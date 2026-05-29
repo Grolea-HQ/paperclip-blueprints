@@ -1,0 +1,36 @@
+schema: paperclip/v1
+sidebar:
+  agents: [ad-ops-specialist, ceo, churn-analyst, cross-promo-lead, growth-lead, managing-editor, newsletter-producer, open-click-analyst, paid-acquisition-lead, paid-tier-manager, repurpose-editor, research-analyst, sponsorship-sales-lead, staff-writer]
+  projects: [first-8-issues-cadence-voice, paid-tier-and-rate-card-launch]
+agents:
+  ad-ops-specialist:
+    role: ''
+  ceo:
+    role: ''
+  churn-analyst:
+    role: ''
+  cross-promo-lead:
+    role: ''
+  growth-lead:
+    role: ''
+  managing-editor:
+    role: ''
+  newsletter-producer:
+    role: ''
+  open-click-analyst:
+    role: ''
+  paid-acquisition-lead:
+    role: ''
+  paid-tier-manager:
+    role: ''
+  repurpose-editor:
+    role: ''
+  research-analyst:
+    role: ''
+  sponsorship-sales-lead:
+    role: ''
+  staff-writer:
+    role: ''
+projects:
+  first-8-issues-cadence-voice:
+  paid-tier-and-rate-card-launch:

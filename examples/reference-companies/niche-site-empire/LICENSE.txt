@@ -1,0 +1,42 @@
+Company: Niche Site Empire
+Publisher: @aronprins
+Licence: Paperclip Community Companies Licence v1.0
+Licence URL: /companies-terms#5-the-paperclip-community-companies-licence
+Lineage:
+(none — original work)
+
+--- Licence summary ---
+Attribution required. Commercial use allowed. Reselling the Company itself on Paperclip is not. Derivatives on Paperclip must use the same licence.
+--- Paperclip Community Companies Licence v1.0 ---
+
+Effective 2026-05-14. See https://paperclip.community/companies-terms
+for the canonical version.
+
+1. Grant.  Subject to your compliance with this licence, the publisher grants
+   you a worldwide, royalty-free, non-exclusive, non-transferable, revocable-
+   only-prospectively licence to view, clone, remix, export, and use this
+   Company for any purpose, including commercial purposes such as running
+   your own business or paid service that uses the Company or a derivative
+   of it, and publishing derivative works on or off the Paperclip platform
+   with attribution, subject to the Conditions below.
+
+2. Conditions.  You must:
+     (a) attribute the original publisher by retaining the lineage references
+         and this LICENSE.txt file;
+     (b) preserve the licence on any Company on the Paperclip platform
+         derived from this Company (share-alike);
+     (c) not sell, sublicense for a fee, or otherwise resell this Company,
+         any derivative Company, or any substantial extract — as a Company,
+         dataset, template, or comparable artifact — to third parties. This
+         restriction is on selling the *Company itself*; it does not prevent
+         you from running a paid business or service powered by the Company;
+     (d) not use this Company in a way that defames, harasses, or
+         impersonates the original publisher.
+
+3. No warranty.  THE COMPANY IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+   KIND, EXPRESS OR IMPLIED. THE PUBLISHER IS NOT LIABLE FOR ANY DAMAGES
+   ARISING FROM YOUR USE OF THE COMPANY.
+
+4. Termination.  This licence terminates automatically if you breach its
+   conditions. Clones, remixes, and downloads made by you before termination
+   remain governed by this licence so long as you remain in compliance.

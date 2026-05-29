@@ -25,7 +25,12 @@ cd paperclip-blueprints
 uv sync
 
 # Set up spec-kit (Claude Code integration)
-uvx --from specify-cli specify init . --integration claude
+# IMPORTANT: install from git, not PyPI. The `specify-cli` name on PyPI is a
+# different project and will fail when it tries to fetch template assets.
+# The real spec-kit lives at github/spec-kit. Pin the version explicitly;
+# check https://github.com/github/spec-kit/releases for the current tag.
+uv tool install specify-cli --from git+https://github.com/github/spec-kit.git@v0.8.11
+specify init . --integration claude
 
 # Install the mattpocock skills working set
 # (See .claude/commands/start-session.md for the exact list)
@@ -211,8 +216,10 @@ If spec-kit's `.specify/` directory is in a weird state, re-initialize:
 
 ```bash
 rm -rf .specify
-uvx --from specify-cli specify init . --integration claude
+specify init . --integration claude
 ```
+
+If `specify` itself isn't on PATH (or is the wrong package), see the install step above — spec-kit must be installed from `git+https://github.com/github/spec-kit.git`, not from PyPI.
 
 You'll lose any specs in `.specify/specs/`, so commit them first if they matter.
 
