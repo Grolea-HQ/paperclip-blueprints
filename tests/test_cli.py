@@ -13,6 +13,19 @@ from paperclip_blueprints.cli import app
 from paperclip_blueprints.generators.client import LLMClient
 from test_models import VALID_BRIEF
 
+
+def _forbid_client():
+    """A ``_make_client`` replacement that fails the test if ever called.
+
+    Used to prove `validate` (and a pre-API `preview` abort) make zero API calls.
+    """
+
+    def _factory() -> LLMClient:
+        raise AssertionError("no Anthropic client may be constructed here")
+
+    return _factory
+
+
 runner = CliRunner()
 
 _IDENTITY = """```json
@@ -154,3 +167,82 @@ def test_generate_refuses_nonempty_dir_without_force(tmp_path, monkeypatch) -> N
         ["generate", "--input", str(brief), "--output", str(out), "--single-agent", "--force"],
     )
     assert forced.exit_code == 0
+
+
+# --- US2: validate (T044) ---------------------------------------------------
+
+
+def test_validate_clean_brief_exits_zero(tmp_path, monkeypatch) -> None:
+    # A clean brief validates with no API call (any client construction fails).
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+    result = runner.invoke(app, ["validate", "--input", str(brief)])
+    assert result.exit_code == 0, result.output
+    assert "indie-game-studio" in result.output
+
+
+def test_validate_defective_brief_lists_all_violations(tmp_path, monkeypatch) -> None:
+    # Two independent violations must BOTH be reported (FR-002 aggregation),
+    # and still no API call is made.
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    bad = VALID_BRIEF.replace("**Slug:** indie-game-studio", "**Slug:** Indie Studio").replace(
+        "2. **We are NOT** a multi-title shop. We do not split focus; "
+        "the live title gets all attention.\n",
+        "",
+    )
+    p = tmp_path / "bad.md"
+    p.write_text(bad, encoding="utf-8")
+    result = runner.invoke(app, ["validate", "--input", str(p)])
+    assert result.exit_code == 1
+    assert "slug" in result.output
+    assert "we are not" in result.output.lower()
+
+
+# --- US3: preview (T046) ----------------------------------------------------
+
+
+def test_preview_prints_only_company_md_to_stdout(tmp_path, monkeypatch) -> None:
+    _patch_client(monkeypatch)
+    brief = _write_brief(tmp_path)
+    result = runner.invoke(app, ["preview", "--input", str(brief)])
+    assert result.exit_code == 0, result.output
+    assert "schema: agentcompanies/v1" in result.output
+    assert "# Indie Game Studio" in result.output
+    # No bundle directory or sibling files are produced.
+    assert not (tmp_path / "indie-game-studio").exists()
+
+
+def test_preview_makes_exactly_one_identity_call(tmp_path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    def counting(**kwargs: object) -> str:
+        calls.append(str(kwargs["system"]).lower())
+        return _dispatch(**kwargs)
+
+    _patch_client(monkeypatch, counting)
+    brief = _write_brief(tmp_path)
+    result = runner.invoke(app, ["preview", "--input", str(brief)])
+    assert result.exit_code == 0, result.output
+    assert len(calls) == 1
+    assert "identity" in calls[0]
+
+
+def test_preview_output_flag_writes_only_company_md(tmp_path, monkeypatch) -> None:
+    _patch_client(monkeypatch)
+    brief = _write_brief(tmp_path)
+    out = tmp_path / "preview" / "COMPANY.md"
+    result = runner.invoke(app, ["preview", "--input", str(brief), "--output", str(out)])
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    assert "schema: agentcompanies/v1" in out.read_text(encoding="utf-8")
+    # Only COMPANY.md lands in the output dir — no .paperclip.yaml/README/agent/skill.
+    assert [p.name for p in out.parent.iterdir()] == ["COMPANY.md"]
+
+
+def test_preview_invalid_brief_aborts_before_api(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    bad = tmp_path / "bad.md"
+    bad.write_text("# Empty brief with no sections\n", encoding="utf-8")
+    result = runner.invoke(app, ["preview", "--input", str(bad)])
+    assert result.exit_code == 1
+    assert "validation failed" in result.output

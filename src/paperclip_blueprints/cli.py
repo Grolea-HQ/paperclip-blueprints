@@ -11,9 +11,12 @@ from pathlib import Path
 
 import typer
 
+from .config import MissingAPIKeyError
 from .generators.client import GenerationError, LLMClient
+from .generators.identity import generate_identity
 from .models.input import BriefValidationError, parse_brief
 from .renderers.bundle import BundleError, build_and_write
+from .renderers.render import render_company_md
 
 app = typer.Typer(
     help="Generate deployable Paperclip company bundles from a Markdown brief.",
@@ -79,7 +82,8 @@ def validate(
     input: Path = typer.Option(..., "--input", help="Path to the company brief Markdown."),
 ) -> None:
     """Validate a brief against the input rules (no API calls)."""
-    raise NotImplementedError("validate is wired in task T045 (US2)")
+    brief = _load_brief(input)
+    typer.echo(f"brief OK: {brief.name} ({brief.slug})")
 
 
 @app.command()
@@ -92,7 +96,24 @@ def preview(
     verbose: bool = typer.Option(False, "--verbose", help="Stream progress/thinking."),
 ) -> None:
     """Generate only the COMPANY.md identity document, to fail fast."""
-    raise NotImplementedError("preview is wired in task T047 (US3)")
+    brief = _load_brief(input)
+    if verbose:
+        typer.echo(f"brief OK: {brief.name} ({brief.slug})", err=True)
+
+    try:
+        client = _make_client()
+        company = generate_identity(brief, client, model=model)
+    except (GenerationError, MissingAPIKeyError) as exc:
+        typer.echo(f"preview failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    document = render_company_md(company)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(document, encoding="utf-8")
+        typer.echo(f"identity written to {output}", err=True)
+    else:
+        typer.echo(document)
 
 
 if __name__ == "__main__":

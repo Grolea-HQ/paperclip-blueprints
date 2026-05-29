@@ -12,6 +12,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from ..models.company import CompanyDefinition
 from ..models.output import CompanyConfig
 from .frontmatter import dump_frontmatter
 
@@ -31,20 +32,25 @@ def _render(template: str, **ctx: object) -> str:
     return _env.get_template(template).render(**ctx)
 
 
-def _company_frontmatter(config: CompanyConfig) -> str:
-    c = config.company
-    return dump_frontmatter(
+def render_company_md(company: CompanyDefinition) -> str:
+    """Render COMPANY.md (frontmatter + body) from identity content alone.
+
+    Shared by the full bundle and ``blueprints preview`` (US3), which emits only
+    this file.
+    """
+    frontmatter = dump_frontmatter(
         {
             "schema": "agentcompanies/v1",
-            "name": c.name,
-            "description": c.description,
-            "version": c.version,
-            "tags": c.tags,
-            "goals": c.goals,
-            "metadata": {"paperclip": {"tone": c.tone, "mono": c.mono}},
+            "name": company.name,
+            "description": company.description,
+            "version": company.version,
+            "tags": company.tags,
+            "goals": company.goals,
+            "metadata": {"paperclip": {"tone": company.tone, "mono": company.mono}},
         },
         flow_seq_keys={"tags"},
     )
+    return frontmatter + "\n" + _render("company_md.j2", company=company)
 
 
 def _agents_frontmatter(config: CompanyConfig) -> str:
@@ -90,7 +96,7 @@ def render_files(config: CompanyConfig) -> dict[str, str]:
 
     return {
         ".paperclip.yaml": _render("paperclip_yaml.j2", **ctx),
-        "COMPANY.md": _company_frontmatter(config) + "\n" + _render("company_md.j2", **ctx),
+        "COMPANY.md": render_company_md(config.company),
         "README.md": _render("readme_md.j2", **ctx),
         "LICENSE.txt": _render("license_txt.j2", **ctx),
         f"{adir}/AGENTS.md": _agents_frontmatter(config) + "\n" + _render("agents_md.j2", **ctx),
