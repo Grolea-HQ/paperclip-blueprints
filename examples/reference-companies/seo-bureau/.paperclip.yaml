@@ -1,0 +1,38 @@
+schema: paperclip/v1
+sidebar:
+  agents: [account-manager, bd-sales-lead, ceo, client-reporting-manager, content-strategist, crawl-render-specialist, digital-pr-specialist, editor, head-of-accounts, link-acquisition-lead, reporting-engineer, schema-implementation-specialist, seo-analyst, seo-writer, tech-seo-lead]
+  projects: [client-1-technical-audit-content-cluster-plan, link-acquisition-digital-pr-sprint]
+agents:
+  account-manager:
+    role: ''
+  bd-sales-lead:
+    role: ''
+  ceo:
+    role: ''
+  client-reporting-manager:
+    role: ''
+  content-strategist:
+    role: ''
+  crawl-render-specialist:
+    role: ''
+  digital-pr-specialist:
+    role: ''
+  editor:
+    role: ''
+  head-of-accounts:
+    role: ''
+  link-acquisition-lead:
+    role: ''
+  reporting-engineer:
+    role: ''
+  schema-implementation-specialist:
+    role: ''
+  seo-analyst:
+    role: ''
+  seo-writer:
+    role: ''
+  tech-seo-lead:
+    role: ''
+projects:
+  client-1-technical-audit-content-cluster-plan:
+  link-acquisition-digital-pr-sprint:

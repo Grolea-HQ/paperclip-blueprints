@@ -1,0 +1,46 @@
+schema: paperclip/v1
+sidebar:
+  agents: [account-manager, analyst, bookkeeper, brand-designer, ceo, copywriter, creative-director, director-of-operations, finance-controller, head-of-accounts, lifecycle-email-lead, market-researcher, paid-media-lead, project-manager, reporting-engineer, seo-lead, social-lead, strategist, video-editor]
+  projects: [client-1-onboarding-first-cycle, retainer-pitch-engine-first-3-deals]
+agents:
+  account-manager:
+    role: ''
+  analyst:
+    role: ''
+  bookkeeper:
+    role: ''
+  brand-designer:
+    role: ''
+  ceo:
+    role: ''
+  copywriter:
+    role: ''
+  creative-director:
+    role: ''
+  director-of-operations:
+    role: ''
+  finance-controller:
+    role: ''
+  head-of-accounts:
+    role: ''
+  lifecycle-email-lead:
+    role: ''
+  market-researcher:
+    role: ''
+  paid-media-lead:
+    role: ''
+  project-manager:
+    role: ''
+  reporting-engineer:
+    role: ''
+  seo-lead:
+    role: ''
+  social-lead:
+    role: ''
+  strategist:
+    role: ''
+  video-editor:
+    role: ''
+projects:
+  client-1-onboarding-first-cycle:
+  retainer-pitch-engine-first-3-deals:

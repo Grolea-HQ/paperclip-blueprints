@@ -1,0 +1,38 @@
+schema: paperclip/v1
+sidebar:
+  agents: [affiliate-manager, billing-specialist, ceo, cmo, community-manager, content-director, member-success-lead, paid-acquisition-lead, platform-engineer, product-manager, retention-analyst, template-asset-designer, tool-engineer, video-producer, writer]
+  projects: [annual-pricing-flip-and-churn-save-sequence, library-v1-20-assets-onboarding-tour]
+agents:
+  affiliate-manager:
+    role: ''
+  billing-specialist:
+    role: ''
+  ceo:
+    role: ''
+  cmo:
+    role: ''
+  community-manager:
+    role: ''
+  content-director:
+    role: ''
+  member-success-lead:
+    role: ''
+  paid-acquisition-lead:
+    role: ''
+  platform-engineer:
+    role: ''
+  product-manager:
+    role: ''
+  retention-analyst:
+    role: ''
+  template-asset-designer:
+    role: ''
+  tool-engineer:
+    role: ''
+  video-producer:
+    role: ''
+  writer:
+    role: ''
+projects:
+  annual-pricing-flip-and-churn-save-sequence:
+  library-v1-20-assets-onboarding-tour:
