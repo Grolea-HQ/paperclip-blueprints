@@ -47,11 +47,18 @@ def test_org_planner_enforces_single_owner() -> None:
     assert "reports_to" in text and "null" in text
 
 
-def test_agents_generator_has_governance_and_approval_types() -> None:
+def test_agents_generator_calibrates_governance_without_token_enum() -> None:
     text = load_prompt("agents_generator")
     assert "{{ governance_position }}" in text
-    for approval in ("strategy", "hire_agent", "budget_override", "custom"):
-        assert approval in text
+    # Decision rights are plain prose; the prompt must NOT instruct embedding
+    # Paperclip's internal approval-flow tokens (ADR-007 / CONTEXT.md).
+    for token in (
+        "hire_agent",
+        "budget_override",
+        "approve_ceo_strategy",
+        "request_board_approval",
+    ):
+        assert token not in text
 
 
 def test_soul_generator_requires_idle_state() -> None:

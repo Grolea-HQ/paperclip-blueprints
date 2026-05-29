@@ -46,7 +46,12 @@ def render_company_md(company: CompanyDefinition) -> str:
             "version": company.version,
             "tags": company.tags,
             "goals": company.goals,
-            "metadata": {"paperclip": {"tone": company.tone, "mono": company.mono}},
+            "metadata": {
+                # `mono` is the company monogram letter, derived from the name
+                # (matches the reference companies: Newsletter→N, Agency→A, …).
+                "paperclip": {"tone": company.tone, "mono": company.name[0].upper()},
+                "sources": [{"kind": "url"}],
+            },
         },
         flow_seq_keys={"tags"},
     )

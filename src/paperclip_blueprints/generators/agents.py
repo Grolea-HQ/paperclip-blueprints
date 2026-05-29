@@ -45,6 +45,7 @@ def generate_agent(
         we_are_not=company.we_are_not,
         constraints=company.constraints,
         governance_position=brief.governance_position,
+        capital_monthly_eur=brief.capital_monthly_eur,
     )
     raw = client.complete(model=model or STRUCTURAL_MODEL, system=_SYSTEM, user=prompt)
     payload = parse_json_response(raw, what="agent mandate")

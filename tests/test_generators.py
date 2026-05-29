@@ -170,7 +170,7 @@ _AGENT_BODY_JSON = """\
   "hands_to": [],
   "deliverables": ["Approved release builds."],
   "can_approve": ["Store metadata within the plan."],
-  "must_escalate": ["Pricing changes (budget_override)."],
+  "must_escalate": ["Pricing changes."],
   "escalation_text": "Escalate to the operator on pricing.",
   "tools_role_specific": "Reviews build status in App Store Connect."
 }

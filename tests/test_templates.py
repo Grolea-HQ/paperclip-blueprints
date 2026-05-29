@@ -4,6 +4,8 @@ Asserts against contracts/bundle-output.md: file set, schema strings, frontmatte
 keys, section headings, single-agent mermaid (no edges), and the HEARTBEAT stub.
 """
 
+from pathlib import Path
+
 from paperclip_blueprints.models.agent import AgentDefinition, AgentSoul
 from paperclip_blueprints.models.company import CompanyDefinition
 from paperclip_blueprints.models.input import CompanyBrief
@@ -55,7 +57,7 @@ def _config() -> CompanyConfig:
         hands_to=[],
         deliverables=["Approved release builds."],
         can_approve=["Store metadata within the plan."],
-        must_escalate=["Pricing changes (budget_override)."],
+        must_escalate=["Pricing changes."],
         escalation_text="Escalate to the operator on pricing.",
         tools_role_specific="Reviews build status in App Store Connect.",
         soul=soul,
@@ -140,6 +142,12 @@ def test_heartbeat_is_stub() -> None:
     out = render_files(_config())["agents/ceo/HEARTBEAT.md"]
     assert "intentionally near-empty" in out
     assert "*(Empty" in out
+    # Everything below the H1 must match the canonical reference stub verbatim (Q2):
+    # the stub is hand-authored, so the generated file must not drift from it.
+    ref = Path("examples/reference-companies/newsletter-press/agents/ceo/HEARTBEAT.md").read_text(
+        encoding="utf-8"
+    )
+    assert out.split("\n", 1)[1].rstrip("\n") == ref.split("\n", 1)[1].rstrip("\n")
 
 
 def test_readme_single_agent_mermaid_no_edges() -> None:

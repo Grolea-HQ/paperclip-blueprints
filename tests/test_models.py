@@ -3,6 +3,7 @@
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from paperclip_blueprints.models.agent import AgentDefinition, AgentSoul
 from paperclip_blueprints.models.company import CompanyDefinition
@@ -248,7 +249,7 @@ def _agent_kwargs(**overrides: Any) -> dict[str, Any]:
         "hands_to": [],
         "deliverables": ["Approved release builds."],
         "can_approve": ["Store metadata within the published plan."],
-        "must_escalate": ["Pricing changes (budget_override)."],
+        "must_escalate": ["Pricing changes."],
         "escalation_text": "Escalate to the operator on pricing or scope cuts.",
         "tools_role_specific": "Uses App Store Connect to review build status only.",
         "soul": AgentSoul(**_soul_kwargs()),
@@ -311,3 +312,38 @@ def test_company_config_single_agent() -> None:
     )
     assert config.license_kind == "Proprietary"
     assert config.agent.slug == "ceo"
+
+
+def _company_kwargs(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "name": "Indie Game Studio",
+        "description": "A solo-founder premium mobile puzzle studio.",
+        "goals": ["4.6+ rating sustained", "refund rate below 3% per quarter"],
+        "we_are": "We are a single-title premium mobile studio.",
+        "we_are_not": ["We are NOT a free-to-play studio.", "We are NOT a multi-title shop."],
+        "north_star": "$30,000 monthly net revenue within 12 months.",
+        "constraints": ["One title at a time.", "No dark patterns."],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_company_definition_rejects_task_shaped_goal() -> None:
+    # Q5: the LLM must not emit a task-shaped goal (CLAUDE.md failure-mode #8).
+    with pytest.raises(ValidationError):
+        CompanyDefinition(**_company_kwargs(goals=["Launch the game", "Build the brand"]))
+
+
+def test_company_definition_rejects_task_shaped_north_star() -> None:
+    with pytest.raises(ValidationError):
+        CompanyDefinition(**_company_kwargs(north_star="Launch the game"))
+
+
+def test_company_definition_rejects_unknown_tone() -> None:
+    # Q8: tone is a closed set mirroring the identity prompt's offered colors.
+    with pytest.raises(ValidationError):
+        CompanyDefinition(**_company_kwargs(tone="teal"))
+
+
+def test_company_definition_accepts_prompt_offered_tone() -> None:
+    assert CompanyDefinition(**_company_kwargs(tone="purple")).tone == "purple"
