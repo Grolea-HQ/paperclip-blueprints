@@ -1,0 +1,26 @@
+# {{ agent.title }} Tools — {{ company.name }}
+
+## Paperclip API
+
+Load the **`paperclip` skill** for any Paperclip API interaction. It covers the full API reference, heartbeat procedure, and critical rules.
+
+- Base URL: `http://localhost:3100/api` (or `$PAPERCLIP_API_URL`)
+- Agent ID: `<set at runtime>`
+- Company ID: `$PAPERCLIP_COMPANY_ID`
+
+## File system
+
+- Company root: `{{ brief.slug }}/` (relative to import location)
+- Agent home: `agents/{{ agent.slug }}/`
+- Company constitution: `COMPANY.md`
+- Own memory: `agents/{{ agent.slug }}/memory/` (daily notes — the `para-memory-files` skill manages this)
+- Own runtime journal: `agents/{{ agent.slug }}/HEARTBEAT.md`
+
+## Role-specific tools
+
+{{ agent.tools_role_specific }}
+
+## Conventions
+
+- I never paste secrets, credentials, or pricing experiments into agent comments — these live in the relevant folder under the company tree.
+- Any secret is referenced via an environment variable or an external secret file, never baked into a file in this bundle.

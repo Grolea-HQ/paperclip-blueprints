@@ -1,0 +1,51 @@
+# {{ agent.title }} SOUL — {{ company.name }}
+
+*Who I am and how I act.*
+
+---
+
+## Identity
+
+{{ soul.identity }}
+
+---
+
+## What we are
+
+{{ soul.what_we_are }}
+
+---
+
+## Product reality
+
+{{ soul.product_reality }}
+
+---
+
+## What I believe in
+
+{% for b in soul.beliefs %}
+- {{ b }}
+{% endfor %}
+
+---
+
+## How I act
+
+{% for h in soul.how_i_act %}
+- {{ h }}
+{% endfor %}
+
+---
+
+## What I don't do
+
+{% for w in soul.what_i_dont_do %}
+- {{ w }}
+{% endfor %}
+
+---
+
+## My north star
+
+{{ soul.my_north_star }}

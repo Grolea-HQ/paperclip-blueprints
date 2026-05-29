@@ -1,0 +1,32 @@
+# {{ company.name }}
+
+> {{ company.description }}
+
+## Overview
+
+| Field | Value |
+| --- | --- |
+| Tags | — |
+| Tone | `{{ company.tone }}` |
+| Agents | 1 |
+| Projects | 0 |
+| Tasks | 0 |
+| Goals | {{ company.goals | length }} |
+| Skills | 1 |
+
+## Org Chart
+
+```mermaid
+graph TD
+  {{ agent.slug }}["{{ agent.name }} — {{ agent.title }}"]
+```
+
+## Agents
+
+- [{{ agent.name }}](agents/{{ agent.slug }}/AGENTS.md) — {{ agent.title }}
+
+## Goals
+
+{% for g in company.goals %}
+- {{ g }}
+{% endfor %}

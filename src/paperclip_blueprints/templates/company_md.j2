@@ -1,0 +1,21 @@
+# {{ company.name }}
+
+{{ company.description }}
+
+## Identity
+
+**We are.** {{ company.we_are }}
+
+**We are not.**
+
+{% for w in company.we_are_not %}
+- {{ w }}
+{% endfor %}
+
+**North star.** {{ company.north_star }}
+
+**Constraints.**
+
+{% for c in company.constraints %}
+- {{ c }}
+{% endfor %}

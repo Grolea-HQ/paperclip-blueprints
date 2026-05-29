@@ -1,0 +1,49 @@
+# {{ agent.name }} — {{ agent.title }}
+
+## Mandate
+
+{{ agent.mandate }}
+
+## Triggers
+
+{% for t in agent.triggers %}
+- {{ t }}
+{% endfor %}
+
+## Workflow handoffs
+
+**Receives from:**
+{% for r in agent.receives_from %}
+- {{ r }}
+{% else %}
+- (none — single-agent company)
+{% endfor %}
+
+**Hands to:**
+{% for h in agent.hands_to %}
+- {{ h }}
+{% else %}
+- (none — single-agent company)
+{% endfor %}
+
+## Deliverables
+
+{% for d in agent.deliverables %}
+- {{ d }}
+{% endfor %}
+
+## Decision rights
+
+**Can approve without escalating:**
+{% for c in agent.can_approve %}
+- {{ c }}
+{% endfor %}
+
+**Must escalate:**
+{% for m in agent.must_escalate %}
+- {{ m }}
+{% endfor %}
+
+## Escalation
+
+{{ agent.escalation_text }}

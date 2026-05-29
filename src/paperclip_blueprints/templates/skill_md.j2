@@ -1,0 +1,41 @@
+# {{ skill.slug }}
+
+*{{ skill.description }}*
+
+## When to load this skill
+
+{% for w in skill.when_to_load %}
+- {{ w }}
+{% endfor %}
+
+## Inputs
+
+{% for i in skill.inputs %}
+- {{ i }}
+{% endfor %}
+
+## Procedure
+
+{% for step in skill.procedure %}
+{{ loop.index }}. {{ step }}
+{% endfor %}
+
+## Outputs
+
+{% for o in skill.outputs %}
+- {{ o }}
+{% endfor %}
+
+## Anti-patterns
+
+{% for a in skill.anti_patterns %}
+- {{ a }}
+{% endfor %}
+
+## Reference
+
+{% for r in skill.references %}
+- {{ r }}
+{% else %}
+*(none yet)*
+{% endfor %}
