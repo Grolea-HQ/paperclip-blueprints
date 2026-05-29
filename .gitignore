@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+.python-version
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — NEVER commit
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+*.pem
+*.key
+
+# Operator-generated company configs (specific to operator's experiments, not project examples)
+examples/generated-companies/*/
+!examples/generated-companies/.gitkeep
+!examples/generated-companies/example-*/
+
+# Logs
+*.log
+logs/
+
+# Anthropic API responses cached for testing (may contain operator-specific data)
+.cache/
+
+# spec-kit feature specs (these are working files, may want to commit selectively later)
+# Keep these for now; review at v0.1 completion
+# .specify/specs/
+
+# Generated config snapshots
+*.snapshot
+
+# Local test outputs
+test-outputs/

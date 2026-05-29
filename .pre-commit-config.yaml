@@ -1,0 +1,71 @@
+# Pre-commit hooks for paperclip-blueprints
+# Install with: pip install pre-commit && pre-commit install
+
+repos:
+  # Python linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Type checking
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.380
+    hooks:
+      - id: pyright
+        files: ^(src|tests)/
+
+  # General hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+
+  # Detect secrets (keys, tokens, etc.)
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: ^(\.specify/|examples/)
+
+  # Custom hooks for this project
+  - repo: local
+    hooks:
+      # Block planning-doc modifications without an ADR
+      - id: planning-changes-need-adr
+        name: Planning doc changes require an ADR
+        entry: scripts/check_planning_changes.sh
+        language: script
+        files: '^(CLAUDE\.md|MASTER_PROMPTS\.md|\.specify/memory/constitution\.md|pyproject\.toml)$'
+        pass_filenames: false
+
+      # Block commits that include common secret patterns
+      - id: no-anthropic-keys
+        name: Block Anthropic API keys
+        entry: 'sk-ant-[a-zA-Z0-9_-]{20,}'
+        language: pygrep
+        types: [text]
+
+      - id: no-openrouter-keys
+        name: Block OpenRouter API keys
+        entry: 'sk-or-v[0-9]+-[a-zA-Z0-9]{20,}'
+        language: pygrep
+        types: [text]
+
+      - id: no-github-tokens
+        name: Block GitHub tokens
+        entry: '(github_pat_|gho_|ghp_|ghu_|ghs_)[a-zA-Z0-9_]{20,}'
+        language: pygrep
+        types: [text]
