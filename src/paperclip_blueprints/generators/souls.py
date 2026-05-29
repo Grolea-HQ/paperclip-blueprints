@@ -28,9 +28,7 @@ def generate_soul(
         we_are_not=company.we_are_not,
         constraints=company.constraints,
     )
-    raw = client.complete(
-        model=model or CONTENT_MODEL, system=_SYSTEM, user=prompt, thinking=True
-    )
+    raw = client.complete(model=model or CONTENT_MODEL, system=_SYSTEM, user=prompt, thinking=True)
     payload = parse_json_response(raw, what="soul")
     try:
         return AgentSoul(**payload)

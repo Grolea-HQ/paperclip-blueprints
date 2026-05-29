@@ -203,8 +203,11 @@ def test_org_planner_returns_single_owner() -> None:
 
 def test_soul_generator_builds_soul_with_idle_belief() -> None:
     stub = AgentStub(
-        slug="ceo", name="Founder / CEO", title="Founder / CEO",
-        reports_to=None, skills=["release-checklist"],
+        slug="ceo",
+        name="Founder / CEO",
+        title="Founder / CEO",
+        reports_to=None,
+        skills=["release-checklist"],
     )
     soul = generate_soul(stub, _company(), LLMClient(_invoke=lambda **_: _SOUL_JSON))
     assert isinstance(soul, AgentSoul)
@@ -214,8 +217,11 @@ def test_soul_generator_builds_soul_with_idle_belief() -> None:
 def test_soul_generator_rejects_missing_idle_belief() -> None:
     bad = _SOUL_JSON.replace("Idle is a success state; I wait between cycles.", "Ship often.")
     stub = AgentStub(
-        slug="ceo", name="Founder / CEO", title="Founder / CEO",
-        reports_to=None, skills=["release-checklist"],
+        slug="ceo",
+        name="Founder / CEO",
+        title="Founder / CEO",
+        reports_to=None,
+        skills=["release-checklist"],
     )
     with pytest.raises(GenerationError):
         generate_soul(stub, _company(), LLMClient(_invoke=lambda **_: bad))
@@ -223,8 +229,11 @@ def test_soul_generator_rejects_missing_idle_belief() -> None:
 
 def test_agents_generator_builds_agent_from_stub_and_soul() -> None:
     stub = AgentStub(
-        slug="ceo", name="Founder / CEO", title="Founder / CEO",
-        reports_to=None, skills=["release-checklist"],
+        slug="ceo",
+        name="Founder / CEO",
+        title="Founder / CEO",
+        reports_to=None,
+        skills=["release-checklist"],
     )
     soul = AgentSoul(
         identity="I am the CEO.",
@@ -236,7 +245,10 @@ def test_agents_generator_builds_agent_from_stub_and_soul() -> None:
         my_north_star="$30k MRR.",
     )
     agent = generate_agent(
-        stub, _company(), _brief(), soul,
+        stub,
+        _company(),
+        _brief(),
+        soul,
         LLMClient(_invoke=lambda **_: _AGENT_BODY_JSON),
     )
     assert isinstance(agent, AgentDefinition)
@@ -249,13 +261,20 @@ def test_agents_generator_builds_agent_from_stub_and_soul() -> None:
 def test_agents_generator_passes_governance_into_prompt() -> None:
     seen: dict[str, object] = {}
     stub = AgentStub(
-        slug="ceo", name="Founder / CEO", title="Founder / CEO",
-        reports_to=None, skills=["release-checklist"],
+        slug="ceo",
+        name="Founder / CEO",
+        title="Founder / CEO",
+        reports_to=None,
+        skills=["release-checklist"],
     )
     soul = AgentSoul(
-        identity="I am the CEO.", what_we_are="Studio.", product_reality="Game.",
-        beliefs=["Idle is a success state."], how_i_act=["Ship."],
-        what_i_dont_do=["No dark patterns."], my_north_star="$30k.",
+        identity="I am the CEO.",
+        what_we_are="Studio.",
+        product_reality="Game.",
+        beliefs=["Idle is a success state."],
+        how_i_act=["Ship."],
+        what_i_dont_do=["No dark patterns."],
+        my_north_star="$30k.",
     )
 
     def fake(**kwargs: object) -> str:
@@ -269,7 +288,9 @@ def test_agents_generator_passes_governance_into_prompt() -> None:
 
 def test_skill_generator_builds_skill() -> None:
     skill = generate_skill(
-        "release-checklist", _company(), ["Founder / CEO"],
+        "release-checklist",
+        _company(),
+        ["Founder / CEO"],
         LLMClient(_invoke=lambda **_: _SKILL_JSON),
     )
     assert isinstance(skill, SkillDefinition)

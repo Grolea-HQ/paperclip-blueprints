@@ -92,9 +92,7 @@ Transport = Callable[..., str]
 class LLMClient:
     """Wraps the Anthropic SDK behind a single, injectable ``complete`` call."""
 
-    def __init__(
-        self, api_key: str | None = None, *, _invoke: Transport | None = None
-    ) -> None:
+    def __init__(self, api_key: str | None = None, *, _invoke: Transport | None = None) -> None:
         self._invoke: Transport = _invoke or self._invoke_anthropic
         self._api_key = api_key
         self._sdk = None  # constructed lazily by the real transport
@@ -110,9 +108,7 @@ class LLMClient:
         """Return the model's text response for a single-turn completion."""
         return self._invoke(model=model, system=system, user=user, thinking=thinking)
 
-    def _invoke_anthropic(
-        self, *, model: str, system: str, user: str, thinking: bool
-    ) -> str:
+    def _invoke_anthropic(self, *, model: str, system: str, user: str, thinking: bool) -> str:
         import anthropic
 
         from ..config import get_api_key

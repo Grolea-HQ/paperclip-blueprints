@@ -19,9 +19,7 @@ def test_frontmatter_is_fenced() -> None:
 
 
 def test_special_char_scalar_is_single_quoted() -> None:
-    out = dump_frontmatter(
-        {"schema": "agentcompanies/v1", "slug": "ceo", "name": "CEO / Editor"}
-    )
+    out = dump_frontmatter({"schema": "agentcompanies/v1", "slug": "ceo", "name": "CEO / Editor"})
     assert "name: 'CEO / Editor'" in out
     # plain slug stays bare
     assert "slug: ceo\n" in out
@@ -54,16 +52,12 @@ def test_block_list_items_quoted_when_needed() -> None:
 
 
 def test_key_order_preserved() -> None:
-    out = dump_frontmatter(
-        {"schema": "agentcompanies/v1", "name": "X Co", "version": "1.0.0"}
-    )
+    out = dump_frontmatter({"schema": "agentcompanies/v1", "name": "X Co", "version": "1.0.0"})
     assert out.index("schema:") < out.index("name:") < out.index("version:")
 
 
 def test_nested_mapping() -> None:
-    out = dump_frontmatter(
-        {"metadata": {"paperclip": {"tone": "green", "mono": "N"}}}
-    )
+    out = dump_frontmatter({"metadata": {"paperclip": {"tone": "green", "mono": "N"}}})
     assert "metadata:" in out
     assert "paperclip:" in out
     assert "tone: green" in out

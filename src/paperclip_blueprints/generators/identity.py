@@ -38,9 +38,7 @@ def generate_identity(
         governance_position=brief.governance_position,
         free_text=brief.free_text,
     )
-    raw = client.complete(
-        model=model or CONTENT_MODEL, system=_SYSTEM, user=prompt, thinking=True
-    )
+    raw = client.complete(model=model or CONTENT_MODEL, system=_SYSTEM, user=prompt, thinking=True)
     return _parse(raw)
 
 

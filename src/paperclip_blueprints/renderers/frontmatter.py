@@ -42,9 +42,7 @@ def _convert(value: Any, key: str | None, flow_seq_keys: set[str]) -> Any:
             m[k] = _convert(v, k, flow_seq_keys)
         return m
     if isinstance(value, (list, tuple)):
-        seq = CommentedSeq(
-            _convert(item, None, flow_seq_keys) for item in value
-        )
+        seq = CommentedSeq(_convert(item, None, flow_seq_keys) for item in value)
         if key is not None and key in flow_seq_keys:
             seq.fa.set_flow_style()
         return seq
@@ -53,9 +51,7 @@ def _convert(value: Any, key: str | None, flow_seq_keys: set[str]) -> Any:
     return value
 
 
-def dump_frontmatter(
-    data: Mapping[str, Any], *, flow_seq_keys: set[str] | None = None
-) -> str:
+def dump_frontmatter(data: Mapping[str, Any], *, flow_seq_keys: set[str] | None = None) -> str:
     """Render ``data`` as a fenced YAML frontmatter block.
 
     Args:

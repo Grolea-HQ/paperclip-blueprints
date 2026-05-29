@@ -99,9 +99,7 @@ def structural_check(files: dict[str, str]) -> None:
 
     # Skill cross-reference: the agent must list the generated skill.
     if skill_slug not in files[f"agents/{agent_slug}/AGENTS.md"]:
-        raise BundleError(
-            f"agent {agent_slug} does not reference skill {skill_slug}"
-        )
+        raise BundleError(f"agent {agent_slug} does not reference skill {skill_slug}")
 
 
 def write_bundle(

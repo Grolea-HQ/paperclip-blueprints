@@ -109,17 +109,29 @@ def test_agents_md_frontmatter_and_sections() -> None:
     assert "schema: agentcompanies/v1" in out
     assert "reportsTo: null" in out
     assert "skills: [release-checklist]" in out
-    for heading in ("## Mandate", "## Triggers", "## Workflow handoffs",
-                    "## Deliverables", "## Decision rights", "## Escalation"):
+    for heading in (
+        "## Mandate",
+        "## Triggers",
+        "## Workflow handoffs",
+        "## Deliverables",
+        "## Decision rights",
+        "## Escalation",
+    ):
         assert heading in out
 
 
 def test_soul_md_has_seven_sections_no_frontmatter() -> None:
     out = render_files(_config())["agents/ceo/SOUL.md"]
     assert not out.startswith("---")
-    for heading in ("## Identity", "## What we are", "## Product reality",
-                    "## What I believe in", "## How I act", "## What I don't do",
-                    "## My north star"):
+    for heading in (
+        "## Identity",
+        "## What we are",
+        "## Product reality",
+        "## What I believe in",
+        "## How I act",
+        "## What I don't do",
+        "## My north star",
+    ):
         assert heading in out
     assert "idle" in out.lower()
 
