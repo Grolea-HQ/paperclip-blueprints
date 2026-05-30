@@ -104,7 +104,9 @@ def test_generate_happy_path(tmp_path, monkeypatch) -> None:
         app, ["generate", "--input", str(brief), "--output", str(out), "--single-agent"]
     )
     assert result.exit_code == 0, result.output
-    dest = out / "indie-game-studio"
+    # --output IS the bundle root; no slug subdirectory is appended.
+    dest = out
+    assert not (out / "indie-game-studio").exists(), "must not nest a slug subdir under --output"
     files = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
     assert len(files) == 9
     assert (dest / "COMPANY.md").exists()
@@ -146,7 +148,8 @@ def test_generate_malformed_response_leaves_no_partial_bundle(tmp_path, monkeypa
         app, ["generate", "--input", str(brief), "--output", str(out), "--single-agent"]
     )
     assert result.exit_code == 1
-    assert not (out / "indie-game-studio").exists()
+    # A failed generation leaves no bundle at the output dir at all.
+    assert not out.exists()
 
 
 def test_generate_refuses_nonempty_dir_without_force(tmp_path, monkeypatch) -> None:
@@ -167,6 +170,22 @@ def test_generate_refuses_nonempty_dir_without_force(tmp_path, monkeypatch) -> N
         ["generate", "--input", str(brief), "--output", str(out), "--single-agent", "--force"],
     )
     assert forced.exit_code == 0
+
+
+def test_generate_writes_into_output_dir_no_slug_subdir(tmp_path, monkeypatch) -> None:
+    """--output <dir> writes the bundle INTO <dir>, never <dir>/<slug>/."""
+    _patch_client(monkeypatch)
+    brief = _write_brief(tmp_path)
+    out = tmp_path / "indie-game-studio"
+    out.mkdir()  # operator points --output at a dir they already made
+    result = runner.invoke(
+        app, ["generate", "--input", str(brief), "--output", str(out), "--single-agent"]
+    )
+    assert result.exit_code == 0, result.output
+    # COMPANY.md is a direct child of --output; the slug is NOT doubled.
+    assert (out / "COMPANY.md").exists()
+    assert not (out / "indie-game-studio").exists()
+    assert str(out) in result.output  # reported destination is --output itself
 
 
 # --- US2: validate (T044) ---------------------------------------------------

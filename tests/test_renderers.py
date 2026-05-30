@@ -112,7 +112,9 @@ def test_structural_check_rejects_skill_cross_ref_mismatch() -> None:
 
 
 def test_write_bundle_writes_nine_files(tmp_path) -> None:
-    dest = write_bundle(render_files(_config()), tmp_path, "indie-game-studio")
+    out = tmp_path / "bundle"
+    dest = write_bundle(render_files(_config()), out)
+    assert dest == out  # bundle root is the output dir itself, no slug subdir
     written = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
     assert len(written) == 9
     assert (dest / "COMPANY.md").exists()
@@ -120,9 +122,10 @@ def test_write_bundle_writes_nine_files(tmp_path) -> None:
 
 def test_write_bundle_refuses_nonempty_without_force(tmp_path) -> None:
     files = render_files(_config())
-    write_bundle(files, tmp_path, "indie-game-studio")
+    out = tmp_path / "bundle"
+    write_bundle(files, out)
     with pytest.raises(BundleError):
-        write_bundle(files, tmp_path, "indie-game-studio")
+        write_bundle(files, out)
     # with force it succeeds
-    dest = write_bundle(files, tmp_path, "indie-game-studio", force=True)
+    dest = write_bundle(files, out, force=True)
     assert dest.exists()

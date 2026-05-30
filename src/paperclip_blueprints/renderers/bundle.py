@@ -102,19 +102,20 @@ def structural_check(files: dict[str, str]) -> None:
         raise BundleError(f"agent {agent_slug} does not reference skill {skill_slug}")
 
 
-def write_bundle(
-    files: dict[str, str], output_dir: str | Path, slug: str, *, force: bool = False
-) -> Path:
-    """Atomically write the bundle to ``<output_dir>/<slug>/`` (R5/R6).
+def write_bundle(files: dict[str, str], output_dir: str | Path, *, force: bool = False) -> Path:
+    """Atomically write the bundle directly into ``output_dir`` (R5/R6).
+
+    ``--output <dir>`` means "write the bundle into this directory" — no slug
+    subdirectory is appended.
 
     Raises:
         BundleError: if the destination is non-empty and ``force`` is not set.
     """
-    parent = Path(output_dir)
-    dest = parent / slug
+    dest = Path(output_dir)
     if dest.exists() and any(dest.iterdir()) and not force:
         raise BundleError(f"output directory {dest} is not empty; pass --force to overwrite")
 
+    parent = dest.parent
     parent.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(dir=parent))
     try:
@@ -139,8 +140,11 @@ def build_and_write(
     model: str | None = None,
     force: bool = False,
 ) -> Path:
-    """Generate, validate, and atomically write a single-agent bundle."""
+    """Generate, validate, and atomically write a single-agent bundle.
+
+    The bundle is written directly into ``output_dir`` (no slug subdirectory).
+    """
     config = generate_bundle(brief, client, model=model)
     files = render_files(config)
     structural_check(files)
-    return write_bundle(files, output_dir, brief.slug, force=force)
+    return write_bundle(files, output_dir, force=force)
