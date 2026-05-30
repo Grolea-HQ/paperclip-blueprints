@@ -106,6 +106,25 @@ def test_company_md_schema_and_sections() -> None:
     assert "**Constraints.**" in out
 
 
+def test_company_md_sources_is_metadata_sibling_not_under_paperclip() -> None:
+    """Guard: `sources` lives at metadata.sources, not metadata.paperclip.sources.
+
+    The reference companies put `sources` as a sibling of `paperclip` under
+    `metadata`. A one-level YAML-nesting slip would bury it inside `paperclip` —
+    invisible to string/section checks, so assert the parsed shape directly.
+    """
+    from ruamel.yaml import YAML
+
+    out = render_files(_config())["COMPANY.md"]
+    block = out.split("---\n", 2)[1]  # frontmatter between the first two fences
+    metadata = YAML(typ="safe").load(block)["metadata"]
+    assert "sources" in metadata, "metadata.sources must exist (sibling of paperclip)"
+    assert "sources" not in metadata["paperclip"], (
+        "sources must NOT be nested under metadata.paperclip"
+    )
+    assert metadata["sources"] == [{"kind": "url"}]
+
+
 def test_agents_md_frontmatter_and_sections() -> None:
     out = render_files(_config())["agents/ceo/AGENTS.md"]
     assert "schema: agentcompanies/v1" in out
