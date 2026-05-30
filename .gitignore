@@ -41,7 +41,8 @@ Thumbs.db
 *.key
 
 # Operator-generated company configs (specific to operator's experiments, not project examples)
-examples/generated-companies/*/
+# Match bare files too (e.g. `preview --output` writes a single file), not just subdirs.
+examples/generated-companies/*
 !examples/generated-companies/.gitkeep
 !examples/generated-companies/example-*/
 
