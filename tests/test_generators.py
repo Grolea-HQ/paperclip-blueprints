@@ -130,6 +130,7 @@ def test_generate_identity_uses_thinking_and_content_model() -> None:
 
     generate_identity(_brief(), LLMClient(_invoke=fake))
     assert seen["thinking"] is True
+    assert seen["effort"] == "high"
     assert seen["model"] == "claude-opus-4-7"
 
 
@@ -212,6 +213,68 @@ def test_soul_generator_builds_soul_with_idle_belief() -> None:
     soul = generate_soul(stub, _company(), LLMClient(_invoke=lambda **_: _SOUL_JSON))
     assert isinstance(soul, AgentSoul)
     assert any("idle" in b.lower() for b in soul.beliefs)
+
+
+def test_soul_generator_uses_thinking_and_high_effort() -> None:
+    seen: dict[str, object] = {}
+
+    def fake(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _SOUL_JSON
+
+    stub = AgentStub(
+        slug="ceo",
+        name="Founder / CEO",
+        title="Founder / CEO",
+        reports_to=None,
+        skills=["release-checklist"],
+    )
+    generate_soul(stub, _company(), LLMClient(_invoke=fake))
+    assert seen["thinking"] is True
+    assert seen["effort"] == "high"
+    assert seen["model"] == "claude-opus-4-7"
+
+
+def test_structural_calls_send_no_thinking_or_effort() -> None:
+    """Guard: cheap-tier structural calls must not enable adaptive thinking.
+
+    org/agents/skills run on the Sonnet structural model. Accidentally turning
+    on thinking (and thus output_config effort) there would silently raise cost
+    on every wakeup. This locks the contract: thinking off, effort unset.
+    """
+    company = _company()
+    soul = AgentSoul(
+        identity="I am the CEO.",
+        what_we_are="We are a studio.",
+        product_reality="One game.",
+        beliefs=["Idle is a success state."],
+        how_i_act=["I ship."],
+        what_i_dont_do=["No dark patterns."],
+        my_north_star="$30k MRR.",
+    )
+    stub = AgentStub(
+        slug="ceo",
+        name="Founder / CEO",
+        title="Founder / CEO",
+        reports_to=None,
+        skills=["release-checklist"],
+    )
+
+    for label, run, payload in (
+        ("org", lambda c: generate_org(_brief(), company, c), _ORG_JSON),
+        ("agents", lambda c: generate_agent(stub, company, _brief(), soul, c), _AGENT_BODY_JSON),
+        ("skills", lambda c: generate_skill("release-checklist", company, ["ceo"], c), _SKILL_JSON),
+    ):
+        seen: dict[str, object] = {}
+
+        def fake(captured: dict[str, object] = seen, body: str = payload, **kwargs: object) -> str:
+            captured.update(kwargs)
+            return body
+
+        run(LLMClient(_invoke=fake))
+        assert seen.get("thinking") is False, f"{label} must not enable thinking"
+        assert seen.get("effort") is None, f"{label} must not set effort"
+        assert seen["model"] == "claude-sonnet-4-6", f"{label} must use the structural model"
 
 
 def test_soul_generator_rejects_missing_idle_belief() -> None:

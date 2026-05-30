@@ -17,9 +17,12 @@ from typing import Any
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
-# Streaming/thinking budgets for the real transport.
+# Streaming cap for the real transport. Thinking is adaptive (ADR-008): the
+# model sizes its own reasoning, so there is no fixed budget to set.
 _MAX_TOKENS = 8000
-_THINKING_BUDGET = 4000
+
+# Project default effort for content-synthesis Opus calls (ADR-008).
+_DEFAULT_EFFORT = "high"
 
 
 class GenerationError(Exception):
@@ -85,7 +88,7 @@ def parse_json_response(raw: str, *, what: str) -> dict[str, Any]:
     return payload
 
 
-# Transport signature: (model, system, user, thinking) -> response text.
+# Transport signature: (model, system, user, thinking, effort) -> response text.
 Transport = Callable[..., str]
 
 
@@ -104,11 +107,23 @@ class LLMClient:
         system: str,
         user: str,
         thinking: bool = False,
+        effort: str | None = None,
     ) -> str:
-        """Return the model's text response for a single-turn completion."""
-        return self._invoke(model=model, system=system, user=user, thinking=thinking)
+        """Return the model's text response for a single-turn completion.
 
-    def _invoke_anthropic(self, *, model: str, system: str, user: str, thinking: bool) -> str:
+        Args:
+            thinking: enable adaptive extended thinking (ADR-008).
+            effort: ``output_config`` effort when thinking is on; defaults to the
+                project content-synthesis default (``high``). Ignored when
+                ``thinking`` is False.
+        """
+        if thinking and effort is None:
+            effort = _DEFAULT_EFFORT
+        return self._invoke(model=model, system=system, user=user, thinking=thinking, effort=effort)
+
+    def _invoke_anthropic(
+        self, *, model: str, system: str, user: str, thinking: bool, effort: str | None
+    ) -> str:
         import anthropic
 
         from ..config import get_api_key
@@ -123,7 +138,8 @@ class LLMClient:
             "messages": [{"role": "user", "content": user}],
         }
         if thinking:
-            kwargs["thinking"] = {"type": "enabled", "budget_tokens": _THINKING_BUDGET}
+            kwargs["thinking"] = {"type": "adaptive"}
+            kwargs["output_config"] = {"effort": effort or _DEFAULT_EFFORT}
 
         parts: list[str] = []
         try:
