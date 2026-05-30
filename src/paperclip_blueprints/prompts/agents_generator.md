@@ -7,6 +7,11 @@ You write the AGENTS.md mandate for one agent in a Paperclip company.
 - Title: {{ title }}
 - Owns this north star: {{ north_star }}
 
+When you refer to the north star, quote it verbatim from the value above. Do NOT
+paraphrase the figure, translate it, or convert its currency — preserve the exact
+amount and currency symbol as written (e.g. if it says `$30,000`, never write
+`€30,000`).
+
 ## Company identity
 
 - We are: {{ we_are }}

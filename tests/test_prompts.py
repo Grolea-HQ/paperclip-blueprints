@@ -64,3 +64,16 @@ def test_agents_generator_calibrates_governance_without_token_enum() -> None:
 def test_soul_generator_requires_idle_state() -> None:
     text = load_prompt("soul_generator")
     assert "idle" in text.lower()
+
+
+def test_agents_generator_preserves_north_star_currency_verbatim() -> None:
+    """Guard against the $→€ currency-conversion bug in the agent mandate.
+
+    The north star is woven into mandate prose by the model, so the only
+    deterministic regression guard is the prompt instruction itself: it must
+    tell the model to quote the figure verbatim and never convert currency.
+    """
+    text = load_prompt("agents_generator").lower()
+    assert "verbatim" in text
+    assert "currency" in text
+    assert "convert" in text
