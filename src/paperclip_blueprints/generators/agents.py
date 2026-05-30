@@ -58,6 +58,7 @@ def generate_agent(
             name=stub.name,
             title=stub.title,
             reports_to=stub.reports_to,
+            role="ceo",  # v0.1a: the lone agent is the CEO; v0.1b derives from reports_to
             skills=stub.skills,
             soul=soul,
             **body,

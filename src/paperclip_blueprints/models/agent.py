@@ -39,6 +39,13 @@ class AgentDefinition(BaseModel):
     name: str
     title: str
     reports_to: str | None
+    role: str | None = None
+    """Paperclip importer role (company-portability.ts:2600 reads
+    agents.<slug>.role, falling back to "agent" — which strips CEO
+    permissions). Free-form non-empty string in Paperclip; "ceo" and "agent"
+    verified. The v0.1a generator sets "ceo" for the single agent; v0.1b will
+    derive from reports_to and verify additional role values against the
+    importer enum before emitting them."""
     skills: list[str]
     mandate: str
     triggers: list[str]

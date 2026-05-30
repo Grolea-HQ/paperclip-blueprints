@@ -4,5 +4,7 @@ sidebar:
   projects: []
 agents:
   {{ agent.slug }}:
-    role: ''
+{% if agent.role %}
+    role: {{ agent.role }}
+{% endif %}
 projects: {}

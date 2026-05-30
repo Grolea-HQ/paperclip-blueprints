@@ -50,6 +50,7 @@ def _config() -> CompanyConfig:
         name="Founder / CEO",
         title="Founder / CEO",
         reports_to=None,
+        role="ceo",
         skills=["release-checklist"],
         mandate="Owns the north star and ships the title.",
         triggers=["A release candidate is ready."],
@@ -95,6 +96,35 @@ def test_paperclip_yaml_schema_and_sidebar() -> None:
     assert "schema: paperclip/v1" in out
     assert "agents: [ceo]" in out
     assert "projects: []" in out
+
+
+def test_paperclip_yaml_emits_ceo_role_not_empty() -> None:
+    """The CEO must import as role=ceo, not fall through to "agent".
+
+    Paperclip's importer reads agents.<slug>.role and, via asString(""),
+    treats '' as null → falls back to "agent" (company-portability.ts:2600,
+    665-669), stripping CEO permissions. So role must be "ceo" — never '',
+    never omitted — for the single-agent CEO bundle.
+    """
+    from ruamel.yaml import YAML
+
+    out = render_files(_config())[".paperclip.yaml"]
+    assert "role: ''" not in out  # the empty string that triggers the fallback
+    role = YAML(typ="safe").load(out)["agents"]["ceo"]["role"]
+    assert role == "ceo"
+
+
+def test_paperclip_yaml_omits_role_when_unset() -> None:
+    """When agent.role is None (v0.1b non-CEO agents), the role line is omitted.
+
+    Guards the v0.1b code path before it exists: an unset role must produce no
+    `role:` line at all — not `role:`, `role: null`, or `role: ''` — so the
+    importer applies its own "agent" default rather than reading a junk value.
+    """
+    config = _config()
+    config.agent.role = None
+    out = render_files(config)[".paperclip.yaml"]
+    assert "role:" not in out
 
 
 def test_company_md_schema_and_sections() -> None:
