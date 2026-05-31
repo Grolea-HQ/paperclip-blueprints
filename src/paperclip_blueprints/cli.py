@@ -69,8 +69,8 @@ def generate(
         kind = "single-agent" if single_agent else "multi-agent"
         typer.echo(f"brief OK: {brief.name} ({brief.slug}) — generating {kind} bundle", err=True)
 
+    client = _make_client()
     try:
-        client = _make_client()
         dest = build_and_write(
             brief, output, client, single_agent=single_agent, model=model, force=force
         )
@@ -79,6 +79,26 @@ def generate(
         raise typer.Exit(1) from exc
 
     typer.echo(f"bundle written to {dest}")
+    _print_cost_summary(client, verbose=verbose)
+
+
+def _print_cost_summary(client: LLMClient, *, verbose: bool) -> None:
+    """Print the run's total token usage and estimated cost (US4, SC-011)."""
+    summary = client.usage_summary()
+    t = summary["total"]
+    if t["calls"] == 0:
+        return
+    typer.echo(
+        f"cost: {t['calls']} calls, {t['input_tokens']} in / {t['output_tokens']} out tokens "
+        f"— est. ${t['cost_usd']:.4f}"
+    )
+    if verbose:
+        for model_id, m in summary["by_model"].items():
+            typer.echo(
+                f"  {model_id}: {m['calls']} calls, "
+                f"{m['input_tokens']}+{m['output_tokens']} tok, ${m['cost_usd']:.4f}",
+                err=True,
+            )
 
 
 @app.command()

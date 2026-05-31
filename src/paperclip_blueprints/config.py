@@ -17,6 +17,20 @@ SONNET_MODEL = "claude-sonnet-4-6"
 CONTENT_MODEL = OPUS_MODEL  # identity, soul (synthesis quality matters)
 STRUCTURAL_MODEL = SONNET_MODEL  # org, agents, skills (constrained)
 
+# USD price per MILLION tokens (input, output), for the end-of-run cost summary
+# (US4 / R-005). Approximate list prices; an unknown model falls back to Sonnet.
+TOKEN_PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
+    OPUS_MODEL: (15.0, 75.0),
+    SONNET_MODEL: (3.0, 15.0),
+}
+
+
+def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Estimate the USD cost of a call from the token price table."""
+    in_price, out_price = TOKEN_PRICES_PER_MTOK.get(model, TOKEN_PRICES_PER_MTOK[SONNET_MODEL])
+    return (input_tokens * in_price + output_tokens * out_price) / 1_000_000
+
+
 # CLI ``--model`` aliases → full IDs.
 _MODEL_ALIASES = {
     "opus-4.7": OPUS_MODEL,

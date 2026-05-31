@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -88,17 +89,34 @@ def parse_json_response(raw: str, *, what: str) -> dict[str, Any]:
     return payload
 
 
-# Transport signature: (model, system, user, thinking, effort) -> response text.
-Transport = Callable[..., str]
+# Transport signature: (model, system, user, thinking, effort) -> response text,
+# or (text, (input_tokens, output_tokens)) when the transport reports usage. The
+# real transport reports usage; plain-text mocks simply return a string.
+Transport = Callable[..., Any]
+
+
+@dataclass(frozen=True)
+class CallUsage:
+    """Token usage for one completed call."""
+
+    model: str
+    input_tokens: int
+    output_tokens: int
 
 
 class LLMClient:
-    """Wraps the Anthropic SDK behind a single, injectable ``complete`` call."""
+    """Wraps the Anthropic SDK behind a single, injectable ``complete`` call.
+
+    Token usage is accumulated on the instance as a side effect of ``complete`` so
+    a whole run's cost can be summarized at the end (US4 / R-005), without changing
+    ``complete``'s ``str`` return type.
+    """
 
     def __init__(self, api_key: str | None = None, *, _invoke: Transport | None = None) -> None:
         self._invoke: Transport = _invoke or self._invoke_anthropic
         self._api_key = api_key
         self._sdk = None  # constructed lazily by the real transport
+        self._usage: list[CallUsage] = []
 
     def complete(
         self,
@@ -119,11 +137,39 @@ class LLMClient:
         """
         if thinking and effort is None:
             effort = _DEFAULT_EFFORT
-        return self._invoke(model=model, system=system, user=user, thinking=thinking, effort=effort)
+        result = self._invoke(
+            model=model, system=system, user=user, thinking=thinking, effort=effort
+        )
+        if isinstance(result, tuple):
+            text, usage = result
+            self._usage.append(CallUsage(model, int(usage[0]), int(usage[1])))
+            return text
+        return result
+
+    def usage_summary(self) -> dict[str, Any]:
+        """Aggregate per-model token usage and estimated cost for the run."""
+        from ..config import estimate_cost
+
+        by_model: dict[str, dict[str, Any]] = {}
+        for u in self._usage:
+            m = by_model.setdefault(
+                u.model, {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+            )
+            m["calls"] += 1
+            m["input_tokens"] += u.input_tokens
+            m["output_tokens"] += u.output_tokens
+        total = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+        for model, m in by_model.items():
+            m["cost_usd"] = estimate_cost(model, m["input_tokens"], m["output_tokens"])
+            total["calls"] += m["calls"]
+            total["input_tokens"] += m["input_tokens"]
+            total["output_tokens"] += m["output_tokens"]
+            total["cost_usd"] += m["cost_usd"]
+        return {"total": total, "by_model": by_model}
 
     def _invoke_anthropic(
         self, *, model: str, system: str, user: str, thinking: bool, effort: str | None
-    ) -> str:
+    ) -> tuple[str, tuple[int, int]]:
         import anthropic
 
         from ..config import get_api_key
@@ -146,6 +192,7 @@ class LLMClient:
             with self._sdk.messages.stream(**kwargs) as stream:  # type: ignore[attr-defined]
                 for chunk in stream.text_stream:
                     parts.append(chunk)
+            usage = stream.get_final_message().usage
         except Exception as exc:  # noqa: BLE001 - surface any SDK failure clearly
             raise GenerationError(f"Anthropic API call failed: {exc}") from exc
-        return "".join(parts)
+        return "".join(parts), (usage.input_tokens, usage.output_tokens)

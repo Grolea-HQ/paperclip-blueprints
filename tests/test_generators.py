@@ -435,3 +435,36 @@ def test_generate_project_and_task() -> None:
         ),
     )
     assert task.project == "launch" and task.completion_criteria == ["done"]
+
+
+# --- US4 cost tracking (T051) -----------------------------------------------
+
+
+def test_client_tallies_usage_from_usage_reporting_transport() -> None:
+    def fake(**kwargs: object) -> tuple[str, tuple[int, int]]:
+        return ("text", (10, 20))
+
+    client = LLMClient(_invoke=fake)
+    client.complete(model="claude-opus-4-7", system="s", user="u")
+    client.complete(model="claude-sonnet-4-6", system="s", user="u")
+    summary = client.usage_summary()
+    assert summary["total"]["calls"] == 2
+    assert summary["total"]["input_tokens"] == 20
+    assert summary["total"]["output_tokens"] == 40
+    assert summary["total"]["cost_usd"] > 0
+    assert set(summary["by_model"]) == {"claude-opus-4-7", "claude-sonnet-4-6"}
+
+
+def test_client_plain_text_transport_records_no_usage() -> None:
+    client = LLMClient(_invoke=lambda **_: "text")
+    client.complete(model="m", system="s", user="u")
+    assert client.usage_summary()["total"]["calls"] == 0
+
+
+def test_estimate_cost_uses_price_table() -> None:
+    from paperclip_blueprints.config import estimate_cost
+
+    # Opus list price: $15/Mtok in, $75/Mtok out → 1M+1M = $90.
+    assert estimate_cost("claude-opus-4-7", 1_000_000, 1_000_000) == pytest.approx(90.0)
+    # An unknown model falls back to the Sonnet price ($3 + $15 = $18).
+    assert estimate_cost("mystery-model", 1_000_000, 1_000_000) == pytest.approx(18.0)

@@ -189,6 +189,20 @@ def test_generate_default_is_full_multi_agent(tmp_path, monkeypatch) -> None:
     assert "ceo --> engineer" in (out / "README.md").read_text()
 
 
+def test_generate_prints_cost_summary(tmp_path, monkeypatch) -> None:
+    # A usage-reporting transport makes the run print its cost summary (SC-011).
+    def with_usage(**kwargs: object) -> tuple[str, tuple[int, int]]:
+        return (_dispatch_full(**kwargs), (5, 7))
+
+    _patch_client(monkeypatch, with_usage)
+    brief = _write_brief(tmp_path)
+    out = tmp_path / "out"
+    result = runner.invoke(app, ["generate", "--input", str(brief), "--output", str(out)])
+    assert result.exit_code == 0, result.output
+    assert "cost:" in result.output
+    assert "est. $" in result.output
+
+
 def test_generate_invalid_brief_exits_nonzero(tmp_path, monkeypatch) -> None:
     _patch_client(monkeypatch)
     bad = tmp_path / "bad.md"
