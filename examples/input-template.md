@@ -158,6 +158,9 @@ If you pick a pattern, the tool uses it as a starting template — suggested age
 - `open-source-maintenance` — for OSS project maintenance (issue triage, PR review, doc drift).
 - `newsletter` — derived from the `newsletter-press` reference. ~14 agents covering editorial, growth, monetization, analytics.
 - `niche-site` — derived from the `niche-site-empire` reference. ~16 agents covering content production, technical SEO, link acquisition, monetization.
+- `agency` — derived from the `agency-engine` reference. ~19 agents covering creative, accounts, paid media, SEO, operations, finance. For client-services / retainer agencies.
+- `membership` — derived from the `membership-stack` reference. ~15 agents covering content, community, retention, billing, growth. For membership / subscription businesses.
+- `seo-bureau` — derived from the `seo-bureau` reference. ~15 agents covering technical SEO, content, link acquisition, reporting. For SEO-led service businesses.
 - `custom` — no template; the org_planner designs from scratch.
 
 **Your choice:** [pattern slug, or `custom`]
