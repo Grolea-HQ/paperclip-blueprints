@@ -266,6 +266,45 @@ def test_validate_clean_brief_exits_zero(tmp_path, monkeypatch) -> None:
     assert "indie-game-studio" in result.output
 
 
+# --- US2: pattern validation + seeding (T038) -------------------------------
+
+
+def test_validate_unknown_pattern_reports_available_set(tmp_path, monkeypatch) -> None:
+    # An unknown use-case pattern is reported (FR-015) with zero API calls.
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    p = tmp_path / "brief.md"
+    p.write_text(
+        VALID_BRIEF.replace("**Your choice:** custom", "**Your choice:** franchise-empire"),
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["validate", "--input", str(p)])
+    assert result.exit_code == 1
+    assert "unknown use-case pattern" in result.output
+    assert "solo-dev-shop" in result.output  # the available set is shown
+
+
+def test_generate_passes_pattern_seed_into_org_planner(tmp_path, monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    def capturing(**kwargs: object) -> str:
+        if "org" in str(kwargs["system"]).lower():
+            captured["org_user"] = str(kwargs["user"])
+        return _dispatch_full(**kwargs)
+
+    _patch_client(monkeypatch, capturing)
+    p = tmp_path / "brief.md"
+    p.write_text(
+        VALID_BRIEF.replace("**Your choice:** custom", "**Your choice:** solo-dev-shop"),
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
+    result = runner.invoke(app, ["generate", "--input", str(p), "--output", str(out)])
+    assert result.exit_code == 0, result.output
+    # The solo-dev-shop seed reached the org planner prompt.
+    assert "Suggested roles:" in captured["org_user"]
+    assert "CTO" in captured["org_user"]
+
+
 def test_validate_defective_brief_lists_all_violations(tmp_path, monkeypatch) -> None:
     # Two independent violations must BOTH be reported (FR-002 aggregation),
     # and still no API call is made.

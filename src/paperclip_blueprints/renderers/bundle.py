@@ -27,6 +27,7 @@ from ..generators.souls import generate_soul
 from ..generators.tasks import generate_task
 from ..models.input import CompanyBrief
 from ..models.output import CompanyConfig
+from ..patterns import get_seed
 from .render import render_files
 
 _TOP_LEVEL = {".paperclip.yaml", "COMPANY.md", "README.md", "LICENSE.txt"}
@@ -67,8 +68,15 @@ async def _gather_full(
     Any failure propagates out of ``gather`` so no partial bundle is ever written.
     """
     company = await asyncio.to_thread(generate_identity, brief, client, model=model)
+    seed = get_seed(brief.use_case_pattern)
     plan = await asyncio.to_thread(
-        generate_org_plan, brief, company, client, single_agent=False, model=model
+        generate_org_plan,
+        brief,
+        company,
+        client,
+        single_agent=False,
+        seed=seed.render() if seed is not None else None,
+        model=model,
     )
 
     sem = asyncio.Semaphore(_CONCURRENCY)

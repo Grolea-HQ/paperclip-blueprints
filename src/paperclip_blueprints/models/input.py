@@ -128,6 +128,22 @@ class CompanyBrief(BaseModel):
             )
         return v
 
+    @field_validator("use_case_pattern")
+    @classmethod
+    def _known_use_case_pattern(cls, v: str | None) -> str | None:
+        # FR-015: an unrecognized pattern is reported with the available set,
+        # not silently ignored. Imported locally so the model stays loadable
+        # without importing the patterns package at module load.
+        if v is None:
+            return v
+        from ..patterns import KNOWN_PATTERNS
+
+        if v not in KNOWN_PATTERNS:
+            raise ValueError(
+                f"unknown use-case pattern {v!r}; available: {', '.join(KNOWN_PATTERNS)}"
+            )
+        return v
+
 
 class BriefValidationError(Exception):
     """Raised when a brief fails to parse or validate. Carries all messages."""
