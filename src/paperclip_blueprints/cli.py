@@ -17,6 +17,7 @@ from .generators.identity import generate_identity
 from .models.input import BriefValidationError, parse_brief
 from .renderers.bundle import BundleError, build_and_write
 from .renderers.render import render_company_md
+from .validators import BundleValidationError
 
 app = typer.Typer(
     help="Generate deployable Paperclip company bundles from a Markdown brief.",
@@ -73,7 +74,7 @@ def generate(
         dest = build_and_write(
             brief, output, client, single_agent=single_agent, model=model, force=force
         )
-    except (GenerationError, BundleError, MissingAPIKeyError) as exc:
+    except (GenerationError, BundleError, BundleValidationError, MissingAPIKeyError) as exc:
         typer.echo(f"generation failed: {exc}", err=True)
         raise typer.Exit(1) from exc
 

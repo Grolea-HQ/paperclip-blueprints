@@ -473,7 +473,13 @@ def _operations() -> OperationsDefinition:
         comm_conventions="Async first.",
         approval_merge_rules="Board approves strategy.",
         delegation_checklist=["Is the goal an outcome?"],
-        anti_drift_checks=["We are not a services shop."],
+        # Must reproduce every constraint + "we are not" from _company_kwargs (P-PAT-10).
+        anti_drift_checks=[
+            "We are NOT a free-to-play studio.",
+            "We are NOT a multi-title shop.",
+            "One title at a time.",
+            "No dark patterns.",
+        ],
         duplicate_prevention="Check the inventory first.",
         routine_slots=["ceo: weekly review"],
         critical_rules=["Never ship without sign-off."],

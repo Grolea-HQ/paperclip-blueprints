@@ -28,6 +28,7 @@ from ..generators.tasks import generate_task
 from ..models.input import CompanyBrief
 from ..models.output import CompanyConfig
 from ..patterns import get_seed
+from ..validators import validate_bundle
 from .render import render_files
 
 _TOP_LEVEL = {".paperclip.yaml", "COMPANY.md", "README.md", "LICENSE.txt"}
@@ -355,5 +356,5 @@ def build_and_write(
     else:
         config = generate_bundle_full(brief, client, model=model)
     files = render_files(config)
-    structural_check(files)
+    validate_bundle(config, files)
     return write_bundle(files, output_dir, force=force)
