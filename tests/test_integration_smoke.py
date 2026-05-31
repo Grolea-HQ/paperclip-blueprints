@@ -25,7 +25,7 @@ def test_single_agent_bundle_real_api(tmp_path: Path) -> None:
     brief = parse_brief(_EXAMPLE_BRIEF.read_text(encoding="utf-8"))
     client = LLMClient()  # real transport; reads ANTHROPIC_API_KEY from env
 
-    dest = build_and_write(brief, tmp_path, client)
+    dest = build_and_write(brief, tmp_path, client, single_agent=True)
 
     files = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
     assert len(files) == 9
