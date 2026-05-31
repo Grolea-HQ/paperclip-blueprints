@@ -12,8 +12,17 @@ from paperclip_blueprints.models.input import (
     CompanyBrief,
     parse_brief,
 )
+from paperclip_blueprints.models.operations import OperationsDefinition
+from paperclip_blueprints.models.org_plan import (
+    AgentStub,
+    OrgPlan,
+    ProjectStub,
+    TaskStub,
+)
 from paperclip_blueprints.models.output import CompanyConfig
+from paperclip_blueprints.models.project import ProjectDefinition
 from paperclip_blueprints.models.skill import SkillDefinition
+from paperclip_blueprints.models.task import TaskDefinition
 
 # A minimal but complete filled-in brief, structured like examples/input-template.md.
 # Section bodies appear AFTER each "**Your ...:**" anchor so the parser ignores the
@@ -305,13 +314,14 @@ def test_company_config_single_agent() -> None:
         anti_patterns=["skip smoke"],
     )
     config = CompanyConfig(
+        mode="single",
         brief=CompanyBrief(**_brief_kwargs()),
         company=company,
-        agent=AgentDefinition(**_agent_kwargs()),
-        skill=skill,
+        agents=[AgentDefinition(**_agent_kwargs())],
+        skills=[skill],
     )
     assert config.license_kind == "Proprietary"
-    assert config.agent.slug == "ceo"
+    assert config.agents[0].slug == "ceo"
 
 
 def _company_kwargs(**overrides: Any) -> dict[str, Any]:
@@ -347,3 +357,223 @@ def test_company_definition_rejects_unknown_tone() -> None:
 
 def test_company_definition_accepts_prompt_offered_tone() -> None:
     assert CompanyDefinition(**_company_kwargs(tone="purple")).tone == "purple"
+
+
+# --- v0.1b foundational models (T003) ---------------------------------------
+
+
+def _stub(slug: str, reports_to: str | None, skills: list[str] | None = None) -> AgentStub:
+    return AgentStub(
+        slug=slug,
+        name=slug.title(),
+        title=slug.title(),
+        reports_to=reports_to,
+        skills=skills or [f"{slug}-skill"],
+    )
+
+
+def _valid_org() -> OrgPlan:
+    return OrgPlan(
+        agents=[
+            _stub("ceo", None, ["pricing-strategy"]),
+            _stub("cto", "ceo", ["architecture"]),
+            _stub("engineer", "cto", ["coding"]),
+        ],
+        projects=[ProjectStub(slug="launch-v1", name="Launch v1", owner="cto")],
+        tasks=[
+            TaskStub(slug="ship-mvp", name="Ship the MVP", project="launch-v1", assignee="engineer")
+        ],
+    )
+
+
+def test_orgplan_valid_constructs() -> None:
+    org = _valid_org()
+    assert {a.slug for a in org.agents} == {"ceo", "cto", "engineer"}
+    assert org.skill_slugs == ["pricing-strategy", "architecture", "coding"]
+
+
+def test_orgplan_requires_exactly_one_root() -> None:
+    with pytest.raises(ValidationError, match="exactly one root"):
+        OrgPlan(agents=[_stub("ceo", None), _stub("coo", None)])
+
+
+def test_orgplan_rejects_unknown_manager() -> None:
+    with pytest.raises(ValidationError, match="unknown manager"):
+        OrgPlan(agents=[_stub("ceo", None), _stub("eng", "ghost")])
+
+
+def test_orgplan_rejects_cycle() -> None:
+    with pytest.raises(ValidationError, match="cycle"):
+        OrgPlan(agents=[_stub("a", "b"), _stub("b", "a"), _stub("root", None)])
+
+
+def test_orgplan_enforces_span_of_control() -> None:
+    reports = [_stub(f"r{i}", "ceo") for i in range(8)]
+    with pytest.raises(ValidationError, match="span-of-control"):
+        OrgPlan(agents=[_stub("ceo", None), *reports])
+
+
+def test_orgplan_allows_seven_reports() -> None:
+    reports = [_stub(f"r{i}", "ceo") for i in range(7)]
+    org = OrgPlan(agents=[_stub("ceo", None), *reports])
+    assert len(org.agents) == 8
+
+
+def test_orgplan_rejects_dangling_task_refs() -> None:
+    with pytest.raises(ValidationError, match="unknown project"):
+        OrgPlan(
+            agents=[_stub("ceo", None)],
+            tasks=[TaskStub(slug="t", name="T", project="ghost", assignee="ceo")],
+        )
+    with pytest.raises(ValidationError, match="unknown agent"):
+        OrgPlan(
+            agents=[_stub("ceo", None)],
+            projects=[ProjectStub(slug="p", name="P", owner="ceo")],
+            tasks=[TaskStub(slug="t", name="T", project="p", assignee="ghost")],
+        )
+
+
+def test_orgplan_rejects_duplicate_slugs() -> None:
+    with pytest.raises(ValidationError, match="duplicate agent"):
+        OrgPlan(agents=[_stub("ceo", None), _stub("ceo", "ceo")])
+
+
+def test_project_and_task_definitions_construct() -> None:
+    p = ProjectDefinition(
+        slug="launch-v1",
+        name="Launch v1",
+        owner="cto",
+        summary="Ship it.",
+        success_condition="Live.",
+    )
+    t = TaskDefinition(
+        slug="ship-mvp",
+        name="Ship the MVP",
+        project="launch-v1",
+        assignee="engineer",
+        objective="Cut the first build.",
+        completion_criteria=["Build uploads", "Smoke pass green"],
+    )
+    assert p.owner == "cto"
+    assert t.project == "launch-v1"
+
+
+def test_task_requires_completion_criterion() -> None:
+    with pytest.raises(ValidationError):
+        TaskDefinition(
+            slug="t", name="T", project="p", assignee="a", objective="x", completion_criteria=[]
+        )
+
+
+def _operations() -> OperationsDefinition:
+    return OperationsDefinition(
+        phase_model="Phase 1 then 2.",
+        idle_state_protocol="Idle is a success state.",
+        reporting_cadence="Weekly.",
+        comm_conventions="Async first.",
+        approval_merge_rules="Board approves strategy.",
+        delegation_checklist=["Is the goal an outcome?"],
+        anti_drift_checks=["We are not a services shop."],
+        duplicate_prevention="Check the inventory first.",
+        routine_slots=["ceo: weekly review"],
+        critical_rules=["Never ship without sign-off."],
+    )
+
+
+def _full_config_kwargs(**overrides: Any) -> dict[str, Any]:
+    ceo = AgentDefinition(**_agent_kwargs())
+    cto = AgentDefinition(
+        **_agent_kwargs(
+            slug="cto", name="CTO", title="CTO", reports_to="ceo", skills=["architecture"]
+        )
+    )
+    skills = [
+        SkillDefinition(**_skill_kwargs()),
+        SkillDefinition(**_skill_kwargs(slug="architecture", name="architecture")),
+    ]
+    base: dict[str, Any] = {
+        "mode": "full",
+        "brief": CompanyBrief(**_brief_kwargs()),
+        "company": CompanyDefinition(**_company_kwargs()),
+        "agents": [ceo, cto],
+        "skills": skills,
+        "projects": [
+            ProjectDefinition(
+                slug="launch-v1", name="Launch v1", owner="cto", summary="s", success_condition="c"
+            )
+        ],
+        "tasks": [
+            TaskDefinition(
+                slug="ship",
+                name="Ship",
+                project="launch-v1",
+                assignee="cto",
+                objective="o",
+                completion_criteria=["done"],
+            )
+        ],
+        "operations": _operations(),
+    }
+    base.update(overrides)
+    return base
+
+
+def _skill_kwargs(**overrides: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "slug": "release-checklist",
+        "name": "release-checklist",
+        "description": "Pre-submission checklist.",
+        "when_to_load": ["RC ready."],
+        "inputs": ["build"],
+        "procedure": ["check"],
+        "outputs": ["signed build"],
+        "anti_patterns": ["skip smoke"],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_company_config_full_constructs() -> None:
+    config = CompanyConfig(**_full_config_kwargs())
+    assert config.mode == "full"
+    assert len(config.agents) == 2
+    assert config.operations is not None
+
+
+def test_company_config_full_requires_operations() -> None:
+    with pytest.raises(ValidationError, match="must have operations"):
+        CompanyConfig(**_full_config_kwargs(operations=None))
+
+
+def test_company_config_full_requires_single_root() -> None:
+    ceo = AgentDefinition(**_agent_kwargs())
+    coo = AgentDefinition(**_agent_kwargs(slug="coo", name="COO", title="COO", reports_to=None))
+    with pytest.raises(ValidationError, match="exactly one root"):
+        CompanyConfig(**_full_config_kwargs(agents=[ceo, coo]))
+
+
+def test_company_config_full_rejects_unresolved_skill() -> None:
+    cto = AgentDefinition(
+        **_agent_kwargs(
+            slug="cto", name="CTO", title="CTO", reports_to="ceo", skills=["ghost-skill"]
+        )
+    )
+    ceo = AgentDefinition(**_agent_kwargs())
+    with pytest.raises(ValidationError, match="no SKILL.md"):
+        CompanyConfig(**_full_config_kwargs(agents=[ceo, cto]))
+
+
+def test_company_config_single_rejects_projects() -> None:
+    with pytest.raises(ValidationError, match="no projects or tasks"):
+        CompanyConfig(
+            mode="single",
+            brief=CompanyBrief(**_brief_kwargs()),
+            company=CompanyDefinition(**_company_kwargs()),
+            agents=[AgentDefinition(**_agent_kwargs())],
+            skills=[SkillDefinition(**_skill_kwargs())],
+            projects=[
+                ProjectDefinition(
+                    slug="p", name="P", owner="ceo", summary="s", success_condition="c"
+                )
+            ],
+        )

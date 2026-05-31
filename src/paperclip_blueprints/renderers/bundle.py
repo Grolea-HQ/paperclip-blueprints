@@ -40,7 +40,9 @@ def generate_bundle(
     soul = generate_soul(stub, company, client, model=model)
     agent = generate_agent(stub, company, brief, soul, client, model=model)
     skill = generate_skill(stub.skills[0], company, [agent.name], client, model=model)
-    return CompanyConfig(brief=brief, company=company, agent=agent, skill=skill)
+    return CompanyConfig(
+        mode="single", brief=brief, company=company, agents=[agent], skills=[skill]
+    )
 
 
 def _we_are_not_count(company_md: str) -> int:

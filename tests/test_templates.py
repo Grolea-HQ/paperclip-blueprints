@@ -73,7 +73,9 @@ def _config() -> CompanyConfig:
         outputs=["A signed-off build."],
         anti_patterns=["Shipping without the smoke pass."],
     )
-    return CompanyConfig(brief=brief, company=company, agent=agent, skill=skill)
+    return CompanyConfig(
+        mode="single", brief=brief, company=company, agents=[agent], skills=[skill]
+    )
 
 
 def test_exact_file_set() -> None:
@@ -122,7 +124,7 @@ def test_paperclip_yaml_omits_role_when_unset() -> None:
     importer applies its own "agent" default rather than reading a junk value.
     """
     config = _config()
-    config.agent.role = None
+    config.agents[0].role = None
     out = render_files(config)[".paperclip.yaml"]
     assert "role:" not in out
 

@@ -59,7 +59,7 @@ def render_company_md(company: CompanyDefinition) -> str:
 
 
 def _agents_frontmatter(config: CompanyConfig) -> str:
-    a = config.agent
+    a = config.agents[0]
     return dump_frontmatter(
         {
             "schema": "agentcompanies/v1",
@@ -74,7 +74,7 @@ def _agents_frontmatter(config: CompanyConfig) -> str:
 
 
 def _skill_frontmatter(config: CompanyConfig) -> str:
-    s = config.skill
+    s = config.skills[0]
     return dump_frontmatter(
         {
             "schema": "agentcompanies/v1",
@@ -87,17 +87,18 @@ def _skill_frontmatter(config: CompanyConfig) -> str:
 
 def render_files(config: CompanyConfig) -> dict[str, str]:
     """Render every file of a single-agent bundle to a path→content map."""
-    agent = config.agent
+    agent = config.agents[0]
+    skill = config.skills[0]
     ctx = {
         "brief": config.brief,
         "company": config.company,
         "agent": agent,
         "soul": agent.soul,
-        "skill": config.skill,
+        "skill": skill,
         "license_kind": config.license_kind,
     }
     adir = f"agents/{agent.slug}"
-    sdir = f"skills/{config.skill.slug}"
+    sdir = f"skills/{skill.slug}"
 
     return {
         ".paperclip.yaml": _render("paperclip_yaml.j2", **ctx),
