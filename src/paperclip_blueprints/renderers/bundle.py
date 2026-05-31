@@ -28,7 +28,7 @@ from ..generators.tasks import generate_task
 from ..models.input import CompanyBrief
 from ..models.output import CompanyConfig
 from ..patterns import get_seed
-from ..validators import validate_bundle
+from ..validators import BundleValidationError, validate_bundle
 from .render import render_files
 
 _TOP_LEVEL = {".paperclip.yaml", "COMPANY.md", "README.md", "LICENSE.txt"}
@@ -349,12 +349,46 @@ def build_and_write(
     The bundle is written directly into ``output_dir`` (no slug subdirectory). The
     full bundle fans out concurrently; the single-agent bundle runs sequentially.
     Validation happens fully in memory before any file is written, so a failed
-    generation or check leaves no partial bundle.
+    generation or check leaves no valid bundle. On a validation failure the rejected
+    bundle is dumped to ``<output_dir>-failed/`` for inspection (clearly marked, never
+    importable) and the error is re-raised.
     """
     if single_agent:
         config = generate_bundle(brief, client, model=model)
     else:
         config = generate_bundle_full(brief, client, model=model)
     files = render_files(config)
-    validate_bundle(config, files)
+    try:
+        validate_bundle(config, files)
+    except BundleValidationError as exc:
+        _dump_failed(files, output_dir, exc)
+        raise
     return write_bundle(files, output_dir, force=force)
+
+
+def _dump_failed(
+    files: dict[str, str], output_dir: str | Path, error: BundleValidationError
+) -> Path:
+    """Write a rejected bundle to ``<output_dir>-failed/`` for inspection.
+
+    The dump is clearly named and carries a ``VALIDATION-ERRORS.txt`` banner, so it
+    can never be mistaken for an importable bundle (Constitution II). Best-effort: a
+    dump failure must not mask the original validation error.
+    """
+    failed = Path(f"{str(output_dir).rstrip('/')}-failed")
+    try:
+        if failed.exists():
+            shutil.rmtree(failed)
+        for rel, content in files.items():
+            target = failed / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+        (failed / "VALIDATION-ERRORS.txt").write_text(
+            "REJECTED BUNDLE — written for inspection only.\n"
+            "This bundle failed validation and is NOT importable. Do not import it.\n\n"
+            f"{error}\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # never let a dump failure hide the validation error
+    return failed

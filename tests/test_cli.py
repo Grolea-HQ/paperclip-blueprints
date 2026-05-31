@@ -189,6 +189,39 @@ def test_generate_default_is_full_multi_agent(tmp_path, monkeypatch) -> None:
     assert "ceo --> engineer" in (out / "README.md").read_text()
 
 
+_OPERATIONS_NO_ECHO = """```json
+{"phase_model": "Build then polish.", "idle_state_protocol": "Idle is a success state.",
+ "reporting_cadence": "Weekly.", "comm_conventions": "Async.",
+ "approval_merge_rules": "The board approves strategy.", "delegation_checklist": ["outcome?"],
+ "anti_drift_checks": ["Stay on mission and ship quality work."],
+ "duplicate_prevention": "Check the inventory first.",
+ "routine_slots": ["ceo: weekly review"], "critical_rules": ["Sign-off before ship."]}
+```"""
+
+
+def test_generate_dumps_failed_bundle_for_inspection(tmp_path, monkeypatch) -> None:
+    # An OPERATIONS payload whose anti-drift checks echo none of the constraints
+    # fails S7; the rejected bundle must be dumped to <output>-failed/ (#3).
+    def failing_ops(**kwargs: object) -> str:
+        if "operations" in str(kwargs["system"]).lower():
+            return _OPERATIONS_NO_ECHO
+        return _dispatch_full(**kwargs)
+
+    _patch_client(monkeypatch, failing_ops)
+    brief = _write_brief(tmp_path)
+    out = tmp_path / "out"
+    result = runner.invoke(app, ["generate", "--input", str(brief), "--output", str(out)])
+    assert result.exit_code == 1
+    assert not out.exists()  # no valid bundle written
+    failed = tmp_path / "out-failed"
+    assert failed.exists()
+    assert (failed / "OPERATIONS.md").exists()  # the rejected artifact is inspectable
+    errors = (failed / "VALIDATION-ERRORS.txt").read_text()
+    assert "S7" in errors
+    assert "REJECTED" in errors
+    assert "-failed" in result.output
+
+
 def test_generate_prints_cost_summary(tmp_path, monkeypatch) -> None:
     # A usage-reporting transport makes the run print its cost summary (SC-011).
     def with_usage(**kwargs: object) -> tuple[str, tuple[int, int]]:

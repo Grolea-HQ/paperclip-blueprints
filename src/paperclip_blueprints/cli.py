@@ -74,7 +74,11 @@ def generate(
         dest = build_and_write(
             brief, output, client, single_agent=single_agent, model=model, force=force
         )
-    except (GenerationError, BundleError, BundleValidationError, MissingAPIKeyError) as exc:
+    except BundleValidationError as exc:
+        typer.echo(f"generation failed: {exc}", err=True)
+        typer.echo(f"rejected bundle written to {output}-failed/ for inspection", err=True)
+        raise typer.Exit(1) from exc
+    except (GenerationError, BundleError, MissingAPIKeyError) as exc:
         typer.echo(f"generation failed: {exc}", err=True)
         raise typer.Exit(1) from exc
 
