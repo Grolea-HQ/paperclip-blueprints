@@ -1,49 +1,68 @@
-"""org_planner — produce the single owner agent stub (Sonnet, ADR-004).
+"""org_planner — produce the OrgPlan skeleton (Sonnet, ADR-004 / R-001).
 
-The stub is a transient intermediate (not a bundle artifact), so it lives here
-rather than in ``models/``.
+The planner fixes every agent, project, and task slug and all their cross-references
+before content fan-out. ``OrgPlan`` and the stub models live in ``models/org_plan.py``
+and are re-exported here for callers that import them from the generator.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel
-
 from ..config import STRUCTURAL_MODEL
 from ..models.company import CompanyDefinition
 from ..models.input import CompanyBrief
+from ..models.org_plan import AgentStub, OrgPlan, ProjectStub, TaskStub
 from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+
+__all__ = [
+    "AgentStub",
+    "OrgPlan",
+    "ProjectStub",
+    "TaskStub",
+    "generate_org_plan",
+    "generate_org",
+]
 
 _SYSTEM = "You design Paperclip company org structures. Follow the instructions exactly."
 
 
-class AgentStub(BaseModel):
-    """The org_planner's output: enough to drive per-agent generation."""
+def generate_org_plan(
+    brief: CompanyBrief,
+    company: CompanyDefinition,
+    client: LLMClient,
+    *,
+    single_agent: bool = False,
+    seed: str | None = None,
+    model: str | None = None,
+) -> OrgPlan:
+    """Plan the org skeleton (agents + projects + tasks), fully cross-referenced.
 
-    slug: str
-    name: str
-    title: str
-    reports_to: str | None
-    skills: list[str]
-
-
-def generate_org(
-    brief: CompanyBrief, company: CompanyDefinition, client: LLMClient, *, model: str | None = None
-) -> AgentStub:
-    """Plan a single-agent org: the top-level owner who owns the north star."""
+    Args:
+        single_agent: when True, the planner returns exactly one owner agent and no
+            projects/tasks (the v0.1a size-one path).
+        seed: optional pattern-seed context (US2) injected into the prompt.
+    """
     prompt = render_prompt(
         "org_planner",
         name=company.name,
         north_star=company.north_star,
         we_are=company.we_are,
+        governance_position=brief.governance_position,
+        single_agent=single_agent,
+        seed=seed,
     )
     raw = client.complete(model=model or STRUCTURAL_MODEL, system=_SYSTEM, user=prompt)
     payload = parse_json_response(raw, what="org plan")
     try:
-        stub = AgentStub(**payload)
-    except Exception as exc:  # noqa: BLE001
+        plan = OrgPlan(**payload)
+    except Exception as exc:  # noqa: BLE001 - pydantic ValidationError or type errors
         raise GenerationError(f"org plan failed validation: {exc}") from exc
-    if stub.reports_to is not None:
-        raise GenerationError("single-agent org owner must have reports_to = null")
-    if len(stub.skills) != 1:
-        raise GenerationError("single-agent owner must have exactly one primary skill")
-    return stub
+    if single_agent and len(plan.agents) != 1:
+        raise GenerationError("single-agent org must have exactly one agent")
+    return plan
+
+
+def generate_org(
+    brief: CompanyBrief, company: CompanyDefinition, client: LLMClient, *, model: str | None = None
+) -> AgentStub:
+    """Plan a single-agent org and return its one owner stub (v0.1a convenience)."""
+    return generate_org_plan(brief, company, client, single_agent=True, model=model).agents[0]

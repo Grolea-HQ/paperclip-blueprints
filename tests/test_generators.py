@@ -143,8 +143,8 @@ def _company() -> CompanyDefinition:
 
 _ORG_JSON = """\
 ```json
-{"slug": "ceo", "name": "Founder / CEO", "title": "Founder / CEO",
- "reports_to": null, "skills": ["release-checklist"]}
+{"agents": [{"slug": "ceo", "name": "Founder / CEO", "title": "Founder / CEO",
+ "reports_to": null, "skills": ["release-checklist"]}], "projects": [], "tasks": []}
 ```
 """
 
@@ -358,3 +358,80 @@ def test_skill_generator_builds_skill() -> None:
     )
     assert isinstance(skill, SkillDefinition)
     assert skill.slug == "release-checklist"
+
+
+# --- US1 full-bundle generators (T012) --------------------------------------
+
+_ORG_FULL_JSON = """\
+```json
+{"agents": [
+  {"slug": "ceo", "name": "CEO", "title": "CEO", "reports_to": null, "skills": ["strategy"]},
+  {"slug": "eng", "name": "Engineer", "title": "Engineer",
+   "reports_to": "ceo", "skills": ["coding"]}
+ ],
+ "projects": [{"slug": "launch", "name": "Launch", "owner": "eng"}],
+ "tasks": [{"slug": "ship", "name": "Ship", "project": "launch", "assignee": "eng"}]}
+```
+"""
+
+_OPERATIONS_JSON = """\
+```json
+{"phase_model": "Build then polish.", "idle_state_protocol": "Idle is a success state.",
+ "reporting_cadence": "Weekly.", "comm_conventions": "Async.",
+ "approval_merge_rules": "Board approves strategy.", "delegation_checklist": ["outcome?"],
+ "anti_drift_checks": ["We are NOT a free-to-play studio."],
+ "duplicate_prevention": "Check inventory.",
+ "routine_slots": ["ceo: weekly review"], "critical_rules": ["Sign-off before ship."]}
+```
+"""
+
+
+def test_generate_org_plan_full_multi_agent() -> None:
+    from paperclip_blueprints.generators.org import generate_org_plan
+    from paperclip_blueprints.models.org_plan import OrgPlan
+
+    plan = generate_org_plan(_brief(), _company(), LLMClient(_invoke=lambda **_: _ORG_FULL_JSON))
+    assert isinstance(plan, OrgPlan)
+    assert {a.slug for a in plan.agents} == {"ceo", "eng"}
+    assert plan.skill_slugs == ["strategy", "coding"]
+    assert len(plan.projects) == 1 and len(plan.tasks) == 1
+
+
+def test_generate_operations_parses_and_uses_thinking() -> None:
+    from paperclip_blueprints.generators.operations import generate_operations
+    from paperclip_blueprints.models.operations import OperationsDefinition
+    from paperclip_blueprints.models.org_plan import AgentStub
+
+    seen: dict[str, object] = {}
+
+    def fake(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _OPERATIONS_JSON
+
+    stub = AgentStub(slug="ceo", name="CEO", title="CEO", reports_to=None, skills=["strategy"])
+    ops = generate_operations(_company(), _brief(), [stub], LLMClient(_invoke=fake))
+    assert isinstance(ops, OperationsDefinition)
+    assert ops.anti_drift_checks
+    assert seen["thinking"] is True  # operations is a content-synthesis Opus call
+
+
+def test_generate_project_and_task() -> None:
+    from paperclip_blueprints.generators.projects import generate_project
+    from paperclip_blueprints.generators.tasks import generate_task
+    from paperclip_blueprints.models.org_plan import ProjectStub, TaskStub
+
+    proj = generate_project(
+        ProjectStub(slug="launch", name="Launch", owner="eng"),
+        _company(),
+        LLMClient(_invoke=lambda **_: '```json\n{"summary": "s", "success_condition": "c"}\n```'),
+    )
+    assert proj.owner == "eng" and proj.success_condition == "c"
+
+    task = generate_task(
+        TaskStub(slug="ship", name="Ship", project="launch", assignee="eng"),
+        _company(),
+        LLMClient(
+            _invoke=lambda **_: '```json\n{"objective": "o", "completion_criteria": ["done"]}\n```'
+        ),
+    )
+    assert task.project == "launch" and task.completion_criteria == ["done"]

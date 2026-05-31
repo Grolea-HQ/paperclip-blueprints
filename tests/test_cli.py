@@ -39,8 +39,8 @@ _IDENTITY = """```json
 ```"""
 
 _ORG = """```json
-{"slug": "ceo", "name": "Founder / CEO", "title": "Founder / CEO",
- "reports_to": null, "skills": ["release-checklist"]}
+{"agents": [{"slug": "ceo", "name": "Founder / CEO", "title": "Founder / CEO",
+ "reports_to": null, "skills": ["release-checklist"]}], "projects": [], "tasks": []}
 ```"""
 
 _SOUL = """```json
@@ -86,6 +86,65 @@ def _dispatch(**kwargs: object) -> str:
     raise AssertionError(f"unexpected system prompt: {system!r}")
 
 
+# --- full multi-agent mocks -------------------------------------------------
+
+_ORG_FULL = """```json
+{"agents": [
+  {"slug": "ceo", "name": "Founder / CEO", "title": "Founder / CEO",
+   "reports_to": null, "skills": ["release-checklist"]},
+  {"slug": "engineer", "name": "Engineer", "title": "Engineer",
+   "reports_to": "ceo", "skills": ["release-checklist"]}
+ ],
+ "projects": [{"slug": "launch-v1", "name": "Launch v1", "owner": "engineer"}],
+ "tasks": [{"slug": "ship-build", "name": "Ship the first build",
+            "project": "launch-v1", "assignee": "engineer"}]}
+```"""
+
+_OPERATIONS = """```json
+{"phase_model": "Build, then polish.",
+ "idle_state_protocol": "Idle is a success state; wait between heartbeats.",
+ "reporting_cadence": "Weekly to the CEO.", "comm_conventions": "Async first.",
+ "approval_merge_rules": "The board approves strategy and hires.",
+ "delegation_checklist": ["Is the goal an outcome?"],
+ "anti_drift_checks": ["We are NOT a free-to-play studio.", "We are NOT a multi-title shop.",
+                       "One title at a time.", "No dark patterns."],
+ "duplicate_prevention": "Check the inventory first.",
+ "routine_slots": ["ceo: weekly review"],
+ "critical_rules": ["Never ship without sign-off."]}
+```"""
+
+_PROJECT = """```json
+{"summary": "Ship the first premium build to the store.",
+ "success_condition": "A live, signed build that holds a 4.6+ rating."}
+```"""
+
+_TASK = """```json
+{"objective": "Cut and upload the first release candidate.",
+ "completion_criteria": ["Build uploads to the store", "Smoke pass is green"]}
+```"""
+
+
+def _dispatch_full(**kwargs: object) -> str:
+    system = str(kwargs["system"]).lower()
+    if "identity" in system:
+        return _IDENTITY
+    if "org" in system:
+        return _ORG_FULL
+    if "persona" in system:
+        return _SOUL
+    if "mandate" in system:
+        return _AGENT
+    if "operations" in system:
+        return _OPERATIONS
+    if "project" in system:
+        return _PROJECT
+    if "task" in system:
+        return _TASK
+    if "skill" in system:
+        return _SKILL
+    raise AssertionError(f"unexpected system prompt: {system!r}")
+
+
 def _patch_client(monkeypatch, transport=_dispatch) -> None:
     monkeypatch.setattr(cli_module, "_make_client", lambda: LLMClient(_invoke=transport))
 
@@ -113,14 +172,21 @@ def test_generate_happy_path(tmp_path, monkeypatch) -> None:
     assert (dest / "agents/ceo/SOUL.md").exists()
 
 
-def test_generate_requires_single_agent_flag(tmp_path, monkeypatch) -> None:
-    _patch_client(monkeypatch)
+def test_generate_default_is_full_multi_agent(tmp_path, monkeypatch) -> None:
+    _patch_client(monkeypatch, _dispatch_full)
     brief = _write_brief(tmp_path)
-    result = runner.invoke(
-        app, ["generate", "--input", str(brief), "--output", str(tmp_path / "out")]
-    )
-    assert result.exit_code == 1
-    assert "single-agent" in result.output
+    out = tmp_path / "out"
+    result = runner.invoke(app, ["generate", "--input", str(brief), "--output", str(out)])
+    assert result.exit_code == 0, result.output
+    # Full bundle: multiple agents, the operations + inventory files, a project and a task.
+    assert (out / "OPERATIONS.md").exists()
+    assert (out / "PROJECT-INVENTORY.md").exists()
+    assert (out / "agents/ceo/AGENTS.md").exists()
+    assert (out / "agents/engineer/AGENTS.md").exists()
+    assert (out / "projects/launch-v1/PROJECT.md").exists()
+    assert (out / "tasks/ship-build/TASK.md").exists()
+    # The README org chart wires the reporting edge.
+    assert "ceo --> engineer" in (out / "README.md").read_text()
 
 
 def test_generate_invalid_brief_exits_nonzero(tmp_path, monkeypatch) -> None:

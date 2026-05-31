@@ -218,3 +218,52 @@ def test_skill_md_frontmatter_and_sections() -> None:
 def test_license_default_proprietary() -> None:
     out = render_files(_config())["LICENSE.txt"]
     assert "Proprietary" in out
+
+
+# --- full-bundle templates (T013) -------------------------------------------
+
+from paperclip_blueprints.models.output import CompanyConfig  # noqa: E402
+from test_models import _full_config_kwargs  # noqa: E402
+
+
+def _full_files() -> dict[str, str]:
+    return render_files(CompanyConfig(**_full_config_kwargs()))
+
+
+def test_full_operations_md_sections() -> None:
+    out = _full_files()["OPERATIONS.md"]
+    assert "# Operations —" in out
+    assert "## Anti-drift checks" in out
+    assert "## Routine slots" in out
+
+
+def test_full_project_and_task_md() -> None:
+    files = _full_files()
+    proj = files["projects/launch-v1/PROJECT.md"]
+    assert "schema: agentcompanies/v1" in proj
+    assert "## Success condition" in proj
+    task = files["tasks/ship/TASK.md"]
+    assert "project: launch-v1" in task
+    assert "assignee: cto" in task
+    assert "## Completion criteria" in task
+
+
+def test_full_project_inventory_seeded() -> None:
+    out = _full_files()["PROJECT-INVENTORY.md"]
+    assert "## Starter projects" in out
+    assert "### Launch v1" in out
+    assert "`in_progress`" in out
+
+
+def test_full_readme_multi_node_mermaid_with_edges() -> None:
+    out = _full_files()["README.md"]
+    assert "| Agents | 2 |" in out
+    assert "ceo --> cto" in out
+    assert 'cto["CTO — CTO"]' in out
+
+
+def test_full_paperclip_yaml_maps() -> None:
+    out = _full_files()[".paperclip.yaml"]
+    assert "agents: [ceo, cto]" in out
+    assert "projects: [launch-v1]" in out
+    assert "launch-v1:" in out  # bare project key in the projects map

@@ -129,3 +129,63 @@ def test_write_bundle_refuses_nonempty_without_force(tmp_path) -> None:
     # with force it succeeds
     dest = write_bundle(files, out, force=True)
     assert dest.exists()
+
+
+# --- full-mode structural check (T015) --------------------------------------
+
+from paperclip_blueprints.models.output import CompanyConfig  # noqa: E402
+from test_models import _full_config_kwargs  # noqa: E402
+
+
+def _full_files() -> dict[str, str]:
+    return render_files(CompanyConfig(**_full_config_kwargs()))
+
+
+def test_full_bundle_passes_structural_check() -> None:
+    structural_check(_full_files())  # must not raise
+
+
+def test_full_single_agent_still_nine_files() -> None:
+    files = render_files(_config())
+    structural_check(files)
+    assert len(files) == 9
+
+
+def test_full_missing_top_level_rejected() -> None:
+    files = _full_files()
+    del files["README.md"]
+    with pytest.raises(BundleError, match="missing top-level"):
+        structural_check(files)
+
+
+def test_full_wrong_schema_string_rejected() -> None:
+    files = _full_files()
+    files["COMPANY.md"] = files["COMPANY.md"].replace("agentcompanies/v1", "wrong/v9")
+    with pytest.raises(BundleError, match="agentcompanies/v1"):
+        structural_check(files)
+
+
+def test_full_dangling_task_project_rejected() -> None:
+    files = _full_files()
+    key = next(k for k in files if k.startswith("tasks/"))
+    files[key] = files[key].replace("project: launch-v1", "project: ghost-project")
+    with pytest.raises(BundleError, match="unknown project"):
+        structural_check(files)
+
+
+def test_full_orphan_skill_rejected() -> None:
+    files = _full_files()
+    files["skills/orphan-skill/SKILL.md"] = (
+        "---\nschema: agentcompanies/v1\nslug: orphan-skill\n"
+        "name: orphan-skill\ndescription: x\n---\n"
+    )
+    with pytest.raises(BundleError, match="referenced by no agent"):
+        structural_check(files)
+
+
+def test_full_missing_idle_belief_rejected() -> None:
+    files = _full_files()
+    key = next(k for k in files if k.endswith("/SOUL.md"))
+    files[key] = files[key].replace("Idle", "Busy").replace("idle", "busy")
+    with pytest.raises(BundleError, match="idle-state"):
+        structural_check(files)

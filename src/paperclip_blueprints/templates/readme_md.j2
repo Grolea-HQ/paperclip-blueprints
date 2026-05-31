@@ -6,24 +6,33 @@
 
 | Field | Value |
 | --- | --- |
-| Tags | — |
+| Tags | {% if company.tags %}{{ company.tags | join(', ') }}{% else %}—{% endif %} |
 | Tone | `{{ company.tone }}` |
-| Agents | 1 |
-| Projects | 0 |
-| Tasks | 0 |
+| Agents | {{ agents | length }} |
+| Projects | {{ projects | length }} |
+| Tasks | {{ tasks | length }} |
 | Goals | {{ company.goals | length }} |
-| Skills | 1 |
+| Skills | {{ skills | length }} |
 
 ## Org Chart
 
 ```mermaid
 graph TD
-  {{ agent.slug }}["{{ agent.name }} — {{ agent.title }}"]
+{% for a in agents %}
+  {{ a.slug }}["{{ a.name }} — {{ a.title }}"]
+{% endfor %}
+{% for a in agents %}
+{% if a.reports_to %}
+  {{ a.reports_to }} --> {{ a.slug }}
+{% endif %}
+{% endfor %}
 ```
 
 ## Agents
 
-- [{{ agent.name }}](agents/{{ agent.slug }}/AGENTS.md) — {{ agent.title }}
+{% for a in agents %}
+- [{{ a.name }}](agents/{{ a.slug }}/AGENTS.md) — {{ a.title }}
+{% endfor %}
 
 ## Goals
 

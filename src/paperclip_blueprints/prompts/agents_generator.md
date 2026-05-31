@@ -44,7 +44,25 @@ the actual decisions (e.g. "Pricing changes", "Sponsorship deals beyond the agre
 ceiling"). Do NOT embed Paperclip's internal approval-flow identifiers as literal
 tokens — the runtime maps prose decisions to the right approval flow.
 
+## Place in the org
+
+{% if single_agent %}
 This is a SINGLE-AGENT company, so `receives_from` and `hands_to` are both empty lists.
+{% else %}
+{% if manager %}- This agent reports to: `{{ manager }}`.
+{% else %}- This agent is the company owner and reports to no one.
+{% endif %}
+{% if reports %}- Direct reports: {% for r in reports %}`{{ r }}`{% if not loop.last %}, {% endif %}{% endfor %}.
+{% else %}- This agent has no direct reports.
+{% endif %}
+{% if peers %}- Peers (same manager): {% for p in peers %}`{{ p }}`{% if not loop.last %}, {% endif %}{% endfor %}.
+{% else %}- No peers.
+{% endif %}
+
+Populate `receives_from` and `hands_to` ONLY with agents named above (by their
+slug), each as a string `"<slug> — what flows across the handoff"`. Every handoff
+must name a real agent from the list above; never invent a slug.
+{% endif %}
 
 ## Output format
 
@@ -54,12 +72,12 @@ Return ONE fenced ```json block and nothing else:
 {
   "mandate": "1-2 paragraphs: what this agent owns and how it operates.",
   "triggers": ["what wakes the agent"],
-  "receives_from": [],
-  "hands_to": [],
+  "receives_from": [{% if not single_agent %}"manager-or-peer-slug — what flows in"{% endif %}],
+  "hands_to": [{% if not single_agent %}"report-or-peer-slug — what flows out"{% endif %}],
   "deliverables": ["concrete recurring outputs"],
   "can_approve": ["calibrated to governance; no escalation needed"],
   "must_escalate": ["calibrated to governance; plain-prose decisions, no approval-flow tokens"],
-  "escalation_text": "One paragraph: when and how the agent escalates to the operator.",
+  "escalation_text": "One paragraph: when and how the agent escalates.",
   "tools_role_specific": "One short paragraph for TOOLS.md describing role-specific tools."
 }
 ```

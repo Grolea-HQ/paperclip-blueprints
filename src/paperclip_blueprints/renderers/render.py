@@ -12,8 +12,12 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from ..models.agent import AgentDefinition
 from ..models.company import CompanyDefinition
 from ..models.output import CompanyConfig
+from ..models.project import ProjectDefinition
+from ..models.skill import SkillDefinition
+from ..models.task import TaskDefinition
 from .frontmatter import dump_frontmatter
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -58,56 +62,125 @@ def render_company_md(company: CompanyDefinition) -> str:
     return frontmatter + "\n" + _render("company_md.j2", company=company)
 
 
-def _agents_frontmatter(config: CompanyConfig) -> str:
-    a = config.agents[0]
+def _agent_frontmatter(agent: AgentDefinition) -> str:
     return dump_frontmatter(
         {
             "schema": "agentcompanies/v1",
-            "slug": a.slug,
-            "name": a.name,
-            "title": a.title,
-            "reportsTo": a.reports_to,
-            "skills": a.skills,
+            "slug": agent.slug,
+            "name": agent.name,
+            "title": agent.title,
+            "reportsTo": agent.reports_to,
+            "skills": agent.skills,
         },
         flow_seq_keys={"skills"},
     )
 
 
-def _skill_frontmatter(config: CompanyConfig) -> str:
-    s = config.skills[0]
+def _skill_frontmatter(skill: SkillDefinition) -> str:
     return dump_frontmatter(
         {
             "schema": "agentcompanies/v1",
-            "slug": s.slug,
-            "name": s.name,
-            "description": s.description,
+            "slug": skill.slug,
+            "name": skill.name,
+            "description": skill.description,
         }
     )
 
 
+def _project_frontmatter(project: ProjectDefinition) -> str:
+    return dump_frontmatter(
+        {
+            "schema": "agentcompanies/v1",
+            "slug": project.slug,
+            "name": project.name,
+            "owner": project.owner,
+        }
+    )
+
+
+def _task_frontmatter(task: TaskDefinition) -> str:
+    return dump_frontmatter(
+        {
+            "schema": "agentcompanies/v1",
+            "slug": task.slug,
+            "name": task.name,
+            "project": task.project,
+            "assignee": task.assignee,
+        }
+    )
+
+
+def _role_bucket(agent: AgentDefinition, is_manager: bool) -> str:
+    """Classify an agent's role for TOOLS.md customization (R-008)."""
+    if agent.reports_to is None:
+        return "owner"
+    if is_manager:
+        return "manager"
+    text = (agent.title + " " + " ".join(agent.skills)).lower()
+    if any(
+        k in text for k in ("engineer", "developer", " dev", "qa", "coding", "platform", "tool")
+    ):
+        return "engineering"
+    return "generic"
+
+
 def render_files(config: CompanyConfig) -> dict[str, str]:
-    """Render every file of a single-agent bundle to a path→content map."""
-    agent = config.agents[0]
-    skill = config.skills[0]
-    ctx = {
+    """Render every file of a bundle (single or full) to a path→content map."""
+    base = {
         "brief": config.brief,
         "company": config.company,
-        "agent": agent,
-        "soul": agent.soul,
-        "skill": skill,
+        "agents": config.agents,
+        "projects": config.projects,
+        "tasks": config.tasks,
+        "skills": config.skills,
         "license_kind": config.license_kind,
     }
-    adir = f"agents/{agent.slug}"
-    sdir = f"skills/{skill.slug}"
 
-    return {
-        ".paperclip.yaml": _render("paperclip_yaml.j2", **ctx),
+    files: dict[str, str] = {
+        ".paperclip.yaml": _render("paperclip_yaml.j2", **base),
         "COMPANY.md": render_company_md(config.company),
-        "README.md": _render("readme_md.j2", **ctx),
-        "LICENSE.txt": _render("license_txt.j2", **ctx),
-        f"{adir}/AGENTS.md": _agents_frontmatter(config) + "\n" + _render("agents_md.j2", **ctx),
-        f"{adir}/SOUL.md": _render("soul_md.j2", **ctx),
-        f"{adir}/HEARTBEAT.md": _render("heartbeat_md.j2", **ctx),
-        f"{adir}/TOOLS.md": _render("tools_md.j2", **ctx),
-        f"{sdir}/SKILL.md": _skill_frontmatter(config) + "\n" + _render("skill_md.j2", **ctx),
+        "README.md": _render("readme_md.j2", **base),
+        "LICENSE.txt": _render("license_txt.j2", **base),
     }
+
+    if config.operations is not None:
+        files["OPERATIONS.md"] = _render(
+            "operations_md.j2", company=config.company, operations=config.operations
+        )
+        files["PROJECT-INVENTORY.md"] = _render(
+            "project_inventory_md.j2", company=config.company, projects=config.projects
+        )
+
+    manager_slugs = {a.reports_to for a in config.agents if a.reports_to is not None}
+    for agent in config.agents:
+        actx = {
+            "brief": config.brief,
+            "company": config.company,
+            "agent": agent,
+            "soul": agent.soul,
+            "role_bucket": _role_bucket(agent, agent.slug in manager_slugs),
+        }
+        adir = f"agents/{agent.slug}"
+        files[f"{adir}/AGENTS.md"] = (
+            _agent_frontmatter(agent) + "\n" + _render("agents_md.j2", **actx)
+        )
+        files[f"{adir}/SOUL.md"] = _render("soul_md.j2", **actx)
+        files[f"{adir}/HEARTBEAT.md"] = _render("heartbeat_md.j2", **actx)
+        files[f"{adir}/TOOLS.md"] = _render("tools_md.j2", **actx)
+
+    for skill in config.skills:
+        files[f"skills/{skill.slug}/SKILL.md"] = (
+            _skill_frontmatter(skill) + "\n" + _render("skill_md.j2", skill=skill)
+        )
+
+    for project in config.projects:
+        files[f"projects/{project.slug}/PROJECT.md"] = (
+            _project_frontmatter(project) + "\n" + _render("project_md.j2", project=project)
+        )
+
+    for task in config.tasks:
+        files[f"tasks/{task.slug}/TASK.md"] = (
+            _task_frontmatter(task) + "\n" + _render("task_md.j2", task=task)
+        )
+
+    return files

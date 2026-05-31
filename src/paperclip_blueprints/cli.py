@@ -58,19 +58,22 @@ def generate(
     verbose: bool = typer.Option(False, "--verbose", help="Stream progress/thinking."),
     force: bool = typer.Option(False, "--force", help="Overwrite a non-empty output dir."),
 ) -> None:
-    """Generate a company bundle from a brief."""
-    if not single_agent:
-        typer.echo("error: v0.1a only supports --single-agent.", err=True)
-        raise typer.Exit(1)
+    """Generate a company bundle from a brief.
 
+    Default mode produces the full multi-agent bundle; ``--single-agent`` produces
+    the minimal one-agent bundle (the size-one special case).
+    """
     brief = _load_brief(input)
     if verbose:
-        typer.echo(f"brief OK: {brief.name} ({brief.slug})", err=True)
+        kind = "single-agent" if single_agent else "multi-agent"
+        typer.echo(f"brief OK: {brief.name} ({brief.slug}) — generating {kind} bundle", err=True)
 
     try:
         client = _make_client()
-        dest = build_and_write(brief, output, client, model=model, force=force)
-    except (GenerationError, BundleError) as exc:
+        dest = build_and_write(
+            brief, output, client, single_agent=single_agent, model=model, force=force
+        )
+    except (GenerationError, BundleError, MissingAPIKeyError) as exc:
         typer.echo(f"generation failed: {exc}", err=True)
         raise typer.Exit(1) from exc
 

@@ -1,0 +1,51 @@
+# Operations — {{ company.name }}
+
+How this company runs day to day, and how it stays what it is.
+
+## Phase model
+
+{{ operations.phase_model }}
+
+## Idle-state protocol
+
+{{ operations.idle_state_protocol }}
+
+## Reporting cadence
+
+{{ operations.reporting_cadence }}
+
+## Communication conventions
+
+{{ operations.comm_conventions }}
+
+## Approval and merge rules
+
+{{ operations.approval_merge_rules }}
+
+## Delegation quality checklist
+
+{% for d in operations.delegation_checklist %}
+- {{ d }}
+{% endfor %}
+
+## Anti-drift checks
+
+{% for a in operations.anti_drift_checks %}
+- {{ a }}
+{% endfor %}
+
+## Duplicate prevention
+
+{{ operations.duplicate_prevention }}
+
+## Routine slots
+
+{% for r in operations.routine_slots %}
+- {{ r }}
+{% endfor %}
+
+## Critical rules summary
+
+{% for c in operations.critical_rules %}
+- {{ c }}
+{% endfor %}

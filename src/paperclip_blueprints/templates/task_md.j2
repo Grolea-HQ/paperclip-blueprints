@@ -1,0 +1,11 @@
+# {{ task.name }}
+
+## Objective
+
+{{ task.objective }}
+
+## Completion criteria
+
+{% for c in task.completion_criteria %}
+- {{ c }}
+{% endfor %}

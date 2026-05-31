@@ -1,4 +1,11 @@
-"""agents_generator — the AGENTS.md mandate, assembled into an AgentDefinition (Sonnet)."""
+"""agents_generator — the AGENTS.md mandate, assembled into an AgentDefinition (Sonnet).
+
+The agent's place in the org (manager, direct reports, peers) is passed in so the
+prompt can populate ``receives_from``/``hands_to`` with real agent slugs. The
+Paperclip importer ``role`` is derived structurally: the root (``reports_to is
+None``) imports as ``ceo``; every other agent leaves ``role`` unset so the importer
+applies its own ``agent`` default (company-portability.ts).
+"""
 
 from __future__ import annotations
 
@@ -32,6 +39,10 @@ def generate_agent(
     soul: AgentSoul,
     client: LLMClient,
     *,
+    manager: str | None = None,
+    reports: list[str] | None = None,
+    peers: list[str] | None = None,
+    single_agent: bool = False,
     model: str | None = None,
 ) -> AgentDefinition:
     """Generate the agent's mandate and assemble the full AgentDefinition."""
@@ -46,19 +57,25 @@ def generate_agent(
         constraints=company.constraints,
         governance_position=brief.governance_position,
         capital_monthly_eur=brief.capital_monthly_eur,
+        single_agent=single_agent,
+        manager=manager,
+        reports=reports or [],
+        peers=peers or [],
     )
     raw = client.complete(model=model or STRUCTURAL_MODEL, system=_SYSTEM, user=prompt)
     payload = parse_json_response(raw, what="agent mandate")
     # Keep only the body fields the prompt owns; a missing one is left out so
     # pydantic reports it (surfaced as GenerationError below).
     body = {k: payload[k] for k in _BODY_FIELDS if k in payload}
+    # The root agent imports as the CEO; every other agent leaves role unset.
+    role = "ceo" if stub.reports_to is None else None
     try:
         return AgentDefinition(
             slug=stub.slug,
             name=stub.name,
             title=stub.title,
             reports_to=stub.reports_to,
-            role="ceo",  # v0.1a: the lone agent is the CEO; v0.1b derives from reports_to
+            role=role,
             skills=stub.skills,
             soul=soul,
             **body,

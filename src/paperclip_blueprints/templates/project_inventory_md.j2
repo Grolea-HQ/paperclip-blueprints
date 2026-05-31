@@ -1,0 +1,32 @@
+# Project Inventory — {{ company.name }}
+
+## Purpose
+
+The single place to see what this company is building, what is in flight, and what
+is done. Agents check here before starting work to avoid duplicating effort.
+
+## Completed deliverables
+
+| Deliverable | Owner | Location | Completed |
+| --- | --- | --- | --- |
+
+## Starter projects
+
+{% for p in projects %}
+### {{ p.name }}
+
+**Owner:** `{{ p.owner }}`
+**Description:** {{ p.summary }}
+**Success condition:** {{ p.success_condition }}
+**Status:** `in_progress`
+
+{% endfor %}
+## In-flight deliverables
+
+| Deliverable | Owner | Started | ETA |
+| --- | --- | --- | --- |
+
+## Protocol
+
+Before starting work, check this inventory and the relevant project. When a
+deliverable ships, move it to **Completed deliverables** with its location.

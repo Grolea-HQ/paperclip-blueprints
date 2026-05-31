@@ -77,3 +77,38 @@ def test_agents_generator_preserves_north_star_currency_verbatim() -> None:
     assert "verbatim" in text
     assert "currency" in text
     assert "convert" in text
+
+
+# --- US1 full-bundle prompts (T011) -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["operations_generator", "project_generator", "task_generator"],
+)
+def test_full_bundle_prompt_loadable_and_demands_json(name: str) -> None:
+    text = load_prompt(name)
+    assert text.strip()
+    assert "```json" in text
+
+
+def test_org_planner_supports_full_org_with_span_of_control() -> None:
+    text = load_prompt("org_planner")
+    for key in ("agents", "projects", "tasks"):
+        assert key in text
+    assert "span of control" in text.lower() or "span-of-control" in text.lower()
+    assert "7" in text  # the span-of-control limit
+
+
+def test_operations_prompt_demands_anti_drift_echo() -> None:
+    text = load_prompt("operations_generator")
+    assert "anti_drift_checks" in text
+    # The prompt must require reproducing every constraint and "we are not".
+    assert "we are not" in text.lower()
+    assert "constraint" in text.lower()
+
+
+def test_agents_generator_supports_multi_agent_handoffs() -> None:
+    text = load_prompt("agents_generator")
+    assert "{{ manager }}" in text or "manager" in text
+    assert "receives_from" in text and "hands_to" in text

@@ -1,10 +1,19 @@
 schema: paperclip/v1
 sidebar:
-  agents: [{{ agent.slug }}]
-  projects: []
+  agents: [{{ agents | map(attribute='slug') | join(', ') }}]
+  projects: [{{ projects | map(attribute='slug') | join(', ') }}]
 agents:
-  {{ agent.slug }}:
-{% if agent.role %}
-    role: {{ agent.role }}
+{% for a in agents %}
+  {{ a.slug }}:
+{% if a.role %}
+    role: {{ a.role }}
 {% endif %}
+{% endfor %}
+{% if projects %}
+projects:
+{% for p in projects %}
+  {{ p.slug }}:
+{% endfor %}
+{% else %}
 projects: {}
+{% endif %}
