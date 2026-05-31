@@ -98,3 +98,28 @@ operator's manual Paperclip import remains the final confirmation (SC-008).
 - ADR-007 — source-of-truth hierarchy (reference companies as shape oracle)
 - `specs/002-v01b-full-multi-agent-bundle/contracts/bundle-validation.md` — the S/I rule contract
 - `src/paperclip_blueprints/validators/` — the implementation
+
+## Update — S7 relaxed from verbatim to key-phrase coverage (Path C)
+
+The S7 anti-drift check introduced with this ADR (commit `fde7076`) required each
+COMPANY.md constraint and "we are not" negation to appear **verbatim** — as a
+whole-string substring — inside the operations anti-drift checks. The first live
+`generate` run failed S7 on every item: that bar is unwinnable, because the
+`operations_generator` prompt asks the model to *restate* each item as an operational
+check, so a faithful paraphrase fails the verbatim match (and even a literal
+reproduction fails on multi-sentence negations). The prior "negative consequence"
+above — "S7 could trip on heavy paraphrasing" — landed in practice immediately.
+
+S7 is now a **key-phrase coverage** check: each constraint/negation must contribute at
+least one distinctive term (≥5 letters, not a stopword) to the anti-drift text
+(`validators/schema_shape.py::_key_terms`). The `operations_generator` prompt was
+clarified to remove the self-contradictory "reproduce … restated" wording. The
+Constitution-II guarantee is preserved — a dropped item is still caught — without
+dictating the model's phrasing. The same change added a failed-bundle dump
+(`<output>-failed/`, commit immediately preceding this one) so rejected runs are
+inspectable.
+
+This change is the **Path C** commit (subject `v0.1b fix: relax S7 …`; its exact SHA
+is the one that introduced this section — see `git log`/`git blame` on this file,
+since a commit cannot embed its own hash). Diagnosis context:
+`specs/002-v01b-full-multi-agent-bundle/research.md` R-003.

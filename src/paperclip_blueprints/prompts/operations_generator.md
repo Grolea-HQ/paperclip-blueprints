@@ -22,9 +22,13 @@ drifting away from what it is.
 
 ## Rules
 
-- **Anti-drift checks MUST reproduce every constraint and every "we are not"
-  negation above**, restated as an operational check ("Before X, confirm we are
-  still not Y"). This is the heart of the file — do not summarize or drop any.
+- **Anti-drift checks MUST cover every constraint and every "we are not" negation
+  above.** For each one, write an operational check that preserves its distinctive
+  content — typically the lead noun phrase plus the specific behavior being avoided
+  (e.g. for "We are NOT a hot-takes blog", a check like "Before publishing, confirm
+  the piece is sourced — never a hot-takes blog post"). Reword freely into a check,
+  but keep the distinctive terms. One check per item — do not drop, merge, or
+  summarize any. This is the heart of the file.
 - `routine_slots` reference ONLY the agents listed above, by slug.
 - Calibrate `approval_merge_rules` to the governance position. Refer to approval
   decisions in plain prose; do not embed Paperclip's internal approval-flow tokens.

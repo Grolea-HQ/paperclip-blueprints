@@ -58,13 +58,27 @@ def test_s6_missing_idle_belief() -> None:
         validate_bundle(config, files)
 
 
-def test_s7_anti_drift_must_echo_constraints() -> None:
+def test_s7_anti_drift_must_cover_every_constraint() -> None:
     config, files = _valid()
-    # Drop a constraint from the operations anti-drift checks.
+    # Only one of the four constraints/negations is covered; the rest are dropped.
     assert config.operations is not None
     config.operations.anti_drift_checks = ["We are NOT a free-to-play studio."]
     with pytest.raises(BundleValidationError, match="S7"):
         validate_bundle(config, files)
+
+
+def test_s7_accepts_paraphrased_anti_drift() -> None:
+    # Path C: an operational check that REWORDS each item but keeps its distinctive
+    # terms must pass — verbatim reproduction is not required (R-003 / ADR-009).
+    config, files = _valid()
+    assert config.operations is not None
+    config.operations.anti_drift_checks = [
+        "Before taking work, confirm we keep one title in focus at a time.",
+        "Watch monetization for dark patterns and strip them out.",
+        "Reject anything that would turn us into a free-to-play studio.",
+        "Decline pitches that would make us a multi-title shop.",
+    ]
+    validate_bundle(config, files)  # must not raise
 
 
 def test_s9_body_only_file_must_not_carry_schema() -> None:

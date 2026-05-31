@@ -7,6 +7,8 @@ caller aggregates. The reference companies are the oracle (ADR-007 / ADR-009).
 
 from __future__ import annotations
 
+import re
+
 from ..models.output import CompanyConfig
 
 # Body-only files carry no `schema:` frontmatter (S9).
@@ -29,6 +31,69 @@ _OPERATIONS_HEADINGS = (
 
 def _norm(s: str) -> str:
     return " ".join(s.lower().split()).rstrip(".")
+
+
+# Common ≥5-letter words that aren't distinctive enough to anchor an anti-drift
+# check on their own (they would let a dropped item pass on a coincidental match).
+_STOP = {
+    "every",
+    "their",
+    "there",
+    "these",
+    "those",
+    "which",
+    "while",
+    "where",
+    "about",
+    "after",
+    "before",
+    "would",
+    "could",
+    "should",
+    "shall",
+    "might",
+    "always",
+    "never",
+    "often",
+    "other",
+    "others",
+    "thing",
+    "things",
+    "without",
+    "within",
+    "across",
+    "around",
+    "being",
+    "doing",
+    "having",
+    "because",
+    "between",
+    "during",
+    "against",
+    "through",
+    "under",
+    "still",
+    "confirm",
+    "ensure",
+    "avoid",
+    "company",
+    "agent",
+    "agents",
+    "operational",
+}
+
+
+def _key_terms(item: str) -> list[str]:
+    """Distinctive terms (≥5 letters, not stopwords) an anti-drift check should keep.
+
+    A simple, robust signal: a faithful operational check preserves the distinctive
+    vocabulary of the constraint/negation it covers (e.g. ``hot-takes``, ``primary``,
+    ``sponsorships``), even when it rewords the surrounding sentence. We deliberately
+    do NOT try to extract THE lead noun phrase (that needs NLP); we just require that
+    at least one distinctive term survives — enough to catch a dropped item without
+    dictating the model's phrasing.
+    """
+    return [w for w in re.findall(r"[a-z0-9][a-z0-9-]{4,}", item.lower()) if w not in _STOP]
 
 
 def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str]:
@@ -97,12 +162,15 @@ def _check_operations(config: CompanyConfig, ops: str) -> list[str]:
     for h in _OPERATIONS_HEADINGS:
         if h not in ops:
             v.append(f"S7: OPERATIONS.md is missing section {h!r}")
-    # Anti-drift echo: every constraint and 'we are not' must be reproduced.
+    # Anti-drift coverage: every constraint and 'we are not' negation must be covered
+    # by an operational check that keeps its distinctive terms (key-phrase presence,
+    # not verbatim — the operational check is expected to reword; see ADR-009 / R-003).
     assert config.operations is not None
     haystack = _norm(" ".join(config.operations.anti_drift_checks))
     for item in (*config.company.constraints, *config.company.we_are_not):
-        if _norm(item) not in haystack:
-            v.append(f"S7: OPERATIONS.md anti-drift checks do not reproduce {item!r}")
+        terms = _key_terms(item)
+        if terms and not any(t in haystack for t in terms):
+            v.append(f"S7: OPERATIONS.md anti-drift checks do not cover {item!r}")
     return v
 
 
