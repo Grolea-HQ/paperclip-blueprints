@@ -1,5 +1,9 @@
 # Paperclip Blueprints
 
+[![MIT License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Built for Paperclip](https://img.shields.io/badge/built%20for-Paperclip-7b3fe4)](https://github.com/paperclipai/paperclip)
+
 A CLI tool that takes a structured Markdown brief and generates a complete, deployable **Paperclip company bundle** — a directory of ~80 files conforming to the `paperclip/v1` and `agentcompanies/v1` schemas, ready to import into a Paperclip instance.
 
 ## What this does
@@ -33,31 +37,32 @@ The first parts benefit from frontier-model synthesis. The latter parts are mech
 
 ## Status
 
-**Pre-v0.1.** Project skeleton and planning documents exist. Implementation hasn't started.
+**v0.1 complete.** v0.1a (single-agent slice) and v0.1b (full multi-agent bundle) are built and verified — generated bundles import successfully into a real Paperclip instance. Deployment automation (v0.2 Paperclip API, v0.3 Hermes-on-VPS) is planned but not yet built.
 
-See `MASTER_PROMPTS.md` for the three-phase build plan. v0.1 is split into v0.1a (single-agent slice, 8-12h) and v0.1b (full multi-agent bundle, 12-18h).
-
-## Quickstart (when v0.1 ships)
+## Quickstart
 
 ```bash
-# Install
-uv tool install paperclip-blueprints
+# Clone and install
+git clone https://github.com/Grolea-HQ/paperclip-blueprints.git
+cd paperclip-blueprints
+uv sync
+
+# Provide your Anthropic API key
+export ANTHROPIC_API_KEY=sk-ant-...
 
 # Set up your input brief
 cp examples/input-template.md my-company-brief.md
 # Edit my-company-brief.md to describe identity, north star, goals, constraints
 
 # Generate the bundle
-blueprints generate --input my-company-brief.md --output my-company/
+uv run blueprints generate --input my-company-brief.md --output my-company/
 
 # Inspect the bundle
 ls my-company/
 cat my-company/COMPANY.md
 
-# Import into Paperclip via the UI's import flow, or wait for v0.2 to automate the deploy
+# Import into Paperclip via the UI's import flow (v0.2 will automate the deploy)
 ```
-
-Until v0.1 ships, this section is aspirational. See `MASTER_PROMPTS.md` for current phase status.
 
 ## Requirements
 
@@ -71,53 +76,45 @@ Until v0.1 ships, this section is aspirational. See `MASTER_PROMPTS.md` for curr
 
 - Python 3.11+, Typer (CLI), Pydantic v2 (validation), Jinja2 (templating), ruamel.yaml (YAML round-trips)
 - Anthropic SDK (LLM access — Claude Opus 4.7 and Sonnet 4.6)
-- [spec-kit](https://github.com/github/spec-kit) for development workflow
-- [mattpocock/skills](https://github.com/mattpocock/skills) for engineering practices
 
 ## Project layout
 
 ```
-CLAUDE.md                    # Claude Code's operating context for this codebase
-MASTER_PROMPTS.md            # Three-phase build plan (v0.1a, v0.1b, v0.2, v0.3)
+README.md                    # This file
 SETUP.md                     # Installation + daily usage
+CONTRIBUTING.md              # How to contribute
+CONTEXT.md                   # Domain glossary + conventions
+LICENSE                      # MIT
 examples/
 ├── input-template.md        # Canonical input format (mirrors COMPANY.md structure)
-├── reference-companies/     # newsletter-press, niche-site-empire — structural references
 └── generated-companies/     # Blueprints outputs (gitignored except sanitized examples)
 docs/
-├── deployment-gaps.md       # ~22 Paperclip+Hermes integration gaps + best-practice patterns
 └── adr/                     # Architecture Decision Records
-src/paperclip_blueprints/            # Built during v0.1
+src/paperclip_blueprints/
 ├── models/                  # Pydantic schemas
 ├── prompts/                 # System prompts as .md files
 ├── generators/              # Anthropic API callers
 ├── templates/               # Jinja2 templates for pure-template files
 ├── renderers/               # Pydantic → Markdown rendering
 ├── patterns/                # Canonical use-case patterns (solo-dev-shop, content-ops, etc.)
-├── validators/              # Schema validation for paperclip/v1 and agentcompanies/v1
-└── deployers/               # v0.2+ Paperclip API integration
+└── validators/              # Schema validation for paperclip/v1 and agentcompanies/v1
+tests/                       # pytest suite
 ```
 
 ## Philosophy
 
-- **Output bundle matches Paperclip's import format precisely.** The two reference companies in `examples/reference-companies/` are the canonical "what good looks like" for structure. Prompts produce original content; templates ensure structural fidelity.
+- **Output bundle matches Paperclip's import format precisely.** Structural fidelity is enforced by validators on every generation.
 - **Goal-as-outcome rule.** Goals in the input are persistent outcomes, not one-off tasks. The blueprints validates this at input time.
 - **Default to native, not Docker.** Native Hermes deployment skips 5 container-specific gaps. Docker is an opt-in v0.3 mode.
-- **Spec-Driven Development.** Use [spec-kit](https://github.com/github/spec-kit) commands for feature work.
-- **Disciplined micro-practices.** Use selected [mattpocock/skills](https://github.com/mattpocock/skills) for execution discipline.
 - **Phase discipline is the project's main risk control.** Don't pull v0.2/v0.3 work into v0.1 scope.
-
-See `CLAUDE.md` for the full operating brief.
 
 ## License
 
-Not yet decided. Personal-tool phase. MIT is the likely choice if/when it goes open-source.
+MIT. See LICENSE.
 
 ## Acknowledgments
 
 - [Paperclip](https://paperclip.community) — autonomous company management platform
 - [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) — the agent runtime
-- [github/spec-kit](https://github.com/github/spec-kit) — Spec-Driven Development toolkit
-- [mattpocock/skills](https://github.com/mattpocock/skills) — engineering practice skills
 
-Built by an operator running a production Paperclip + Hermes company elsewhere, encoding lessons learned from real deployment experience.
+Encodes patterns from real Paperclip + Hermes deployment experience.
