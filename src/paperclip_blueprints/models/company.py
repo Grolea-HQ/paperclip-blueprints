@@ -44,8 +44,8 @@ class CompanyDefinition(BaseModel):
     @field_validator("goals")
     @classmethod
     def _goals_outcome_shaped(cls, v: list[str]) -> list[str]:
-        # FR/CLAUDE.md failure-mode #8: reject task-shaped goals the LLM emits,
-        # using the same heuristic the input gate applies to the brief.
+        # Failure mode: reject task-shaped goals (single-session work) the LLM
+        # emits, using the same heuristic the input gate applies to the brief.
         bad = [g for g in v if _is_task_shaped(g)]
         if bad:
             raise ValueError(

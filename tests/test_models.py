@@ -339,7 +339,7 @@ def _company_kwargs(**overrides: Any) -> dict[str, Any]:
 
 
 def test_company_definition_rejects_task_shaped_goal() -> None:
-    # Q5: the LLM must not emit a task-shaped goal (CLAUDE.md failure-mode #8).
+    # The LLM must not emit a task-shaped goal (single-session work).
     with pytest.raises(ValidationError):
         CompanyDefinition(**_company_kwargs(goals=["Launch the game", "Build the brand"]))
 
