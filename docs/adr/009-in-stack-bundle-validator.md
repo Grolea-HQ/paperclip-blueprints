@@ -101,7 +101,7 @@ operator's manual Paperclip import remains the final confirmation (SC-008).
 
 ## Update — S7 relaxed from verbatim to key-phrase coverage (Path C)
 
-The S7 anti-drift check introduced with this ADR (commit `fde7076`) required each
+The S7 anti-drift check introduced with this ADR (commit `d497887`) required each
 COMPANY.md constraint and "we are not" negation to appear **verbatim** — as a
 whole-string substring — inside the operations anti-drift checks. The first live
 `generate` run failed S7 on every item: that bar is unwinnable, because the

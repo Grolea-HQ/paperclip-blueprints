@@ -28,7 +28,7 @@ behavior) in at least two concrete places:
 
 1. **Empty CEO role.** The references' CEO carried no `role: ceo`, so the importer
    landed the CEO at `role=agent` with stripped permissions (upstream Issue #1990 /
-   PR #1989). v0.1a already deviated from the references (commit `15d1c0a`) to emit
+   PR #1989). v0.1a already deviated from the references (commit `03e90f7`) to emit
    `role: ceo`, driven by observed import failure — the ADR-007 backstop in action.
 2. **SKILL.md frontmatter.** The references carry top-level `schema:
    agentcompanies/v1` and `slug:` on SKILL.md, but the live product treats SKILL.md
@@ -74,7 +74,7 @@ anchor to.
 
 | Detail | Reference (tier 2) said | Live product (tier 3) requires | Override taken | Recorded |
 |---|---|---|---|---|
-| CEO import role | CEO carried no `role` → imported as `agent` (stripped perms) | first `reportsTo: null` agent is CEO; explicit `role: ceo` is read | emit `role: ceo` in `.paperclip.yaml` for the root | v0.1a, commit `15d1c0a` (Issue #1990 / PR #1989) |
+| CEO import role | CEO carried no `role` → imported as `agent` (stripped perms) | first `reportsTo: null` agent is CEO; explicit `role: ceo` is read | emit `role: ceo` in `.paperclip.yaml` for the root | v0.1a, commit `03e90f7` (Issue #1990 / PR #1989) |
 | SKILL.md frontmatter | top-level `schema: agentcompanies/v1` + `slug:` | Agent Skills package — `name` + `description`; slug positional | align generator in v0.1c (deferred; not yet applied) | this v2026.529.0 analysis; `docs/TODO-v0.1c.md` item 1 |
 
 ## Consequences

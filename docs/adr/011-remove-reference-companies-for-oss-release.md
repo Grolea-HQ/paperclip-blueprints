@@ -27,7 +27,7 @@ prompt loads the directory at runtime; the only consumer was one drift-guard tes
 Take **option B: remove `examples/reference-companies/` from the public repo.** The
 one test that read a reference HEARTBEAT.md now reads a first-party fixture
 (`tests/fixtures/heartbeat_canonical_body.md`) that preserves the verbatim
-drift-guard intent. (Commit `b82dc53`.)
+drift-guard intent. (Commit `fb3d54c`.)
 
 ## Consequences
 
@@ -55,5 +55,5 @@ drift-guard intent. (Commit `b82dc53`.)
 
 - ADR-002 (output bundle format / reference oracle), ADR-007 (tier hierarchy),
   ADR-010 (reference-company drift)
-- Commit `b82dc53` (the removal); `tests/fixtures/heartbeat_canonical_body.md`
+- Commit `fb3d54c` (the removal); `tests/fixtures/heartbeat_canonical_body.md`
 - `paperclip.community/companies` — re-sourcing target if examples are wanted back
