@@ -18,9 +18,13 @@ CONTENT_MODEL = OPUS_MODEL  # identity, soul (synthesis quality matters)
 STRUCTURAL_MODEL = SONNET_MODEL  # org, agents, skills (constrained)
 
 # USD price per MILLION tokens (input, output), for the end-of-run cost summary
-# (US4 / R-005). Approximate list prices; an unknown model falls back to Sonnet.
+# (US4 / R-005). An unknown model falls back to Sonnet.
+# Verified against platform.claude.com 2026-06-01.
+# When updating: check https://platform.claude.com/docs/en/about-claude/pricing
+# for the current rate; Anthropic's pricing has dropped before (Opus 4 → Opus 4.5
+# cut the Opus rate by 3×, from $15/$75 to $5/$25).
 TOKEN_PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
-    OPUS_MODEL: (15.0, 75.0),
+    OPUS_MODEL: (5.0, 25.0),
     SONNET_MODEL: (3.0, 15.0),
 }
 

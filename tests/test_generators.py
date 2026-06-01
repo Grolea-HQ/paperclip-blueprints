@@ -464,7 +464,22 @@ def test_client_plain_text_transport_records_no_usage() -> None:
 def test_estimate_cost_uses_price_table() -> None:
     from paperclip_blueprints.config import estimate_cost
 
-    # Opus list price: $15/Mtok in, $75/Mtok out → 1M+1M = $90.
-    assert estimate_cost("claude-opus-4-7", 1_000_000, 1_000_000) == pytest.approx(90.0)
+    # Opus list price: $5/Mtok in, $25/Mtok out → 1M+1M = $30.
+    assert estimate_cost("claude-opus-4-7", 1_000_000, 1_000_000) == pytest.approx(30.0)
     # An unknown model falls back to the Sonnet price ($3 + $15 = $18).
     assert estimate_cost("mystery-model", 1_000_000, 1_000_000) == pytest.approx(18.0)
+
+
+def test_estimate_cost_reconciles_with_real_billing() -> None:
+    """Anchor the calculator to a real run so a stale rate can't drift silently.
+
+    Token counts captured from real tenkay run 2026-06-01 (13 Opus calls,
+    37 Sonnet calls). Actual Anthropic billing for that run was ~$1.50; the
+    encoded rates must reproduce it within ±5%.
+    """
+    from paperclip_blueprints.config import estimate_cost
+
+    opus = estimate_cost("claude-opus-4-7", 27854, 25703)
+    sonnet = estimate_cost("claude-sonnet-4-6", 37542, 42884)
+    total = opus + sonnet
+    assert total == pytest.approx(1.54, rel=0.05)
