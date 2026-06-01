@@ -193,12 +193,12 @@ def test_heartbeat_is_stub() -> None:
     out = render_files(_config())["agents/ceo/HEARTBEAT.md"]
     assert "intentionally near-empty" in out
     assert "*(Empty" in out
-    # Everything below the H1 must match the canonical reference stub verbatim (Q2):
-    # the stub is hand-authored, so the generated file must not drift from it.
-    ref = Path("examples/reference-companies/newsletter-press/agents/ceo/HEARTBEAT.md").read_text(
-        encoding="utf-8"
-    )
-    assert out.split("\n", 1)[1].rstrip("\n") == ref.split("\n", 1)[1].rstrip("\n")
+    # Everything below the H1 must match the canonical stub verbatim (Q2): the
+    # stub is hand-authored, so the generated file must not drift from it. The
+    # canonical body is frozen in a first-party fixture (the reference-companies
+    # oracle was removed from the public repo — see open-source release prep).
+    ref = Path("tests/fixtures/heartbeat_canonical_body.md").read_text(encoding="utf-8")
+    assert out.split("\n", 1)[1].rstrip("\n") == ref.rstrip("\n")
 
 
 def test_readme_single_agent_mermaid_no_edges() -> None:
