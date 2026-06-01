@@ -109,4 +109,4 @@ MIT. See LICENSE.
 - [Paperclip](https://paperclip.community) — autonomous company management platform
 - [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) — the agent runtime
 
-Encodes patterns from real Paperclip + Hermes deployment experience.
+Built by [Grolea Oy](https://grolea.com). Encodes patterns from real Paperclip + Hermes deployment experience.
