@@ -36,6 +36,10 @@ The tool handles the synthesis from a brief and produces a deployable bundle tha
 
 **v0.1 complete.** Generated bundles import successfully into a real Paperclip instance. The tool is in production use.
 
+## Cost
+
+Generating a bundle costs roughly **$1–3 in Anthropic API credits**, depending on company complexity (an 11-agent bundle runs about $1.50 at current pricing). The tool prints a cost summary after each run. Note this uses Anthropic API credits, not a Claude subscription.
+
 ## Quickstart
 
 ```bash
