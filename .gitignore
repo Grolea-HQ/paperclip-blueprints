@@ -62,3 +62,17 @@ logs/
 
 # Local test outputs
 test-outputs/
+
+# Local-only working files (not part of the published package)
+/CLAUDE.md
+/MASTER_PROMPTS.md
+/CHANGES.md
+/skills-lock.json
+/.claude/
+/.specify/
+/specs/
+/docs/TODO-v0.1b.md
+/docs/TODO-v0.1c.md
+/docs/deployment-gaps.md
+/docs/agents/
+/DEV-WORKFLOW.md
