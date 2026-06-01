@@ -11,8 +11,6 @@ This guide covers getting the paperclip-blueprints project running on a fresh ma
 - Python 3.11 or newer (`python3 --version`)
 - [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - An Anthropic API key with access to Claude Opus 4.7 and Sonnet 4.6
-- (Optional, for v0.2+) Access to a running Paperclip instance with an admin token
-- (Optional, for v0.3) An SSH-able target VPS
 
 ### Clone and bootstrap
 
@@ -47,7 +45,7 @@ If any of those fail on a clean install, that's a setup bug — open an issue or
 
 ## Daily workflow
 
-### Generating a company bundle (when v0.1 is done)
+### Generating a company bundle
 
 ```bash
 # 1. Copy the input template
@@ -95,32 +93,6 @@ blueprints preview --input my-brief.md
 ```
 
 Generates only the COMPANY.md content. ~30 seconds, one Opus call. Useful for iterating on identity content before paying for a full bundle generation.
-
-### Deploying to Paperclip (when v0.2 is done)
-
-```bash
-blueprints deploy \
-  --bundle examples/generated-companies/my-company/ \
-  --paperclip-url http://100.127.11.16:3100 \
-  --paperclip-token-env PAPERCLIP_ADMIN_TOKEN
-
-# Then follow the generated post-deploy checklist
-cat examples/generated-companies/my-company/post_deploy_checklist.md
-```
-
-### Full deployment to a VPS (when v0.3 is done)
-
-```bash
-blueprints launch \
-  --input my-brief.md \
-  --target ssh://operator@my-vps.example.com
-
-# Or with Docker mode (not recommended; adds 5 container-specific gaps)
-blueprints launch \
-  --input my-brief.md \
-  --target ssh://operator@my-vps.example.com \
-  --mode docker
-```
 
 ---
 

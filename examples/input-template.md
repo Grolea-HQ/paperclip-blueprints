@@ -273,7 +273,7 @@ blueprints generate --input <this-file>.md --output <output-dir>/ --single-agent
 blueprints generate --input <this-file>.md --output <output-dir>/
 ```
 
-The tool will produce a directory matching the structure of the reference companies in `examples/reference-companies/`:
+The tool will produce a directory matching Paperclip's bundle structure:
 
 - `.paperclip.yaml` — runtime config (sidebar, agents map, projects map)
 - `COMPANY.md` — your identity content (Identity, We are, We are not, Constraints, Goals, North star)
@@ -288,4 +288,4 @@ The tool will produce a directory matching the structure of the reference compan
 
 Total generation time: 1-3 minutes for v0.1a, 5-10 minutes for a full v0.1b bundle (parallelized across agents and skills).
 
-Once generated, import the bundle into your Paperclip instance via its import flow. v0.2 (when ready) automates the import via the Paperclip API; v0.3 also automates the Hermes-side deployment to a target VPS.
+The generated bundle imports via Paperclip's import UI.
