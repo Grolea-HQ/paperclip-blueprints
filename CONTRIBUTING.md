@@ -33,8 +33,7 @@ The key is read from the `ANTHROPIC_API_KEY` environment variable only. The
 tool never reads credentials from files passed on the command line, and `.env`
 is gitignored — keep it that way.
 
-See `SETUP.md` for the full installation guide, including the spec-kit and
-mattpocock-skills setup used for the project's own development workflow.
+See `SETUP.md` for the full installation guide.
 
 ## Running tests
 
