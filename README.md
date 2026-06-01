@@ -21,23 +21,18 @@ Give the tool a brief describing a company's identity, north star, goals, and co
 - `skills/<slug>/SKILL.md` per shared skill
 - `LICENSE.txt`
 
-Later phases automate the actual deployment: creating the Paperclip company via API (v0.2), provisioning Hermes on a target VPS (v0.3).
-
 ## Why this exists
 
 Setting up a Paperclip + Hermes company manually involves:
 
 - Writing strong identity content (Identity, We are, We are not, Constraints) — hard, requires synthesis. The tool does this from a brief.
 - Designing the org chart with reasonable span-of-control and clear escalation paths — easy to get wrong. The tool applies canonical use-case patterns (solo dev shop, content ops, etc.) or freeform plans.
-- Configuring the Paperclip side correctly (10 documented integration gaps that break things) — v0.2 automates this.
-- Configuring the Hermes side correctly (6 more gaps) — v0.3 automates this.
-- Wiring them together (more gaps, mostly undocumented) — v0.3 automates this.
 
-The first parts benefit from frontier-model synthesis. The latter parts are mechanical but easy to get wrong. The tool handles both.
+The tool handles the synthesis from a brief and produces a deployable bundle that imports directly into Paperclip.
 
 ## Status
 
-**v0.1 complete.** v0.1a (single-agent slice) and v0.1b (full multi-agent bundle) are built and verified — generated bundles import successfully into a real Paperclip instance. Deployment automation (v0.2 Paperclip API, v0.3 Hermes-on-VPS) is planned but not yet built.
+**v0.1 complete.** Generated bundles import successfully into a real Paperclip instance. The tool is in production use.
 
 ## Quickstart
 
@@ -61,7 +56,7 @@ uv run blueprints generate --input my-company-brief.md --output my-company/
 ls my-company/
 cat my-company/COMPANY.md
 
-# Import into Paperclip via the UI's import flow (v0.2 will automate the deploy)
+# Import into Paperclip via the UI's import flow
 ```
 
 ## Requirements
@@ -69,8 +64,7 @@ cat my-company/COMPANY.md
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) for package management
 - Anthropic API key (`ANTHROPIC_API_KEY` env var)
-- A Paperclip instance (for v0.2+ deployment)
-- A target VPS with SSH access (for v0.3 full deployment)
+- A Paperclip instance to import the generated bundle into
 
 ## Tech stack
 
@@ -105,8 +99,6 @@ tests/                       # pytest suite
 
 - **Output bundle matches Paperclip's import format precisely.** Structural fidelity is enforced by validators on every generation.
 - **Goal-as-outcome rule.** Goals in the input are persistent outcomes, not one-off tasks. The blueprints validates this at input time.
-- **Default to native, not Docker.** Native Hermes deployment skips 5 container-specific gaps. Docker is an opt-in v0.3 mode.
-- **Phase discipline is the project's main risk control.** Don't pull v0.2/v0.3 work into v0.1 scope.
 
 ## License
 
