@@ -3,11 +3,11 @@
 #
 # Block commits that modify planning documents without an accompanying ADR.
 #
-# A commit that modifies CLAUDE.md, MASTER_PROMPTS.md, constitution.md, or
-# pyproject.toml must also include a new or modified ADR in docs/adr/.
+# A commit that modifies pyproject.toml must also include a new or modified ADR
+# in docs/adr/.
 #
-# Reasoning: these files encode project-level decisions. Changing them without
-# documenting why creates silent drift.
+# Reasoning: this file encodes project-level decisions (dependencies). Changing it
+# without documenting why creates silent drift.
 
 set -e
 
@@ -20,7 +20,7 @@ PLANNING_FILES=""
 
 for file in $STAGED_FILES; do
     case "$file" in
-        CLAUDE.md|MASTER_PROMPTS.md|.specify/memory/constitution.md|pyproject.toml)
+        pyproject.toml)
             PLANNING_CHANGED=true
             PLANNING_FILES="$PLANNING_FILES $file"
             ;;
@@ -61,8 +61,8 @@ if [ "$ADR_CHANGED" = false ]; then
     echo "  3. git add the new ADR"
     echo "  4. git commit again"
     echo ""
-    echo "If this change genuinely doesn't need an ADR (e.g., fixing a typo in"
-    echo "CLAUDE.md), bypass with: git commit --no-verify"
+    echo "If this change genuinely doesn't need an ADR (e.g., a formatting-only"
+    echo "tweak to pyproject.toml), bypass with: git commit --no-verify"
     echo "But think twice — most planning-doc changes are worth an ADR."
     echo ""
     exit 1

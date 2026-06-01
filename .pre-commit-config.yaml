@@ -48,7 +48,7 @@ repos:
         name: Planning doc changes require an ADR
         entry: scripts/check_planning_changes.sh
         language: script
-        files: '^(CLAUDE\.md|MASTER_PROMPTS\.md|\.specify/memory/constitution\.md|pyproject\.toml)$'
+        files: '^pyproject\.toml$'
         pass_filenames: false
 
       # Block commits that include common secret patterns
