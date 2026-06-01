@@ -79,8 +79,10 @@ ls examples/generated-companies/my-company/
 cat examples/generated-companies/my-company/COMPANY.md
 cat examples/generated-companies/my-company/README.md   # Mermaid org chart inside
 
-# 5. Compare structure to a reference company
-diff -r examples/reference-companies/newsletter-press/ \
+# 5. Compare structure to a canonical example
+# (Reference companies are no longer bundled in this repo — see ADR-011.
+#  Download one from https://paperclip.community/companies to diff against.)
+diff -r ~/Downloads/newsletter-press/ \
         examples/generated-companies/my-company/ | head -50
 ```
 
@@ -231,7 +233,7 @@ You'll lose any specs in `.specify/specs/`, so commit them first if they matter.
 |---|---|
 | Operator's input briefs | Outside the repo (your home dir, your other project) |
 | Generated bundles | `examples/generated-companies/<slug>/` (gitignored by default) |
-| Reference companies | `examples/reference-companies/<slug>/` (committed, sanitized) |
+| Reference companies | Not bundled — download from [paperclip.community/companies](https://paperclip.community/companies) (removed per ADR-011) |
 | Prompts | `src/paperclip_blueprints/prompts/*.md` |
 | Templates | `src/paperclip_blueprints/templates/*.j2` |
 | Patterns | `src/paperclip_blueprints/patterns/*.py` |
