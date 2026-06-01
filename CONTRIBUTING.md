@@ -2,9 +2,8 @@
 
 Thanks for your interest in contributing. This is a CLI tool that turns a
 structured Markdown brief into a deployable Paperclip company bundle. It's a
-small project with a focused scope — please read `CLAUDE.md` and
-`MASTER_PROMPTS.md` for the project's philosophy and phase plan before
-proposing larger changes.
+small project with a focused scope — please read the project README and ADRs
+(`docs/adr/`) for the project's design decisions before proposing larger changes.
 
 ## Development environment
 
@@ -90,12 +89,13 @@ Issues are tracked in [GitHub Issues](https://github.com/Grolea-HQ/paperclip-blu
   include the validation output (`blueprints validate-bundle --bundle <dir>`).
 - **Feature requests** — open an issue describing the use case and why the
   current behavior is insufficient. Because the project is deliberately scoped
-  to Paperclip + Hermes (see the anti-goals in `MASTER_PROMPTS.md`), proposals
-  that broaden scope to other stacks are likely out of bounds — but the
+  to Paperclip configuration generation, proposals that broaden scope are likely
+  out of bounds. Out of scope: features documented as future phases,
+  runtime-specific tooling, things that should live in Paperclip core. But the
   conversation is welcome.
 
 New issues start with a `needs-triage` label; a maintainer will evaluate and
-re-label. See `docs/agents/triage-labels.md` for the label vocabulary.
+re-label.
 
 ## A note on prompt changes
 
@@ -111,9 +111,9 @@ of the affected file (e.g. the `Goals` section of a `COMPANY.md`, or an
 `AGENTS.md` decision-rights block) is enough; you don't need to attach a full
 ~80-file bundle.
 
-Watch especially for the "recycled-shape" failure mode documented in
-`CLAUDE.md`: if outputs start looking like the reference companies with names
-swapped, the prompt is over-fitting and the change needs rework.
+Watch especially for the "recycled-shape" failure mode: if outputs start looking
+like a generic template with names swapped, the prompt is over-fitting and the
+change needs rework.
 
 ## Code of conduct
 
