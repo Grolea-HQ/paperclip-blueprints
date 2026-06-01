@@ -21,9 +21,11 @@ Give the tool a brief describing a company's identity, north star, goals, and co
 - `skills/<slug>/SKILL.md` per shared skill
 - `LICENSE.txt`
 
+The result is a Paperclip-importable bundle ready to use.
+
 ## Why this exists
 
-Setting up a Paperclip + Hermes company manually involves:
+Setting up a Paperclip company manually involves:
 
 - Writing strong identity content (Identity, We are, We are not, Constraints) — hard, requires synthesis. The tool does this from a brief.
 - Designing the org chart with reasonable span-of-control and clear escalation paths — easy to get wrong. The tool applies canonical use-case patterns (solo dev shop, content ops, etc.) or freeform plans.
@@ -107,6 +109,5 @@ MIT. See LICENSE.
 ## Acknowledgments
 
 - [Paperclip](https://paperclip.community) — autonomous company management platform
-- [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) — the agent runtime
 
-Built by [Grolea Oy](https://grolea.com). Encodes patterns from real Paperclip + Hermes deployment experience.
+Built by [Grolea Oy](https://grolea.com). Encodes patterns from real Paperclip deployment experience.
