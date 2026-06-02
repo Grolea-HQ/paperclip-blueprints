@@ -38,7 +38,7 @@ The tool handles the synthesis from a brief and produces a deployable bundle tha
 
 ## Cost
 
-Generating a bundle costs roughly **$1–3 in Anthropic API credits**, depending on company complexity (an 11-agent bundle runs about $1.50 at current pricing). The tool prints a cost summary after each run. Note this uses Anthropic API credits, not a Claude subscription.
+Generating a bundle costs roughly **$1–3 in Anthropic API credits**, depending on company complexity (an 11-agent bundle runs about $1.50 at current pricing). Generation typically takes **3–8 minutes**, again depending on complexity — a research-digest bundle runs about 5 minutes. The tool prints a cost summary after each run. Note this uses Anthropic API credits, not a Claude subscription.
 
 ## Quickstart
 
@@ -52,15 +52,15 @@ uv sync
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # Set up your input brief
-cp examples/input-template.md my-company-brief.md
-# Edit my-company-brief.md to describe identity, north star, goals, constraints
+cp examples/input-template.md examples/my-company-brief.md
+# Edit examples/my-company-brief.md to describe identity, north star, goals, constraints
 
-# Generate the bundle
-uv run blueprints generate --input my-company-brief.md --output my-company/
+# Generate the bundle (takes 3-8 minutes, costs ~$1-3 in API credits)
+uv run blueprints generate --input examples/my-company-brief.md --output examples/generated-companies/my-company/
 
 # Inspect the bundle
-ls my-company/
-cat my-company/COMPANY.md
+ls examples/generated-companies/my-company/
+cat examples/generated-companies/my-company/COMPANY.md
 
 # Import into Paperclip via the UI's import flow
 ```
@@ -105,6 +105,7 @@ tests/                       # pytest suite
 
 - **Output bundle matches Paperclip's import format precisely.** Structural fidelity is enforced by validators on every generation.
 - **Goal-as-outcome rule.** Goals in the input are persistent outcomes, not one-off tasks. The blueprints validates this at input time.
+- **Patterns come from Paperclip's community guides.** Identity structure, "we are" / "we are not" framing, span-of-control discipline. The tool's value is automating their application, not inventing the patterns.
 
 ## License
 
@@ -114,4 +115,4 @@ MIT. See LICENSE.
 
 - [Paperclip](https://paperclip.ing) — autonomous company management platform
 
-Built by [Grolea Oy](https://grolea.com). Encodes patterns from real Paperclip deployment experience.
+Built by [Grolea Oy](https://grolea.com). Encodes patterns from Paperclip's community guides, refined through real deployment experience.
