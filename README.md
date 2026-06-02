@@ -112,6 +112,6 @@ MIT. See LICENSE.
 
 ## Acknowledgments
 
-- [Paperclip](https://paperclip.community) — autonomous company management platform
+- [Paperclip](https://paperclip.ing) — autonomous company management platform
 
 Built by [Grolea Oy](https://grolea.com). Encodes patterns from real Paperclip deployment experience.
