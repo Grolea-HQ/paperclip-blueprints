@@ -72,7 +72,13 @@ def generate(
     client = _make_client()
     try:
         dest = build_and_write(
-            brief, output, client, single_agent=single_agent, model=model, force=force
+            brief,
+            output,
+            client,
+            single_agent=single_agent,
+            model=model,
+            force=force,
+            progress=lambda msg: typer.echo(msg, err=True),
         )
     except BundleValidationError as exc:
         typer.echo(f"generation failed: {exc}", err=True)
@@ -82,7 +88,7 @@ def generate(
         typer.echo(f"generation failed: {exc}", err=True)
         raise typer.Exit(1) from exc
 
-    typer.echo(f"bundle written to {dest}")
+    typer.echo(f"✓ Bundle written to {dest}")
     _print_cost_summary(client, verbose=verbose)
 
 

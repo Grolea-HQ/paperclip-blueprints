@@ -44,11 +44,22 @@ class BundleError(Exception):
     """Raised when an assembled bundle fails its structural check."""
 
 
+def _noop_progress(_msg: str) -> None:
+    """Default progress sink: discard the message (silent)."""
+
+
 def generate_bundle(
-    brief: CompanyBrief, client: LLMClient, *, model: str | None = None
+    brief: CompanyBrief,
+    client: LLMClient,
+    *,
+    model: str | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> CompanyConfig:
     """Run the single-agent generation pipeline (sequential)."""
+    emit = progress or _noop_progress
+    emit("→ Generating identity...")
     company = generate_identity(brief, client, model=model)
+    emit("→ Generating agent...")
     stub = generate_org(brief, company, client, model=model)
     soul = generate_soul(stub, company, client, model=model)
     agent = generate_agent(stub, company, brief, soul, client, single_agent=True, model=model)
@@ -59,7 +70,11 @@ def generate_bundle(
 
 
 async def _gather_full(
-    brief: CompanyBrief, client: LLMClient, *, model: str | None = None
+    brief: CompanyBrief,
+    client: LLMClient,
+    *,
+    model: str | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> CompanyConfig:
     """Fan out per-agent and per-leaf generation concurrently (R-004).
 
@@ -68,8 +83,11 @@ async def _gather_full(
     bounded semaphore; OPERATIONS.md is generated last (it needs the agent list).
     Any failure propagates out of ``gather`` so no partial bundle is ever written.
     """
+    emit = progress or _noop_progress
+    emit("→ Generating identity...")
     company = await asyncio.to_thread(generate_identity, brief, client, model=model)
     seed = get_seed(brief.use_case_pattern)
+    emit(f"→ Planning organization (use case: {brief.use_case_pattern or 'custom'})...")
     plan = await asyncio.to_thread(
         generate_org_plan,
         brief,
@@ -114,6 +132,7 @@ async def _gather_full(
     def _used_by(slug: str) -> list[str]:
         return [a.name for a in plan.agents if slug in a.skills]
 
+    emit(f"→ Generating {len(plan.agents)} agents and their skills, projects, tasks...")
     agents, skills, projects, tasks = await asyncio.gather(
         asyncio.gather(*(make_agent(s) for s in plan.agents)),
         asyncio.gather(
@@ -128,6 +147,7 @@ async def _gather_full(
         asyncio.gather(*(run(generate_task, t, company, client, model=model) for t in plan.tasks)),
     )
 
+    emit("→ Writing operations...")
     operations = await asyncio.to_thread(
         generate_operations, company, brief, plan.agents, client, model=model
     )
@@ -148,10 +168,14 @@ async def _gather_full(
 
 
 def generate_bundle_full(
-    brief: CompanyBrief, client: LLMClient, *, model: str | None = None
+    brief: CompanyBrief,
+    client: LLMClient,
+    *,
+    model: str | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> CompanyConfig:
     """Run the full multi-agent generation pipeline (concurrent fan-out)."""
-    return asyncio.run(_gather_full(brief, client, model=model))
+    return asyncio.run(_gather_full(brief, client, model=model, progress=progress))
 
 
 def _we_are_not_count(company_md: str) -> int:
@@ -343,6 +367,7 @@ def build_and_write(
     single_agent: bool = False,
     model: str | None = None,
     force: bool = False,
+    progress: Callable[[str], None] | None = None,
 ) -> Path:
     """Generate, validate, and atomically write a bundle (full or single-agent).
 
@@ -352,12 +377,17 @@ def build_and_write(
     generation or check leaves no valid bundle. On a validation failure the rejected
     bundle is dumped to ``<output_dir>-failed/`` for inspection (clearly marked, never
     importable) and the error is re-raised.
+
+    ``progress`` is an optional callback invoked with a short status line at the start
+    of each major stage; it defaults to silent so library callers stay quiet.
     """
+    emit = progress or _noop_progress
     if single_agent:
-        config = generate_bundle(brief, client, model=model)
+        config = generate_bundle(brief, client, model=model, progress=progress)
     else:
-        config = generate_bundle_full(brief, client, model=model)
+        config = generate_bundle_full(brief, client, model=model, progress=progress)
     files = render_files(config)
+    emit("→ Validating bundle...")
     try:
         validate_bundle(config, files)
     except BundleValidationError as exc:
