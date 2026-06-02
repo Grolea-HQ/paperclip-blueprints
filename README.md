@@ -4,7 +4,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Built for Paperclip](https://img.shields.io/badge/built%20for-Paperclip-7b3fe4)](https://github.com/paperclipai/paperclip)
 
-A CLI tool that takes a structured Markdown brief and generates a complete, deployable **Paperclip company bundle** — a directory of ~80 files conforming to the `paperclip/v1` and `agentcompanies/v1` schemas, ready to import into a Paperclip instance.
+A CLI tool that takes a structured Markdown brief and generates a complete, deployable **Paperclip company bundle** — a directory of files conforming to the `paperclip/v1` and `agentcompanies/v1` schemas, ready to import into a Paperclip instance.
 
 ## What this does
 
