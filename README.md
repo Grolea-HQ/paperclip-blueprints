@@ -53,7 +53,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 # Set up your input brief
 cp examples/input-template.md examples/my-company-brief.md
-# Edit examples/my-company-brief.md to describe identity, north star, goals, constraints
+# Edit examples/my-company-brief.md to describe identity, north star, goals, constraints (see examples/example-brief-*.md for references)
 
 # Generate the bundle (takes 3-8 minutes, costs ~$1-3 in API credits)
 uv run blueprints generate --input examples/my-company-brief.md --output examples/generated-companies/my-company/
@@ -64,6 +64,16 @@ cat examples/generated-companies/my-company/COMPANY.md
 
 # Import into Paperclip via the UI's import flow
 ```
+
+## Examples
+
+The `examples/` directory contains:
+
+- `input-template.md` — the blank brief template. Start here and fill in your company's details.
+- `example-brief-research-digest.md` — a worked example for a research newsletter company.
+- `example-brief-indie-game-studio.md` — a worked example for an indie game studio.
+
+Both worked examples show the level of detail that produces coherent bundles. Use them as references when writing your own brief.
 
 ## Requirements
 
