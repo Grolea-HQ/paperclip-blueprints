@@ -386,7 +386,7 @@ def build_and_write(
         config = generate_bundle(brief, client, model=model, progress=progress)
     else:
         config = generate_bundle_full(brief, client, model=model, progress=progress)
-    files = render_files(config)
+    files = render_files(config, warn=emit)
     emit("→ Validating bundle...")
     try:
         validate_bundle(config, files)

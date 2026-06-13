@@ -111,6 +111,9 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
     # I9: .paperclip.yaml maps + sidebar match the actual dirs.
     v += _check_paperclip_yaml(files.get(".paperclip.yaml", ""), agent_slugs, project_slugs)
 
+    # I11: per-agent budgets sum within the stated capital cap (ADR-012, INV-1).
+    v += _check_budget_sum(files.get(".paperclip.yaml", ""), config.brief.capital_monthly_eur)
+
     # I10: file set matches the mode contract exactly.
     expected = _expected_files(config)
     actual = set(files)
@@ -120,6 +123,30 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
         v.append(f"I10: unexpected files: {sorted(extra)}")
 
     return v
+
+
+def _check_budget_sum(yaml_text: str, capital_monthly_eur: int | None) -> list[str]:
+    """I11: the per-agent budgets sum to no more than the capital cap (INV-1).
+
+    Skipped when no cap was stated (budgets are then absent by design).
+    """
+    if capital_monthly_eur is None or not yaml_text:
+        return []
+    try:
+        data = YAML(typ="safe").load(yaml_text)
+    except Exception:  # noqa: BLE001 - I9 already reports unparseable YAML
+        return []
+    total = 0
+    for agent in (data.get("agents") or {}).values():
+        if isinstance(agent, dict) and isinstance(agent.get("budgetMonthlyCents"), int):
+            total += agent["budgetMonthlyCents"]
+    cap_cents = capital_monthly_eur * 100
+    if total > cap_cents:
+        return [
+            f"I11: per-agent budgets sum to {total} cents, exceeding the capital cap "
+            f"of {cap_cents} cents"
+        ]
+    return []
 
 
 def _check_paperclip_yaml(

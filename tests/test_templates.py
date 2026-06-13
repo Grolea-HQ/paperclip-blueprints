@@ -267,3 +267,67 @@ def test_full_paperclip_yaml_maps() -> None:
     assert "agents: [ceo, cto]" in out
     assert "projects: [launch-v1]" in out
     assert "launch-v1:" in out  # bare project key in the projects map
+
+
+# --- per-agent budgets (ADR-012, US1/US2/US3) -------------------------------
+
+from ruamel.yaml import YAML  # noqa: E402
+
+from test_models import _brief_kwargs  # noqa: E402
+
+
+def _capped_full(eur: int = 100, governance: str = "balanced") -> CompanyConfig:
+    """A full bundle whose brief states a monthly capital cap."""
+    brief = CompanyBrief(**_brief_kwargs(capital_monthly_eur=eur, governance_position=governance))
+    return CompanyConfig(**_full_config_kwargs(brief=brief))
+
+
+def test_budgets_render_when_cap_present() -> None:
+    # US1: every agent carries a budgetMonthlyCents; owner highest; sum within cap.
+    out = render_files(_capped_full(100, "balanced"))[".paperclip.yaml"]
+    data = YAML(typ="safe").load(out)
+    ceo = data["agents"]["ceo"]["budgetMonthlyCents"]
+    cto = data["agents"]["cto"]["budgetMonthlyCents"]
+    assert isinstance(ceo, int) and isinstance(cto, int)
+    assert ceo > cto  # owner outweighs a generic report
+    assert ceo + cto == 100 * 70  # balanced pool, exact
+    assert ceo + cto <= 100 * 100  # within the cap
+
+
+def test_no_budget_keys_when_no_cap() -> None:
+    # US2: default fixture has no cap → no budget figures at all.
+    out = _full_files()[".paperclip.yaml"]
+    assert "budgetMonthlyCents" not in out
+
+
+def test_operations_note_capped() -> None:
+    # US2 / FR-009: capped bundle tells the operator the caps are starting points.
+    out = render_files(_capped_full())["OPERATIONS.md"]
+    assert "## Budget review" in out
+    assert "conservative starting caps" in out
+
+
+def test_operations_note_uncapped() -> None:
+    # US2 / FR-008: cap-less bundle tells the operator to set budgets first.
+    out = _full_files()["OPERATIONS.md"]
+    assert "## Budget review" in out
+    assert "before enabling heartbeats" in out
+    assert "no" in out.lower()
+
+
+def test_single_agent_gets_full_scaled_pool() -> None:
+    # US3 / FR-010: the lone owner receives the whole governance-scaled pool.
+    config = _config()
+    config.brief.capital_monthly_eur = 40
+    config.brief.governance_position = "loose"
+    out = render_files(config)[".paperclip.yaml"]
+    data = YAML(typ="safe").load(out)
+    assert data["agents"]["ceo"]["budgetMonthlyCents"] == 40 * 90
+    assert data["agents"]["ceo"]["budgetMonthlyCents"] <= 40 * 100
+
+
+def test_pool_too_small_warns_via_sink() -> None:
+    # FR-006: a tiny cap over the org triggers the advisory warning through warn().
+    warnings: list[str] = []
+    render_files(_capped_full(1, "tight"), warn=warnings.append)
+    assert warnings and "too small" in warnings[0]

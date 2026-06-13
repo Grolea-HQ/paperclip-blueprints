@@ -8,6 +8,9 @@ agents:
 {% if a.role %}
     role: {{ a.role }}
 {% endif %}
+{% if a.slug in budgets %}
+    budgetMonthlyCents: {{ budgets[a.slug] }}
+{% endif %}
 {% endfor %}
 {% if projects %}
 projects:
