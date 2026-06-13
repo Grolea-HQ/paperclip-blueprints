@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+from ruamel.yaml import YAML
+
 from ..models.output import CompanyConfig
 
 # Body-only files carry no `schema:` frontmatter (S9).
@@ -26,6 +28,7 @@ _OPERATIONS_HEADINGS = (
     "## Duplicate prevention",
     "## Routine slots",
     "## Critical rules summary",
+    "## Budget review",
 )
 
 
@@ -104,6 +107,11 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
     if "schema: paperclip/v1" not in files.get(".paperclip.yaml", ""):
         v.append("S1: .paperclip.yaml is missing 'schema: paperclip/v1'")
 
+    # S10: any per-agent budgetMonthlyCents must be a non-negative integer (ADR-012,
+    # INV-2). Paperclip parses it as an integer count of cents; a float or negative
+    # would be rejected at import.
+    v += _check_budget_fields(files.get(".paperclip.yaml", ""))
+
     # S2: agentcompanies/v1 on every content file.
     for rel, text in files.items():
         if rel == "COMPANY.md" or rel.endswith(("AGENTS.md", "SKILL.md", "PROJECT.md", "TASK.md")):
@@ -154,6 +162,28 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
             if "schema: agentcompanies/v1" in text or "schema: paperclip/v1" in text:
                 v.append(f"S9: body-only file {rel} must not carry a schema frontmatter")
 
+    return v
+
+
+def _check_budget_fields(yaml_text: str) -> list[str]:
+    """S10: every emitted ``budgetMonthlyCents`` is a non-negative integer (INV-2)."""
+    if not yaml_text or "budgetMonthlyCents" not in yaml_text:
+        return []
+    try:
+        data = YAML(typ="safe").load(yaml_text)
+    except Exception:  # noqa: BLE001 - I9 reports unparseable YAML; don't double-fault
+        return []
+    v: list[str] = []
+    for slug, agent in (data.get("agents") or {}).items():
+        if not isinstance(agent, dict) or "budgetMonthlyCents" not in agent:
+            continue
+        budget = agent["budgetMonthlyCents"]
+        # bool is an int subclass; reject it explicitly so `true` can't slip through.
+        if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0:
+            v.append(
+                f"S10: agent {slug!r} budgetMonthlyCents must be a non-negative "
+                f"integer, got {budget!r}"
+            )
     return v
 
 

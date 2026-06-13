@@ -49,3 +49,16 @@ How this company runs day to day, and how it stays what it is.
 {% for c in operations.critical_rules %}
 - {{ c }}
 {% endfor %}
+
+## Budget review
+
+{% if capital_set %}
+The generated `.paperclip.yaml` carries a per-agent `budgetMonthlyCents` derived
+from the stated monthly capital cap. These are **conservative starting caps**, not
+final values — review them per agent against expected usage before enabling
+heartbeats, and adjust in Paperclip as real spend data arrives.
+{% else %}
+No monthly capital cap was stated, so the generated `.paperclip.yaml` carries **no
+per-agent budgets**. Set a per-agent `budgetMonthlyCents` for every agent in
+Paperclip before enabling heartbeats — an uncapped agent can run up real spend.
+{% endif %}

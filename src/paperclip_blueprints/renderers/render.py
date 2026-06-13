@@ -8,6 +8,7 @@ in ``bundle.py``).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -18,6 +19,7 @@ from ..models.output import CompanyConfig
 from ..models.project import ProjectDefinition
 from ..models.skill import SkillDefinition
 from ..models.task import TaskDefinition
+from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -124,8 +126,30 @@ def _role_bucket(agent: AgentDefinition, is_manager: bool) -> str:
     return "generic"
 
 
-def render_files(config: CompanyConfig) -> dict[str, str]:
-    """Render every file of a bundle (single or full) to a path→content map."""
+def render_files(
+    config: CompanyConfig, *, warn: Callable[[str], None] | None = None
+) -> dict[str, str]:
+    """Render every file of a bundle (single or full) to a path→content map.
+
+    Args:
+        config: The assembled bundle to render.
+        warn: Optional sink for advisory warnings (e.g. a budget pool too small
+            for the org size). Defaults to discarding them.
+    """
+    manager_slugs = {a.reports_to for a in config.agents if a.reports_to is not None}
+
+    # Per-agent budgets (ADR-012): derive a budgetMonthlyCents from the company
+    # cap, scaled by governance and weighted by the same role buckets TOOLS.md
+    # uses. Empty when no cap is stated. ``role_by_slug`` is built in agent order
+    # so the allocation is deterministic.
+    role_by_slug = {a.slug: _role_bucket(a, a.slug in manager_slugs) for a in config.agents}
+    allocation = allocate_budgets(
+        role_by_slug, config.brief.governance_position, config.brief.capital_monthly_eur
+    )
+    if allocation.warning is not None and warn is not None:
+        warn(allocation.warning)
+    capital_set = config.brief.capital_monthly_eur is not None
+
     base = {
         "brief": config.brief,
         "company": config.company,
@@ -134,6 +158,7 @@ def render_files(config: CompanyConfig) -> dict[str, str]:
         "tasks": config.tasks,
         "skills": config.skills,
         "license_kind": config.license_kind,
+        "budgets": allocation.cents,
     }
 
     files: dict[str, str] = {
@@ -145,13 +170,14 @@ def render_files(config: CompanyConfig) -> dict[str, str]:
 
     if config.operations is not None:
         files["OPERATIONS.md"] = _render(
-            "operations_md.j2", company=config.company, operations=config.operations
+            "operations_md.j2",
+            company=config.company,
+            operations=config.operations,
+            capital_set=capital_set,
         )
         files["PROJECT-INVENTORY.md"] = _render(
             "project_inventory_md.j2", company=config.company, projects=config.projects
         )
-
-    manager_slugs = {a.reports_to for a in config.agents if a.reports_to is not None}
     for agent in config.agents:
         actx = {
             "brief": config.brief,

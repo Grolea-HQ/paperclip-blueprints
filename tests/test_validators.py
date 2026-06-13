@@ -150,3 +150,41 @@ def test_aggregates_multiple_violations() -> None:
         validate_bundle(config, files)
     assert any("I2" in x for x in exc.value.violations)
     assert any("I6" in x for x in exc.value.violations)
+
+
+# --- per-agent budgets (ADR-012) --------------------------------------------
+
+
+def _capped() -> tuple[CompanyConfig, dict[str, str]]:
+    from paperclip_blueprints.models.input import CompanyBrief
+    from test_models import _brief_kwargs
+
+    brief = CompanyBrief(**_brief_kwargs(capital_monthly_eur=100))
+    config = CompanyConfig(**_full_config_kwargs(brief=brief))
+    return config, render_files(config)
+
+
+def test_capped_budget_bundle_passes() -> None:
+    config, files = _capped()
+    validate_bundle(config, files)  # budgets sum within cap → no violation
+
+
+def test_i11_budgets_exceeding_cap_rejected() -> None:
+    config, files = _capped()
+    # Inflate one agent's budget past the whole cap (100 EUR = 10000 cents).
+    files[".paperclip.yaml"] = files[".paperclip.yaml"].replace(
+        "budgetMonthlyCents:", "budgetMonthlyCents: 99999  #", 1
+    )
+    with pytest.raises(BundleValidationError) as exc:
+        validate_bundle(config, files)
+    assert any(x.startswith("I11") for x in exc.value.violations)
+
+
+def test_s10_non_integer_budget_rejected() -> None:
+    config, files = _capped()
+    files[".paperclip.yaml"] = files[".paperclip.yaml"].replace(
+        "budgetMonthlyCents:", "budgetMonthlyCents: 12.5  #", 1
+    )
+    with pytest.raises(BundleValidationError) as exc:
+        validate_bundle(config, files)
+    assert any(x.startswith("S10") for x in exc.value.violations)
