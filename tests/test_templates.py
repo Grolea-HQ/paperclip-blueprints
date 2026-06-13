@@ -248,6 +248,20 @@ def test_full_project_and_task_md() -> None:
     assert "## Completion criteria" in task
 
 
+def test_project_md_carries_description_frontmatter() -> None:
+    # ADR-013 / FR-001: the importer reads the project description from frontmatter
+    # only; the summary must surface there while the rich body stays.
+    from ruamel.yaml import YAML
+
+    proj = _full_files()["projects/launch-v1/PROJECT.md"]
+    fm = YAML(typ="safe").load(proj.split("---")[1])
+    assert fm["description"]  # non-empty
+    assert fm["description"] == "s"  # the fixture's ProjectDefinition.summary
+    assert fm["slug"] == "launch-v1"
+    # body still present (authoring content, separate from the entity description)
+    assert "## Success condition" in proj
+
+
 def test_full_project_inventory_seeded() -> None:
     out = _full_files()["PROJECT-INVENTORY.md"]
     assert "## Starter projects" in out

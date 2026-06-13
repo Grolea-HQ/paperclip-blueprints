@@ -7,11 +7,16 @@ and are re-exported here for callers that import them from the generator.
 
 from __future__ import annotations
 
+import logging
+
 from ..config import STRUCTURAL_MODEL
 from ..models.company import CompanyDefinition
 from ..models.input import CompanyBrief
 from ..models.org_plan import AgentStub, OrgPlan, ProjectStub, TaskStub
+from ..paperclip_slug import dedupe_slug, slugify_project_name
 from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+
+_log = logging.getLogger(__name__)
 
 __all__ = [
     "AgentStub",
@@ -58,7 +63,45 @@ def generate_org_plan(
         raise GenerationError(f"org plan failed validation: {exc}") from exc
     if single_agent and len(plan.agents) != 1:
         raise GenerationError("single-agent org must have exactly one agent")
-    return plan
+    return _normalize_project_slugs(plan)
+
+
+def _normalize_project_slugs(plan: OrgPlan) -> OrgPlan:
+    """Force every project slug to Paperclip's ``slugify(name)`` and rewrite task refs.
+
+    Paperclip creates projects with ``urlKey = slugify(name)`` and resolves a task's
+    ``project:`` reference against that key (ADR-013). The planner lets the model pick
+    arbitrary slugs, so we re-key projects to the slugified name (de-duplicating
+    collisions) and rewrite every ``task.project`` to match, then rebuild the plan so
+    its cross-reference validator re-runs. No-op when there are no projects.
+    """
+    if not plan.projects:
+        return plan
+    used: set[str] = set()
+    mapping: dict[str, str] = {}
+    new_projects: list[ProjectStub] = []
+    for project in plan.projects:
+        base = slugify_project_name(project.name)
+        if not base:
+            # All-non-ASCII name: Paperclip would append an unpredictable UUID, so we
+            # cannot match it offline. Keep the planner's slug and warn.
+            _log.warning(
+                "project %r name %r did not yield an ASCII slug; keeping %r — tasks "
+                "may not associate on import",
+                project.slug,
+                project.name,
+                project.slug,
+            )
+            base = project.slug
+        new_slug = dedupe_slug(base, used)
+        mapping[project.slug] = new_slug
+        new_projects.append(project.model_copy(update={"slug": new_slug}))
+    new_tasks = [
+        task.model_copy(update={"project": mapping.get(task.project, task.project)})
+        for task in plan.tasks
+    ]
+    # Rebuild via the constructor so OrgPlan's cross-reference validator re-runs.
+    return OrgPlan(agents=plan.agents, projects=new_projects, tasks=new_tasks)
 
 
 def generate_org(

@@ -8,10 +8,13 @@ aggregate every problem into one report.
 
 from __future__ import annotations
 
+import re
+
 from ruamel.yaml import YAML
 
 from ..models.org_plan import SPAN_OF_CONTROL
 from ..models.output import CompanyConfig
+from ..paperclip_slug import slugify_project_name
 
 _AGENT_FILES = ("AGENTS.md", "SOUL.md", "HEARTBEAT.md", "TOOLS.md")
 
@@ -100,6 +103,17 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
     for p in config.projects:
         if p.owner not in agent_slugs:
             v.append(f"I7: project {p.slug!r} owned by unknown agent {p.owner!r}")
+
+    # I12: project slug must equal Paperclip's slugify(name) so a task's `project:`
+    # reference resolves against the urlKey Paperclip derives on import (ADR-013).
+    # A `-N` collision suffix on that base is allowed (matches `uniqueSlug`).
+    for p in config.projects:
+        base = slugify_project_name(p.name)
+        if base and p.slug != base and not re.fullmatch(rf"{re.escape(base)}-\d+", p.slug):
+            v.append(
+                f"I12: project {p.slug!r} slug must equal slugify(name) {base!r} "
+                f"(or {base!r}-N on collision) so tasks associate on import"
+            )
 
     # I8: handoffs name existing agents.
     for a in agents:

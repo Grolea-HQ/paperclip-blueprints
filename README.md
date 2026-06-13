@@ -65,6 +65,13 @@ cat examples/generated-companies/my-company/COMPANY.md
 # Import into Paperclip via the UI's import flow
 ```
 
+> **Re-importing?** Import into a **fresh** target — e.g. `companies.sh add --target new
+> --include company,agents,projects,tasks,skills`. Importing over an existing company
+> uses Paperclip's default collision strategy, which silently duplicates entities
+> (`-2`-suffixed agents/projects). On the generation side, `blueprints generate`
+> refuses a non-empty `--output` directory unless you pass `--force` (which cleanly
+> replaces it — it never merges two generations).
+
 ## Examples
 
 The `examples/` directory contains:

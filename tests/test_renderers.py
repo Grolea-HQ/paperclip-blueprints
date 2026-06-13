@@ -131,6 +131,18 @@ def test_write_bundle_refuses_nonempty_without_force(tmp_path) -> None:
     assert dest.exists()
 
 
+def test_write_bundle_force_does_not_union_prior_contents(tmp_path) -> None:
+    # ADR-013 / FR-007: a forced regeneration cleanly replaces — it must not leave a
+    # stray file from a prior generation (which downstream caused duplicate entities).
+    out = tmp_path / "bundle"
+    out.mkdir()
+    (out / "STALE-from-prior-run.md").write_text("leftover", encoding="utf-8")
+    dest = write_bundle(render_files(_config()), out, force=True)
+    written = {str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file()}
+    assert "STALE-from-prior-run.md" not in written
+    assert len(written) == 9  # exactly the new single-agent bundle, no union
+
+
 # --- full-mode structural check (T015) --------------------------------------
 
 from paperclip_blueprints.models.output import CompanyConfig  # noqa: E402
