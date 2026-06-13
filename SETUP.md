@@ -116,6 +116,16 @@ blueprints validate-bundle --bundle examples/generated-companies/my-company/
 
 This runs the same validators that should have run before the bundle was written. If it passes here but fails at Paperclip import, the import format may have changed — check the Paperclip docs and update `src/paperclip_blueprints/validators/`.
 
+### Re-importing duplicates agents/projects
+
+Import each bundle into a **fresh** target — e.g. `companies.sh add --target new
+--include company,agents,projects,tasks,skills`. Importing a bundle over an existing
+company uses Paperclip's default collision strategy, which silently duplicates
+entities (`-2`-suffixed agents and projects) rather than updating them. On the
+generation side, `blueprints generate` refuses a non-empty `--output` directory
+unless `--force` is passed; `--force` cleanly replaces the directory (it never unions
+two generations).
+
 ---
 
 ## File locations reference

@@ -90,11 +90,15 @@ def _skill_frontmatter(skill: SkillDefinition) -> str:
 
 
 def _project_frontmatter(project: ProjectDefinition) -> str:
+    # `description` is the entity description Paperclip imports (it reads the
+    # frontmatter field, never the body — ADR-013); the rich body stays authoring
+    # content. Field order follows companies-spec §9 (name, description, owner).
     return dump_frontmatter(
         {
             "schema": "agentcompanies/v1",
             "slug": project.slug,
             "name": project.name,
+            "description": project.summary,
             "owner": project.owner,
         }
     )

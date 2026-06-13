@@ -188,3 +188,24 @@ def test_s10_non_integer_budget_rejected() -> None:
     with pytest.raises(BundleValidationError) as exc:
         validate_bundle(config, files)
     assert any(x.startswith("S10") for x in exc.value.violations)
+
+
+# --- import fidelity: project slug == slugify(name) (ADR-013) ----------------
+
+
+def test_i12_project_slug_must_equal_slugify_name() -> None:
+    config, files = _valid()
+    # the fixture project is "Launch v1" / slug "launch-v1"; break the slug
+    config.projects[0].slug = "launch"  # != slugify("Launch v1") == "launch-v1"
+    violations = check_integrity(config, files)
+    assert any(x.startswith("I12") for x in violations)
+
+
+def test_i12_allows_collision_suffix() -> None:
+    from paperclip_blueprints.validators.integrity import check_integrity
+
+    config, files = _valid()
+    # a -N suffix on the slugified base is allowed (matches Paperclip uniqueSlug)
+    config.projects[0].name = "Launch"
+    config.projects[0].slug = "launch-2"
+    assert not any(x.startswith("I12") for x in check_integrity(config, files))

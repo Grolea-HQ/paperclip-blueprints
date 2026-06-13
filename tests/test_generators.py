@@ -397,6 +397,65 @@ def test_generate_org_plan_full_multi_agent() -> None:
     assert len(plan.projects) == 1 and len(plan.tasks) == 1
 
 
+# --- US1: project slug normalization on the org plan (ADR-013) ---------------
+
+_ORG_SLUG_MISMATCH_JSON = """\
+```json
+{"agents": [
+  {"slug": "ceo", "name": "CEO", "title": "CEO", "reports_to": null, "skills": ["strategy"]},
+  {"slug": "eng", "name": "Engineer", "title": "Engineer",
+   "reports_to": "ceo", "skills": ["coding"]}
+ ],
+ "projects": [{"slug": "seo-foundation",
+   "name": "SEO Content Foundation — First Keyword Cluster", "owner": "eng"}],
+ "tasks": [{"slug": "kw1", "name": "First cluster", "project": "seo-foundation",
+   "assignee": "eng"}]}
+```
+"""
+
+_ORG_SLUG_COLLISION_JSON = """\
+```json
+{"agents": [
+  {"slug": "ceo", "name": "CEO", "title": "CEO", "reports_to": null, "skills": ["strategy"]},
+  {"slug": "eng", "name": "Engineer", "title": "Engineer",
+   "reports_to": "ceo", "skills": ["coding"]}
+ ],
+ "projects": [
+   {"slug": "launch-a", "name": "Launch", "owner": "eng"},
+   {"slug": "launch-b", "name": "Launch!", "owner": "eng"}
+ ],
+ "tasks": [
+   {"slug": "t1", "name": "T1", "project": "launch-a", "assignee": "eng"},
+   {"slug": "t2", "name": "T2", "project": "launch-b", "assignee": "eng"}
+ ]}
+```
+"""
+
+
+def test_org_plan_normalizes_project_slug_to_slugify_name() -> None:
+    from paperclip_blueprints.generators.org import generate_org_plan
+
+    plan = generate_org_plan(
+        _brief(), _company(), LLMClient(_invoke=lambda **_: _ORG_SLUG_MISMATCH_JSON)
+    )
+    (project,) = plan.projects
+    assert project.slug == "seo-content-foundation-first-keyword-cluster"
+    # the task's project ref was rewritten from "seo-foundation" to the new slug
+    assert plan.tasks[0].project == project.slug
+
+
+def test_org_plan_dedupes_colliding_project_slugs() -> None:
+    from paperclip_blueprints.generators.org import generate_org_plan
+
+    plan = generate_org_plan(
+        _brief(), _company(), LLMClient(_invoke=lambda **_: _ORG_SLUG_COLLISION_JSON)
+    )
+    slugs = [p.slug for p in plan.projects]
+    assert slugs == ["launch", "launch-2"]
+    # each task follows its project to the de-duplicated slug
+    assert {t.project for t in plan.tasks} == {"launch", "launch-2"}
+
+
 def test_generate_operations_parses_and_uses_thinking() -> None:
     from paperclip_blueprints.generators.operations import generate_operations
     from paperclip_blueprints.models.operations import OperationsDefinition
