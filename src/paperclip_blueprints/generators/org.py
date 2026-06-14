@@ -14,7 +14,7 @@ from ..models.company import CompanyDefinition
 from ..models.input import CompanyBrief
 from ..models.org_plan import AgentStub, OrgPlan, ProjectStub, TaskStub
 from ..paperclip_slug import dedupe_slug, slugify_project_name
-from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+from .client import GenerationError, LLMClient, render_prompt, strict_json_schema
 
 _log = logging.getLogger(__name__)
 
@@ -55,8 +55,13 @@ def generate_org_plan(
         single_agent=single_agent,
         seed=seed,
     )
-    raw = client.complete(model=model or STRUCTURAL_MODEL, system=_SYSTEM, user=prompt)
-    payload = parse_json_response(raw, what="org plan")
+    payload = client.complete_json(
+        model=model or STRUCTURAL_MODEL,
+        system=_SYSTEM,
+        user=prompt,
+        what="org plan",
+        schema=strict_json_schema(OrgPlan),
+    )
     try:
         plan = OrgPlan(**payload)
     except Exception as exc:  # noqa: BLE001 - pydantic ValidationError or type errors

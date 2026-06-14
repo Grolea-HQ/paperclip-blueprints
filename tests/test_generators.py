@@ -542,3 +542,37 @@ def test_estimate_cost_reconciles_with_real_billing() -> None:
     sonnet = estimate_cost("claude-sonnet-4-6", 37542, 42884)
     total = opus + sonnet
     assert total == pytest.approx(1.54, rel=0.05)
+
+
+# --- resilient JSON: a malformed response self-heals at the generator (ADR-014) ---
+
+
+def test_generator_recovers_from_malformed_then_valid_response() -> None:
+    # US1: one malformed soul response is re-sampled, not fatal; the generator
+    # returns a valid model and prior work is not regenerated.
+    stub = AgentStub(
+        slug="ceo",
+        name="Founder / CEO",
+        title="Founder / CEO",
+        reports_to=None,
+        skills=["release-checklist"],
+    )
+    calls = {"n": 0}
+
+    def flaky(**_: object) -> str:
+        calls["n"] += 1
+        return _SOUL_JSON.replace("}", "", 1) if calls["n"] == 1 else _SOUL_JSON
+
+    soul = generate_soul(stub, _company(), LLMClient(_invoke=flaky))
+    assert isinstance(soul, AgentSoul)
+    assert calls["n"] == 2  # one retry, then success
+
+
+def test_generator_exhaustion_names_the_leaf() -> None:
+    # US3: a never-valid response fails with a clear leaf-named error.
+    stub = AgentStub(
+        slug="ceo", name="CEO", title="CEO", reports_to=None, skills=["release-checklist"]
+    )
+    with pytest.raises(GenerationError) as exc:
+        generate_soul(stub, _company(), LLMClient(_invoke=lambda **_: '{"broken"'))
+    assert "soul" in str(exc.value)

@@ -13,7 +13,7 @@ from ..config import STRUCTURAL_MODEL
 from ..models.agent import AgentDefinition, AgentSoul
 from ..models.company import CompanyDefinition
 from ..models.input import CompanyBrief
-from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+from .client import GenerationError, LLMClient, render_prompt, strict_json_schema
 from .org import AgentStub
 
 _SYSTEM = "You write Paperclip agent mandates. Follow the instructions exactly."
@@ -62,8 +62,13 @@ def generate_agent(
         reports=reports or [],
         peers=peers or [],
     )
-    raw = client.complete(model=model or STRUCTURAL_MODEL, system=_SYSTEM, user=prompt)
-    payload = parse_json_response(raw, what="agent mandate")
+    payload = client.complete_json(
+        model=model or STRUCTURAL_MODEL,
+        system=_SYSTEM,
+        user=prompt,
+        what="agent mandate",
+        schema=strict_json_schema(AgentDefinition, include=_BODY_FIELDS),
+    )
     # Keep only the body fields the prompt owns; a missing one is left out so
     # pydantic reports it (surfaced as GenerationError below).
     body = {k: payload[k] for k in _BODY_FIELDS if k in payload}

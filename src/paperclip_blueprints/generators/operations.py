@@ -12,7 +12,7 @@ from ..models.company import CompanyDefinition
 from ..models.input import CompanyBrief
 from ..models.operations import OperationsDefinition
 from ..models.org_plan import AgentStub
-from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+from .client import GenerationError, LLMClient, render_prompt, strict_json_schema
 
 _SYSTEM = "You write Paperclip company operations manuals. Follow the instructions exactly."
 
@@ -36,8 +36,14 @@ def generate_operations(
         governance_position=brief.governance_position,
         agents=agents,
     )
-    raw = client.complete(model=model or CONTENT_MODEL, system=_SYSTEM, user=prompt, thinking=True)
-    payload = parse_json_response(raw, what="operations")
+    payload = client.complete_json(
+        model=model or CONTENT_MODEL,
+        system=_SYSTEM,
+        user=prompt,
+        what="operations",
+        thinking=True,
+        schema=strict_json_schema(OperationsDefinition),
+    )
     try:
         return OperationsDefinition(**payload)
     except Exception as exc:  # noqa: BLE001

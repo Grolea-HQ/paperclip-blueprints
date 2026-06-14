@@ -7,12 +7,10 @@ validates it.
 
 from __future__ import annotations
 
-import json
-
 from ..config import CONTENT_MODEL
 from ..models.company import CompanyDefinition
 from ..models.input import CompanyBrief
-from .client import GenerationError, LLMClient, extract_fenced_block, render_prompt
+from .client import GenerationError, LLMClient, render_prompt, strict_json_schema
 
 _SYSTEM = "You generate Paperclip company identity content. Follow the instructions exactly."
 
@@ -38,16 +36,14 @@ def generate_identity(
         governance_position=brief.governance_position,
         free_text=brief.free_text,
     )
-    raw = client.complete(model=model or CONTENT_MODEL, system=_SYSTEM, user=prompt, thinking=True)
-    return _parse(raw)
-
-
-def _parse(raw: str) -> CompanyDefinition:
-    block = extract_fenced_block(raw, lang="json")
-    try:
-        payload = json.loads(block)
-    except json.JSONDecodeError as exc:
-        raise GenerationError(f"identity response was not valid JSON: {exc}") from exc
+    payload = client.complete_json(
+        model=model or CONTENT_MODEL,
+        system=_SYSTEM,
+        user=prompt,
+        what="identity",
+        thinking=True,
+        schema=strict_json_schema(CompanyDefinition),
+    )
     try:
         return CompanyDefinition(**payload)
     except Exception as exc:  # noqa: BLE001 - pydantic ValidationError or type errors
