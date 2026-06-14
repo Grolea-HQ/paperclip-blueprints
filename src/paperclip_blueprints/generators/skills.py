@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..config import STRUCTURAL_MODEL
 from ..models.company import CompanyDefinition
 from ..models.skill import SkillDefinition
-from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+from .client import GenerationError, LLMClient, render_prompt, strict_json_schema
 
 _SYSTEM = "You write Paperclip agent skills. Follow the instructions exactly."
 
@@ -27,8 +27,13 @@ def generate_skill(
         north_star=company.north_star,
         constraints=company.constraints,
     )
-    raw = client.complete(model=model or STRUCTURAL_MODEL, system=_SYSTEM, user=prompt)
-    payload = parse_json_response(raw, what="skill")
+    payload = client.complete_json(
+        model=model or STRUCTURAL_MODEL,
+        system=_SYSTEM,
+        user=prompt,
+        what="skill",
+        schema=strict_json_schema(SkillDefinition, exclude={"slug"}),
+    )
     payload.setdefault("slug", slug)
     try:
         return SkillDefinition(**payload)

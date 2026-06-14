@@ -6,7 +6,7 @@ from ..config import STRUCTURAL_MODEL
 from ..models.company import CompanyDefinition
 from ..models.org_plan import TaskStub
 from ..models.task import TaskDefinition
-from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+from .client import GenerationError, LLMClient, render_prompt, strict_json_schema
 
 _SYSTEM = "You write Paperclip task definitions. Follow the instructions exactly."
 
@@ -28,8 +28,13 @@ def generate_task(
         we_are=company.we_are,
         north_star=company.north_star,
     )
-    raw = client.complete(model=model or STRUCTURAL_MODEL, system=_SYSTEM, user=prompt)
-    payload = parse_json_response(raw, what="task")
+    payload = client.complete_json(
+        model=model or STRUCTURAL_MODEL,
+        system=_SYSTEM,
+        user=prompt,
+        what="task",
+        schema=strict_json_schema(TaskDefinition, include={"objective", "completion_criteria"}),
+    )
     try:
         return TaskDefinition(
             slug=stub.slug,

@@ -14,7 +14,10 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
@@ -28,6 +31,16 @@ _DEFAULT_EFFORT = "high"
 
 class GenerationError(Exception):
     """Raised on a missing prompt, a malformed model response, or an API failure."""
+
+
+class APIRequestError(GenerationError):
+    """Raised when the Anthropic SDK rejects the request (``BadRequestError``).
+
+    Distinct from a transient API failure so callers can tell "the model rejected
+    this request shape" (e.g. ``output_config.format`` on a model that does not
+    support structured output — ADR-014) apart from errors worth retrying. The SDK
+    already retries 429/5xx internally before raising.
+    """
 
 
 def load_prompt(name: str) -> str:
@@ -69,24 +82,129 @@ def extract_fenced_block(text: str, *, lang: str | None = None) -> str:
     return blocks[0][1].strip()
 
 
-def parse_json_response(raw: str, *, what: str) -> dict[str, Any]:
-    """Extract and parse the JSON object a generator response carries.
+def extract_json_text(raw: str) -> str:
+    """Return the JSON span of a model response, tolerant of fences and prose.
+
+    Prefers a fenced ```` ```json ````/```` ``` ```` block; otherwise takes the
+    outermost ``{...}`` or ``[...]`` span by bracket matching, ignoring any prose
+    around it. Structured-output responses are raw JSON (no fence), while the
+    prompts ask for a fenced block — this handles both, plus arrays (ADR-014, R5).
+
+    Raises:
+        GenerationError: if no JSON-like span is present at all.
+    """
+    blocks = _FENCE_RE.findall(raw)
+    if blocks:
+        for tag, body in blocks:
+            if tag.lower() == "json":
+                return body.strip()
+        return blocks[0][1].strip()
+
+    # No fence: find the outermost {...} or [...] span by matching brackets.
+    starts = [i for i in (raw.find("{"), raw.find("[")) if i != -1]
+    if not starts:
+        raise GenerationError("model response contained no JSON object or array")
+    start = min(starts)
+    open_ch = raw[start]
+    close_ch = "}" if open_ch == "{" else "]"
+    depth = 0
+    for i in range(start, len(raw)):
+        if raw[i] == open_ch:
+            depth += 1
+        elif raw[i] == close_ch:
+            depth -= 1
+            if depth == 0:
+                return raw[start : i + 1].strip()
+    # Unbalanced (e.g. truncated object) — return from the start; json.loads reports it.
+    return raw[start:].strip()
+
+
+def loads_json(raw: str, *, what: str) -> dict[str, Any] | list[Any]:
+    """Extract and parse the JSON a generator response carries (object or array).
 
     Args:
         raw: The full model response.
         what: A short label used in error messages (e.g. "org plan").
 
     Raises:
-        GenerationError: if no JSON block is present or it is not valid JSON.
+        GenerationError: if no JSON is present or it is not valid JSON.
     """
-    block = extract_fenced_block(raw, lang="json")
+    text = extract_json_text(raw)
     try:
-        payload = json.loads(block)
+        return json.loads(text)
     except json.JSONDecodeError as exc:
         raise GenerationError(f"{what} response was not valid JSON: {exc}") from exc
+
+
+def parse_json_response(raw: str, *, what: str) -> dict[str, Any]:
+    """Extract and parse the JSON object a generator response carries.
+
+    Thin wrapper over :func:`loads_json` kept for callers that require an object.
+    """
+    payload = loads_json(raw, what=what)
     if not isinstance(payload, dict):
         raise GenerationError(f"{what} response was not a JSON object")
     return payload
+
+
+# Constraint keywords that the structured-output JSON-schema dialect does not
+# support (ADR-014); stripped from a model's schema before it is sent.
+_UNSUPPORTED_SCHEMA_KEYS = frozenset(
+    {
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+    }
+)
+
+
+def _strict_node(node: Any) -> Any:
+    """Recursively close objects to extra properties and strip unsupported keys."""
+    if isinstance(node, dict):
+        cleaned = {k: _strict_node(v) for k, v in node.items() if k not in _UNSUPPORTED_SCHEMA_KEYS}
+        if cleaned.get("type") == "object":
+            cleaned["additionalProperties"] = False
+        return cleaned
+    if isinstance(node, list):
+        return [_strict_node(v) for v in node]
+    return node
+
+
+def strict_json_schema(
+    model: type[BaseModel],
+    *,
+    include: set[str] | None = None,
+    exclude: set[str] | None = None,
+) -> dict[str, Any]:
+    """Project a Pydantic model into a structured-output-safe JSON schema (ADR-014).
+
+    Sets ``additionalProperties: false`` on every object (including ``$defs``),
+    strips unsupported constraint keywords, and restricts the top-level properties
+    to ``include`` (or all-but-``exclude``), with ``required`` matching.
+
+    Args:
+        model: the Pydantic model describing the call's JSON output.
+        include: if given, keep only these top-level properties.
+        exclude: if given, drop these top-level properties.
+    """
+    schema = _strict_node(model.model_json_schema())
+    props: dict[str, Any] = schema.get("properties", {})
+    if include is not None:
+        props = {k: v for k, v in props.items() if k in include}
+    if exclude is not None:
+        props = {k: v for k, v in props.items() if k not in exclude}
+    schema["properties"] = props
+    schema["required"] = sorted(props)
+    schema["additionalProperties"] = False
+    return schema
 
 
 # Transport signature: (model, system, user, thinking, effort) -> response text,
@@ -126,6 +244,7 @@ class LLMClient:
         user: str,
         thinking: bool = False,
         effort: str | None = None,
+        schema: dict[str, Any] | None = None,
     ) -> str:
         """Return the model's text response for a single-turn completion.
 
@@ -134,17 +253,85 @@ class LLMClient:
             effort: ``output_config`` effort when thinking is on; defaults to the
                 project content-synthesis default (``high``). Ignored when
                 ``thinking`` is False.
+            schema: when given, constrain the response to this JSON schema via
+                ``output_config.format`` (structured output, ADR-014). Composes
+                with ``thinking``/``effort``.
+
+        Raises:
+            APIRequestError: if the SDK rejects the request (e.g. a model that does
+                not support ``output_config.format``).
+            GenerationError: on any other API failure.
         """
         if thinking and effort is None:
             effort = _DEFAULT_EFFORT
         result = self._invoke(
-            model=model, system=system, user=user, thinking=thinking, effort=effort
+            model=model, system=system, user=user, thinking=thinking, effort=effort, schema=schema
         )
         if isinstance(result, tuple):
             text, usage = result
             self._usage.append(CallUsage(model, int(usage[0]), int(usage[1])))
             return text
         return result
+
+    def complete_json(
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        what: str,
+        thinking: bool = False,
+        effort: str | None = None,
+        schema: dict[str, Any] | None = None,
+        attempts: int = 3,
+    ) -> dict[str, Any]:
+        """Complete and parse a JSON object, re-sampling on a malformed response (ADR-014).
+
+        Resilient call/parse boundary: a single malformed response re-samples only
+        this call (feeding the parser error back) instead of aborting the run. When
+        ``schema`` is given the response is constrained via structured output; if
+        the model rejects that (``APIRequestError``), the schema is dropped and the
+        remaining attempts run unconstrained. Usage accumulates per attempt.
+
+        Args:
+            what: a short leaf label for error messages (e.g. "agent mandate").
+            attempts: total tries before failing (default 3 = 1 + 2 retries).
+
+        Raises:
+            GenerationError: if no attempt yields valid JSON; the message names the
+                leaf and the attempt count.
+        """
+        active_schema = schema
+        prompt = user
+        last_error: Exception | None = None
+        for _ in range(max(1, attempts)):
+            try:
+                raw = self.complete(
+                    model=model,
+                    system=system,
+                    user=prompt,
+                    thinking=thinking,
+                    effort=effort,
+                    schema=active_schema,
+                )
+            except APIRequestError as exc:
+                if active_schema is not None:
+                    # Model rejected structured output — fall back to plain JSON.
+                    active_schema = None
+                    last_error = exc
+                    continue
+                raise
+            try:
+                return parse_json_response(raw, what=what)
+            except GenerationError as exc:
+                last_error = exc
+                prompt = (
+                    f"{user}\n\nYour previous reply was not valid JSON ({exc}). "
+                    "Return ONLY valid JSON — no prose, no markdown code fence."
+                )
+        raise GenerationError(
+            f"{what}: model did not return valid JSON after {attempts} attempts: {last_error}"
+        )
 
     def usage_summary(self) -> dict[str, Any]:
         """Aggregate per-model token usage and estimated cost for the run."""
@@ -168,7 +355,14 @@ class LLMClient:
         return {"total": total, "by_model": by_model}
 
     def _invoke_anthropic(
-        self, *, model: str, system: str, user: str, thinking: bool, effort: str | None
+        self,
+        *,
+        model: str,
+        system: str,
+        user: str,
+        thinking: bool,
+        effort: str | None,
+        schema: dict[str, Any] | None = None,
     ) -> tuple[str, tuple[int, int]]:
         import anthropic
 
@@ -183,9 +377,16 @@ class LLMClient:
             "system": system,
             "messages": [{"role": "user", "content": user}],
         }
+        # effort (when thinking) and format (when a schema is given) both live in
+        # output_config and coexist (ADR-008 / ADR-014).
+        output_config: dict[str, object] = {}
         if thinking:
             kwargs["thinking"] = {"type": "adaptive"}
-            kwargs["output_config"] = {"effort": effort or _DEFAULT_EFFORT}
+            output_config["effort"] = effort or _DEFAULT_EFFORT
+        if schema is not None:
+            output_config["format"] = {"type": "json_schema", "schema": schema}
+        if output_config:
+            kwargs["output_config"] = output_config
 
         parts: list[str] = []
         try:
@@ -193,6 +394,10 @@ class LLMClient:
                 for chunk in stream.text_stream:
                     parts.append(chunk)
             usage = stream.get_final_message().usage
-        except Exception as exc:  # noqa: BLE001 - surface any SDK failure clearly
+        except anthropic.BadRequestError as exc:
+            # e.g. a model that does not support output_config.format — let
+            # complete_json fall back to the unconstrained retry path (ADR-014).
+            raise APIRequestError(f"Anthropic API rejected the request: {exc}") from exc
+        except Exception as exc:  # noqa: BLE001 - surface any other SDK failure clearly
             raise GenerationError(f"Anthropic API call failed: {exc}") from exc
         return "".join(parts), (usage.input_tokens, usage.output_tokens)

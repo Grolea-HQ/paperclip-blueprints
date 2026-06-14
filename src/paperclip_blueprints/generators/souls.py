@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..config import CONTENT_MODEL
 from ..models.agent import AgentSoul
 from ..models.company import CompanyDefinition
-from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+from .client import GenerationError, LLMClient, render_prompt, strict_json_schema
 from .org import AgentStub
 
 _SYSTEM = "You write first-person agent personas. Follow the instructions exactly."
@@ -28,8 +28,14 @@ def generate_soul(
         we_are_not=company.we_are_not,
         constraints=company.constraints,
     )
-    raw = client.complete(model=model or CONTENT_MODEL, system=_SYSTEM, user=prompt, thinking=True)
-    payload = parse_json_response(raw, what="soul")
+    payload = client.complete_json(
+        model=model or CONTENT_MODEL,
+        system=_SYSTEM,
+        user=prompt,
+        what="soul",
+        thinking=True,
+        schema=strict_json_schema(AgentSoul),
+    )
     try:
         return AgentSoul(**payload)
     except Exception as exc:  # noqa: BLE001 - includes the idle-state invariant

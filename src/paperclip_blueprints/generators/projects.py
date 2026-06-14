@@ -6,7 +6,7 @@ from ..config import STRUCTURAL_MODEL
 from ..models.company import CompanyDefinition
 from ..models.org_plan import ProjectStub
 from ..models.project import ProjectDefinition
-from .client import GenerationError, LLMClient, parse_json_response, render_prompt
+from .client import GenerationError, LLMClient, render_prompt, strict_json_schema
 
 _SYSTEM = "You write Paperclip project briefs. Follow the instructions exactly."
 
@@ -28,8 +28,13 @@ def generate_project(
         north_star=company.north_star,
         constraints=company.constraints,
     )
-    raw = client.complete(model=model or STRUCTURAL_MODEL, system=_SYSTEM, user=prompt)
-    payload = parse_json_response(raw, what="project")
+    payload = client.complete_json(
+        model=model or STRUCTURAL_MODEL,
+        system=_SYSTEM,
+        user=prompt,
+        what="project",
+        schema=strict_json_schema(ProjectDefinition, include={"summary", "success_condition"}),
+    )
     try:
         return ProjectDefinition(slug=stub.slug, name=stub.name, owner=stub.owner, **payload)
     except Exception as exc:  # noqa: BLE001
