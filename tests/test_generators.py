@@ -532,7 +532,7 @@ def test_estimate_cost_uses_price_table() -> None:
 def test_estimate_cost_reconciles_with_real_billing() -> None:
     """Anchor the calculator to a real run so a stale rate can't drift silently.
 
-    Token counts captured from real tenkay run 2026-06-01 (13 Opus calls,
+    Token counts captured from a real generation run 2026-06-01 (13 Opus calls,
     37 Sonnet calls). Actual Anthropic billing for that run was ~$1.50; the
     encoded rates must reproduce it within ±5%.
     """

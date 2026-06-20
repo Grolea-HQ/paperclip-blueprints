@@ -75,4 +75,8 @@ test-outputs/
 /docs/TODO-v0.1c.md
 /docs/deployment-gaps.md
 /docs/agents/
+# Release-impact notes cite private gap IDs (G-*) — never publish.
+/docs/release-impact-*.md
+# Going-forward home for local-only working/strategic docs (competitive briefs, scratch).
+/docs/working/
 /DEV-WORKFLOW.md

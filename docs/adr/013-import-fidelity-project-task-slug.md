@@ -23,7 +23,7 @@ below were verified against the real product, not inferred:
 
 - the `agentcompanies/v1` spec (`paperclipai/paperclip/docs/companies/companies-spec.md`),
 - the importer source (`server/src/services/company-portability.ts`), and
-- a fresh export of a live company (the operator's Tenkay bundle).
+- a fresh export of a live company (an operator-provided live company export).
 
 ### What the importer source actually does
 
@@ -122,7 +122,7 @@ then do not resolve against the created project's `urlKey`.
   (parse ~2851/2900, classify ~196, apply ~4759/4828, `uniqueSlug` ~1442),
   `packages/shared/src/project-url-key.ts` (`normalizeProjectUrlKey`/`deriveProjectUrlKey`),
   `docs/companies/companies-spec.md` §4/§9/§10/§14/§21
-- Live Tenkay export (operator-provided) — flat `tasks/<slug>/TASK.md` with
+- A live company export (operator-provided) — flat `tasks/<slug>/TASK.md` with
   `project:` field; `PROJECT.md` with `name:` only when no description was set.
 
 ## Out of scope (recorded so they are not chased as Blueprints bugs)
