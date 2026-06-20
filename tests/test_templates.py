@@ -345,3 +345,46 @@ def test_pool_too_small_warns_via_sink() -> None:
     warnings: list[str] = []
     render_files(_capped_full(1, "tight"), warn=warnings.append)
     assert warnings and "too small" in warnings[0]
+
+
+# --- per-agent model preference (ADR-017, US1/US2) --------------------------
+
+
+def test_paperclip_yaml_emits_per_agent_adapter() -> None:
+    # US1: each agent carries adapter.type + adapter.config.model, role-derived.
+    out = _full_files()[".paperclip.yaml"]
+    data = YAML(typ="safe").load(out)
+    ceo = data["agents"]["ceo"]["adapter"]
+    assert ceo["type"] == "claude_local"
+    assert ceo["config"]["model"] == "claude-opus-4-8"  # owner → top-tier
+    cto = data["agents"]["cto"]["adapter"]  # generic in the fixture
+    assert cto["type"] == "claude_local"
+    assert cto["config"]["model"] == "claude-sonnet-4-6"
+
+
+def test_paperclip_yaml_engineering_agent_gets_claude_sonnet() -> None:
+    # US1: engineering defaults to claude_local/Sonnet (single-provider default).
+    config = CompanyConfig(**_full_config_kwargs())
+    config.agents[1].title = "Engineer"  # classifies cto as engineering via _role_bucket
+    data = YAML(typ="safe").load(render_files(config)[".paperclip.yaml"])
+    eng = data["agents"]["cto"]["adapter"]
+    assert eng["type"] == "claude_local"
+    assert eng["config"]["model"] == "claude-sonnet-4-6"
+
+
+def test_paperclip_yaml_never_emits_adapter_env() -> None:
+    # US2: provider routing / base URLs / credentials stay operator-environment.
+    out = _full_files()[".paperclip.yaml"]
+    data = YAML(typ="safe").load(out)
+    for agent in data["agents"].values():
+        assert "env" not in agent.get("adapter", {}).get("config", {})
+    assert "env:" not in out  # belt-and-suspenders on the raw text
+
+
+def test_single_agent_bundle_emits_adapter() -> None:
+    # US1: the single-agent path also ships the portable model preference.
+    out = render_files(_config())[".paperclip.yaml"]
+    data = YAML(typ="safe").load(out)
+    adapter = data["agents"]["ceo"]["adapter"]
+    assert adapter["type"] == "claude_local"
+    assert adapter["config"]["model"] == "claude-opus-4-8"

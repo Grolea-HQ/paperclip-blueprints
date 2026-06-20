@@ -19,6 +19,7 @@ from ..models.output import CompanyConfig
 from ..models.project import ProjectDefinition
 from ..models.skill import SkillDefinition
 from ..models.task import TaskDefinition
+from .adapter import assign_adapters
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
 
@@ -154,6 +155,10 @@ def render_files(
         warn(allocation.warning)
     capital_set = config.brief.capital_monthly_eur is not None
 
+    # Per-agent portable model preference (ADR-017): (adapter type, model id) derived
+    # from the same role buckets, emitted under each agent's `adapter`. Never `env`.
+    adapters = assign_adapters(role_by_slug)
+
     base = {
         "brief": config.brief,
         "company": config.company,
@@ -163,6 +168,7 @@ def render_files(
         "skills": config.skills,
         "license_kind": config.license_kind,
         "budgets": allocation.cents,
+        "adapters": adapters,
     }
 
     files: dict[str, str] = {

@@ -10,16 +10,26 @@ from __future__ import annotations
 import os
 
 # Full model IDs (ADR-001 / constitution).
-OPUS_MODEL = "claude-opus-4-7"
+OPUS_MODEL = "claude-opus-4-8"
 SONNET_MODEL = "claude-sonnet-4-6"
 
 # Role of each generation step, used to pick a default model tier.
 CONTENT_MODEL = OPUS_MODEL  # identity, soul (synthesis quality matters)
 STRUCTURAL_MODEL = SONNET_MODEL  # org, agents, skills (constrained)
 
+# Per-agent model preference shipped in .paperclip.yaml (ADR-017, refining ADR-015).
+# Only env-free, import-safe registered worker kinds are emitted; provider routing,
+# base URLs, and credentials (adapter.config.env) stay operator-environment and are
+# NEVER emitted. Model ids are adjustable preferences (not import-validated for these
+# kinds). CODEX_MODEL is the codex-local adapter's documented default at v2026.618.0.
+CODEX_MODEL = "gpt-5.3-codex"
+ADAPTER_CLAUDE_LOCAL = "claude_local"
+ADAPTER_CODEX_LOCAL = "codex_local"
+PORTABLE_ADAPTER_TYPES = frozenset({ADAPTER_CLAUDE_LOCAL, ADAPTER_CODEX_LOCAL})
+
 # USD price per MILLION tokens (input, output), for the end-of-run cost summary
 # (US4 / R-005). An unknown model falls back to Sonnet.
-# Verified against platform.claude.com 2026-06-01.
+# Verified against platform.claude.com 2026-06-20 (Opus 4.8 stays $5/$25).
 # When updating: check https://platform.claude.com/docs/en/about-claude/pricing
 # for the current rate; Anthropic's pricing has dropped before (Opus 4 → Opus 4.5
 # cut the Opus rate by 3×, from $15/$75 to $5/$25).
@@ -37,7 +47,7 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
 
 # CLI ``--model`` aliases → full IDs.
 _MODEL_ALIASES = {
-    "opus-4.7": OPUS_MODEL,
+    "opus-4.8": OPUS_MODEL,
     "opus": OPUS_MODEL,
     "sonnet-4.6": SONNET_MODEL,
     "sonnet": SONNET_MODEL,

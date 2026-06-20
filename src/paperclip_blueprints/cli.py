@@ -54,7 +54,7 @@ def generate(
         False, "--single-agent", help="Generate a one-agent bundle (v0.1a)."
     ),
     model: str | None = typer.Option(
-        None, "--model", help="Override the synthesis model (e.g. opus-4.7, sonnet-4.6)."
+        None, "--model", help="Override the synthesis model (e.g. opus-4.8, sonnet-4.6)."
     ),
     verbose: bool = typer.Option(False, "--verbose", help="Stream progress/thinking."),
     force: bool = typer.Option(False, "--force", help="Overwrite a non-empty output dir."),
