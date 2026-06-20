@@ -151,10 +151,11 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
         if rel.endswith("SOUL.md") and "idle" not in text.lower():
             v.append(f"S6: {rel} must include an idle-state belief")
 
-    # S7 + S8: full-bundle-only checks.
+    # S7 + S8 + S11: full-bundle-only checks.
     if config.operations is not None:
         v += _check_operations(config, files.get("OPERATIONS.md", ""))
         v += _check_inventory(config, files.get("PROJECT-INVENTORY.md", ""))
+        v += _check_board_authority(files.get("OPERATIONS.md", ""))
 
     # S9: body-only files carry no schema frontmatter.
     for rel, text in files.items():
@@ -163,6 +164,23 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
                 v.append(f"S9: body-only file {rel} must not carry a schema frontmatter")
 
     return v
+
+
+# Board-authority cues OPERATIONS.md must carry (ADR-016): the human Board is the
+# sole approver and agents escalate rather than self-approve. Presence check in the
+# style of S7's anti-drift coverage — prose correctness is prompt-encoded.
+_BOARD_AUTHORITY_CUES = ("sole approver", "ready for Board review", "Board approv")
+
+
+def _check_board_authority(ops: str) -> list[str]:
+    """S11: OPERATIONS.md states the human Board is the sole approver (ADR-016)."""
+    if "Board" in ops and any(cue in ops for cue in _BOARD_AUTHORITY_CUES):
+        return []
+    return [
+        "S11: OPERATIONS.md must state the human Board is the sole approver of "
+        "board-gated decisions and that agents escalate (ready for Board review) "
+        "rather than self-approving"
+    ]
 
 
 def _check_budget_fields(yaml_text: str) -> list[str]:

@@ -32,6 +32,16 @@ drifting away from what it is.
 - `routine_slots` reference ONLY the agents listed above, by slug.
 - Calibrate `approval_merge_rules` to the governance position. Refer to approval
   decisions in plain prose; do not embed Paperclip's internal approval-flow tokens.
+- **Board-gate authority (non-negotiable).** `approval_merge_rules` MUST state that the
+  human **Board is the sole approver** of board-gated decisions. No agent — not even the
+  CEO — approves on the Board's behalf, records "Board approved" / "Founder approved"
+  itself, or auto-closes a board-gated task. Agents mark such work **"ready for Board review"**
+  and escalate; the CEO orchestrates and routes decisions to the Board but never
+  self-approves. Put the same rule, in one line, into `critical_rules`.
+- **Ownership chains.** Frame responsibilities in `delegation_checklist` and
+  `critical_rules` as ownership chains: every responsibility has a named primary owner,
+  an ordered fallback, and the CEO as the final backstop — nothing is orphaned, and the
+  company degrades gracefully when a role is absent.
 - `idle_state_protocol` codifies that idle is a success state: when an agent's queue
   is empty it proposes work or waits for the next heartbeat rather than inventing it.
 

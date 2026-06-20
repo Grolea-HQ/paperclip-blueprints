@@ -230,7 +230,7 @@ def test_parse_aggregates_all_errors() -> None:
 
 def _soul_kwargs(**overrides: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
-        "identity": "I am the Founder/CEO of the studio.",
+        "identity": "I am the CEO of the studio.",
         "what_we_are": "We are a single-title premium studio.",
         "product_reality": "The product is one polished game.",
         "beliefs": [
@@ -248,8 +248,8 @@ def _soul_kwargs(**overrides: Any) -> dict[str, Any]:
 def _agent_kwargs(**overrides: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
         "slug": "ceo",
-        "name": "Founder / CEO",
-        "title": "Founder / CEO",
+        "name": "CEO",
+        "title": "CEO",
         "reports_to": None,
         "skills": ["release-checklist"],
         "mandate": "Owns the north star and ships the title.",
@@ -471,7 +471,10 @@ def _operations() -> OperationsDefinition:
         idle_state_protocol="Idle is a success state.",
         reporting_cadence="Weekly.",
         comm_conventions="Async first.",
-        approval_merge_rules="Board approves strategy.",
+        approval_merge_rules=(
+            "The human Board is the sole approver of board-gated decisions. Agents mark "
+            "such work ready for Board review and escalate; no agent self-approves."
+        ),
         delegation_checklist=["Is the goal an outcome?"],
         # Must reproduce every constraint + "we are not" from _company_kwargs (P-PAT-10).
         anti_drift_checks=[

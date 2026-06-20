@@ -143,7 +143,7 @@ def _company() -> CompanyDefinition:
 
 _ORG_JSON = """\
 ```json
-{"agents": [{"slug": "ceo", "name": "Founder / CEO", "title": "Founder / CEO",
+{"agents": [{"slug": "ceo", "name": "CEO", "title": "CEO",
  "reports_to": null, "skills": ["release-checklist"]}], "projects": [], "tasks": []}
 ```
 """
@@ -151,7 +151,7 @@ _ORG_JSON = """\
 _SOUL_JSON = """\
 ```json
 {
-  "identity": "I am the Founder/CEO.",
+  "identity": "I am the CEO.",
   "what_we_are": "We are a single-title premium studio.",
   "product_reality": "The product is one polished game.",
   "beliefs": ["Focus is the moat.", "Idle is a success state; I wait between cycles."],
@@ -205,8 +205,8 @@ def test_org_planner_returns_single_owner() -> None:
 def test_soul_generator_builds_soul_with_idle_belief() -> None:
     stub = AgentStub(
         slug="ceo",
-        name="Founder / CEO",
-        title="Founder / CEO",
+        name="CEO",
+        title="CEO",
         reports_to=None,
         skills=["release-checklist"],
     )
@@ -224,8 +224,8 @@ def test_soul_generator_uses_thinking_and_high_effort() -> None:
 
     stub = AgentStub(
         slug="ceo",
-        name="Founder / CEO",
-        title="Founder / CEO",
+        name="CEO",
+        title="CEO",
         reports_to=None,
         skills=["release-checklist"],
     )
@@ -254,8 +254,8 @@ def test_structural_calls_send_no_thinking_or_effort() -> None:
     )
     stub = AgentStub(
         slug="ceo",
-        name="Founder / CEO",
-        title="Founder / CEO",
+        name="CEO",
+        title="CEO",
         reports_to=None,
         skills=["release-checklist"],
     )
@@ -281,8 +281,8 @@ def test_soul_generator_rejects_missing_idle_belief() -> None:
     bad = _SOUL_JSON.replace("Idle is a success state; I wait between cycles.", "Ship often.")
     stub = AgentStub(
         slug="ceo",
-        name="Founder / CEO",
-        title="Founder / CEO",
+        name="CEO",
+        title="CEO",
         reports_to=None,
         skills=["release-checklist"],
     )
@@ -293,8 +293,8 @@ def test_soul_generator_rejects_missing_idle_belief() -> None:
 def test_agents_generator_builds_agent_from_stub_and_soul() -> None:
     stub = AgentStub(
         slug="ceo",
-        name="Founder / CEO",
-        title="Founder / CEO",
+        name="CEO",
+        title="CEO",
         reports_to=None,
         skills=["release-checklist"],
     )
@@ -325,8 +325,8 @@ def test_agents_generator_passes_governance_into_prompt() -> None:
     seen: dict[str, object] = {}
     stub = AgentStub(
         slug="ceo",
-        name="Founder / CEO",
-        title="Founder / CEO",
+        name="CEO",
+        title="CEO",
         reports_to=None,
         skills=["release-checklist"],
     )
@@ -353,7 +353,7 @@ def test_skill_generator_builds_skill() -> None:
     skill = generate_skill(
         "release-checklist",
         _company(),
-        ["Founder / CEO"],
+        ["CEO"],
         LLMClient(_invoke=lambda **_: _SKILL_JSON),
     )
     assert isinstance(skill, SkillDefinition)
@@ -552,8 +552,8 @@ def test_generator_recovers_from_malformed_then_valid_response() -> None:
     # returns a valid model and prior work is not regenerated.
     stub = AgentStub(
         slug="ceo",
-        name="Founder / CEO",
-        title="Founder / CEO",
+        name="CEO",
+        title="CEO",
         reports_to=None,
         skills=["release-checklist"],
     )

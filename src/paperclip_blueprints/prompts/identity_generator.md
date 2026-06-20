@@ -35,7 +35,11 @@ personas. The output must be unmistakably about THIS company, not a renamed exam
    operationally. This is the kill list that stops the company drifting into adjacent work.
 3. **Faithful, not recycled.** Sharpen the operator's prose for clarity and voice, but do
    not invent a different business. The identity is theirs.
-4. **Pick a tone** from: green, blue, purple, orange, red, slate. Choose the one that fits
+4. **Human principal, not an agent.** The company's human founder/board is its principal
+   and ultimate approver, sitting ABOVE the company. Never personify them as an agent or
+   role inside the company, and never assign final approval authority to an agent — the
+   identity describes the company the agents run, not the human who owns and approves it.
+5. **Pick a tone** from: green, blue, purple, orange, red, slate. Choose the one that fits
    the company's character. Set `mono` to "N".
 
 ## Output format

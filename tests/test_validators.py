@@ -209,3 +209,70 @@ def test_i12_allows_collision_suffix() -> None:
     config.projects[0].name = "Launch"
     config.projects[0].slug = "launch-2"
     assert not any(x.startswith("I12") for x in check_integrity(config, files))
+
+
+# --- governance: naming guard I13 (ADR-016) ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["Founder / CEO", "Founder", "Co-Founder", "co-founder", "cofounder", "Board", "Board Member"],
+)
+def test_i13_rejects_founder_board_name(value: str) -> None:
+    config, files = _valid()
+    config.agents[0].name = value
+    violations = check_integrity(config, files)
+    assert any(x.startswith("I13") for x in violations)
+    assert config.agents[0].slug in " ".join(v for v in violations if v.startswith("I13"))
+
+
+def test_i13_rejects_reserved_in_title() -> None:
+    config, files = _valid()
+    config.agents[0].title = "Founder / CEO"
+    assert any(x.startswith("I13") for x in check_integrity(config, files))
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["CEO", "Managing Editor", "Studio Head", "Growth Lead", "Product Owner", "Store Owner"],
+)
+def test_i13_allows_legitimate_roles(value: str) -> None:
+    config, files = _valid()
+    config.agents[0].name = value
+    config.agents[0].title = value
+    assert not any(x.startswith("I13") for x in check_integrity(config, files))
+
+
+@pytest.mark.parametrize("value", ["Onboarding Lead", "Billboard Designer", "Boardroom Liaison"])
+def test_i13_ignores_substrings(value: str) -> None:
+    # reserved words must match standalone tokens, not substrings.
+    config, files = _valid()
+    config.agents[0].title = value
+    assert not any(x.startswith("I13") for x in check_integrity(config, files))
+
+
+# --- governance: board-authority presence S11 (ADR-016) ---------------------
+
+
+def test_s11_passes_with_board_authority() -> None:
+    config, files = _valid()  # _operations fixture states the Board is sole approver
+    validate_bundle(config, files)  # must not raise on S11 grounds
+
+
+def test_s11_rejects_missing_board_authority() -> None:
+    config, files = _valid()
+    ops = files["OPERATIONS.md"]
+    # strip every board-authority cue
+    for cue in ("Board is the sole approver", "sole approver", "ready for Board review", "Board"):
+        ops = ops.replace(cue, "the lead")
+    files["OPERATIONS.md"] = ops
+    with pytest.raises(BundleValidationError) as exc:
+        validate_bundle(config, files)
+    assert any(x.startswith("S11") for x in exc.value.violations)
+
+
+def test_s11_skipped_for_single_agent_bundle() -> None:
+    from test_templates import _config
+
+    config = _config()  # single-agent: no OPERATIONS.md
+    validate_bundle(config, render_files(config))  # S11 must not fire

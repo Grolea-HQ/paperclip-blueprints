@@ -112,3 +112,42 @@ def test_agents_generator_supports_multi_agent_handoffs() -> None:
     text = load_prompt("agents_generator")
     assert "{{ manager }}" in text or "manager" in text
     assert "receives_from" in text and "hands_to" in text
+
+
+# --- governance naming & board-gate anti-drift (ADR-016) --------------------
+
+
+def test_org_planner_has_naming_guard_and_ceo_example() -> None:
+    text = load_prompt("org_planner")  # P-1
+    low = text.lower()
+    assert "naming guard" in low
+    assert "founder" in low and "board" in low
+    assert "Founder / CEO" not in text  # the banned example name is gone
+    assert '"name": "CEO"' in text
+
+
+def test_org_planner_has_ownership_chain() -> None:
+    low = load_prompt("org_planner").lower()  # P-2
+    assert "ownership chain" in low
+    assert "backstop" in low and "orphan" in low
+
+
+def test_identity_prompt_keeps_human_principal_out_of_agents() -> None:
+    low = load_prompt("identity_generator").lower()  # P-3
+    assert "principal" in low
+    assert "never personify" in low or "not an agent" in low or "never assign final" in low
+
+
+def test_operations_prompt_encodes_board_authority() -> None:
+    low = load_prompt("operations_generator").lower()  # P-4
+    assert "sole approver" in low
+    assert "ready for board review" in low
+    assert "auto-close" in low or "auto close" in low
+    assert "self-approve" in low or "never approves on the board" in low
+
+
+def test_agents_prompt_encodes_board_gate_and_ownership() -> None:
+    low = load_prompt("agents_generator").lower()  # P-5
+    assert "board" in low and "must_escalate" in low
+    assert "ready for board review" in low
+    assert "primary owner" in low and "backstop" in low

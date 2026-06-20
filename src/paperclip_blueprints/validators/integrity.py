@@ -16,6 +16,13 @@ from ..models.org_plan import SPAN_OF_CONTROL
 from ..models.output import CompanyConfig
 from ..paperclip_slug import slugify_project_name
 
+# Reserved human-principal role-words (ADR-016): an agent name/title must not collide
+# with the human founder/board, who sit above the company as its approver and are
+# never agents. Matched on standalone tokens (word boundaries) so substrings like
+# "onboarding", "billboard", or "Product Owner" do not trip it. ``owner`` is
+# intentionally not reserved.
+_RESERVED_ROLE_RE = re.compile(r"\b(co-?founder|founder|board)\b", re.IGNORECASE)
+
 _AGENT_FILES = ("AGENTS.md", "SOUL.md", "HEARTBEAT.md", "TOOLS.md")
 
 
@@ -127,6 +134,16 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
 
     # I11: per-agent budgets sum within the stated capital cap (ADR-012, INV-1).
     v += _check_budget_sum(files.get(".paperclip.yaml", ""), config.brief.capital_monthly_eur)
+
+    # I13: no agent name/title collides with the human founder/board role (ADR-016).
+    for a in agents:
+        for field, value in (("name", a.name), ("title", a.title)):
+            if _RESERVED_ROLE_RE.search(value):
+                v.append(
+                    f"I13: agent {a.slug!r} {field} {value!r} collides with the human "
+                    f"founder/board role; name agents for working roles (e.g. CEO), not "
+                    f"Founder/Board"
+                )
 
     # I10: file set matches the mode contract exactly.
     expected = _expected_files(config)
