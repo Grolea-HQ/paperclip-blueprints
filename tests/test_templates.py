@@ -37,7 +37,7 @@ def _config() -> CompanyConfig:
         tone="purple",
     )
     soul = AgentSoul(
-        identity="I am the Founder/CEO.",
+        identity="I am the CEO.",
         what_we_are="We are a single-title premium studio.",
         product_reality="One polished game.",
         beliefs=["Focus is the moat.", "Idle is a success state; I wait between cycles."],
@@ -47,8 +47,8 @@ def _config() -> CompanyConfig:
     )
     agent = AgentDefinition(
         slug="ceo",
-        name="Founder / CEO",
-        title="Founder / CEO",
+        name="CEO",
+        title="CEO",
         reports_to=None,
         role="ceo",
         skills=["release-checklist"],
@@ -204,7 +204,7 @@ def test_heartbeat_is_stub() -> None:
 def test_readme_single_agent_mermaid_no_edges() -> None:
     out = render_files(_config())["README.md"]
     assert "```mermaid" in out
-    assert 'ceo["Founder / CEO — Founder / CEO"]' in out
+    assert 'ceo["CEO — CEO"]' in out
     assert "-->" not in out  # single agent has no reporting edges
 
 

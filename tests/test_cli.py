@@ -39,12 +39,12 @@ _IDENTITY = """```json
 ```"""
 
 _ORG = """```json
-{"agents": [{"slug": "ceo", "name": "Founder / CEO", "title": "Founder / CEO",
+{"agents": [{"slug": "ceo", "name": "CEO", "title": "CEO",
  "reports_to": null, "skills": ["release-checklist"]}], "projects": [], "tasks": []}
 ```"""
 
 _SOUL = """```json
-{"identity": "I am the Founder/CEO.", "what_we_are": "A single-title studio.",
+{"identity": "I am the CEO.", "what_we_are": "A single-title studio.",
  "product_reality": "One polished game.",
  "beliefs": ["Focus is the moat.", "Idle is a success state; I wait between cycles."],
  "how_i_act": ["I decide quickly on scope."], "what_i_dont_do": ["No dark patterns."],
@@ -90,7 +90,7 @@ def _dispatch(**kwargs: object) -> str:
 
 _ORG_FULL = """```json
 {"agents": [
-  {"slug": "ceo", "name": "Founder / CEO", "title": "Founder / CEO",
+  {"slug": "ceo", "name": "CEO", "title": "CEO",
    "reports_to": null, "skills": ["release-checklist"]},
   {"slug": "engineer", "name": "Engineer", "title": "Engineer",
    "reports_to": "ceo", "skills": ["release-checklist"]}
@@ -104,7 +104,7 @@ _OPERATIONS = """```json
 {"phase_model": "Build, then polish.",
  "idle_state_protocol": "Idle is a success state; wait between heartbeats.",
  "reporting_cadence": "Weekly to the CEO.", "comm_conventions": "Async first.",
- "approval_merge_rules": "The board approves strategy and hires.",
+ "approval_merge_rules": "The Board is the sole approver; agents escalate, not self-approve.",
  "delegation_checklist": ["Is the goal an outcome?"],
  "anti_drift_checks": ["We are NOT a free-to-play studio.", "We are NOT a multi-title shop.",
                        "One title at a time.", "No dark patterns."],

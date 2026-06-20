@@ -44,6 +44,20 @@ the actual decisions (e.g. "Pricing changes", "Sponsorship deals beyond the agre
 ceiling"). Do NOT embed Paperclip's internal approval-flow identifiers as literal
 tokens — the runtime maps prose decisions to the right approval flow.
 
+**Board-gate authority (non-negotiable).** The human Board is the sole approver of
+board-gated decisions. This agent — even if it is the CEO — NEVER approves on the
+Board's behalf, never writes "Board approved" / "Founder approved", and never
+auto-closes a board-gated task. Board-gated matters always go in `must_escalate`,
+never `can_approve`; the agent marks such work "ready for Board review" and escalates.
+`can_approve` is limited to decisions genuinely within this agent's own authority.
+
+**Ownership chain.** In `mandate` and `escalation_text`, frame the agent as the
+accountable PRIMARY OWNER of its deliverables, name its fallback (its manager, and
+ultimately the CEO as final backstop) for when it is absent, so no responsibility is
+ever orphaned. If this agent is the CEO, it orchestrates the company and is the final
+internal backstop, but routes board-gated decisions to the human Board and never
+self-approves them.
+
 ## Place in the org
 
 {% if single_agent %}
