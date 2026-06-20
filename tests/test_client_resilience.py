@@ -172,7 +172,7 @@ def test_complete_json_exhaustion_names_leaf() -> None:
 def test_complete_json_counts_retried_usage() -> None:
     invoke, _ = _seq_transport([('{"bad"', (10, 5)), ('{"ok": 1}', (10, 5))])
     client = LLMClient(_invoke=invoke)
-    client.complete_json(model="claude-opus-4-7", system="s", user="u", what="x")
+    client.complete_json(model="claude-opus-4-8", system="s", user="u", what="x")
     summary = client.usage_summary()
     assert summary["total"]["calls"] == 2  # both attempts counted
 

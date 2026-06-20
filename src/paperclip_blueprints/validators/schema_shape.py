@@ -112,6 +112,11 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
     # would be rejected at import.
     v += _check_budget_fields(files.get(".paperclip.yaml", ""))
 
+    # S12: per-agent adapter preference is import-safe (ADR-017) — type in the
+    # env-free allowlist and NO adapter.config.env (provider routing / base URLs /
+    # credentials stay operator-environment).
+    v += _check_adapter_fields(files.get(".paperclip.yaml", ""))
+
     # S2: agentcompanies/v1 on every content file.
     for rel, text in files.items():
         if rel == "COMPANY.md" or rel.endswith(("AGENTS.md", "SKILL.md", "PROJECT.md", "TASK.md")):
@@ -181,6 +186,36 @@ def _check_board_authority(ops: str) -> list[str]:
         "board-gated decisions and that agents escalate (ready for Board review) "
         "rather than self-approving"
     ]
+
+
+def _check_adapter_fields(yaml_text: str) -> list[str]:
+    """S12: per-agent adapter is import-safe — allowlisted type, no ``env`` (ADR-017)."""
+    if not yaml_text or "adapter" not in yaml_text:
+        return []
+    from ..config import PORTABLE_ADAPTER_TYPES
+
+    try:
+        data = YAML(typ="safe").load(yaml_text)
+    except Exception:  # noqa: BLE001 - I9 reports unparseable YAML; don't double-fault
+        return []
+    v: list[str] = []
+    for slug, agent in (data.get("agents") or {}).items():
+        if not isinstance(agent, dict) or not isinstance(agent.get("adapter"), dict):
+            continue
+        adapter = agent["adapter"]
+        atype = adapter.get("type")
+        if atype not in PORTABLE_ADAPTER_TYPES:
+            v.append(
+                f"S12: agent {slug!r} adapter.type {atype!r} is not an import-safe "
+                f"worker kind {sorted(PORTABLE_ADAPTER_TYPES)}"
+            )
+        config = adapter.get("config")
+        if isinstance(config, dict) and "env" in config:
+            v.append(
+                f"S12: agent {slug!r} adapter.config.env must not be emitted "
+                f"(provider routing/base URLs/credentials stay operator-environment)"
+            )
+    return v
 
 
 def _check_budget_fields(yaml_text: str) -> list[str]:

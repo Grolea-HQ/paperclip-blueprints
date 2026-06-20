@@ -8,6 +8,12 @@ agents:
 {% if a.role %}
     role: {{ a.role }}
 {% endif %}
+{% if a.slug in adapters %}
+    adapter:
+      type: {{ adapters[a.slug].type }}
+      config:
+        model: {{ adapters[a.slug].model }}
+{% endif %}
 {% if a.slug in budgets %}
     budgetMonthlyCents: {{ budgets[a.slug] }}
 {% endif %}

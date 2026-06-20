@@ -276,3 +276,41 @@ def test_s11_skipped_for_single_agent_bundle() -> None:
 
     config = _config()  # single-agent: no OPERATIONS.md
     validate_bundle(config, render_files(config))  # S11 must not fire
+
+
+# --- per-agent model preference: S12 (ADR-017) ------------------------------
+
+
+def test_s12_valid_adapter_bundle_passes() -> None:
+    config, files = _valid()  # adapters render as claude_local/codex_local, no env
+    validate_bundle(config, files)  # must not raise on S12 grounds
+
+
+def test_s12_rejects_unknown_adapter_type() -> None:
+    config, files = _valid()
+    files[".paperclip.yaml"] = files[".paperclip.yaml"].replace(
+        "type: claude_local", "type: process", 1
+    )
+    with pytest.raises(BundleValidationError) as exc:
+        validate_bundle(config, files)
+    assert any(x.startswith("S12") for x in exc.value.violations)
+
+
+def test_s12_rejects_adapter_env() -> None:
+    config, files = _valid()
+    # inject an env block under the first agent's adapter.config
+    files[".paperclip.yaml"] = files[".paperclip.yaml"].replace(
+        "        model: claude-opus-4-8",
+        "        model: claude-opus-4-8\n        env:\n          PROVIDER: openrouter",
+        1,
+    )
+    with pytest.raises(BundleValidationError) as exc:
+        validate_bundle(config, files)
+    assert any(x.startswith("S12") for x in exc.value.violations)
+
+
+def test_s12_single_agent_bundle_is_clean() -> None:
+    from test_templates import _config
+
+    config = _config()  # single agent still carries a valid adapter; no env
+    validate_bundle(config, render_files(config))  # must not raise

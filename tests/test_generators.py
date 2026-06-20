@@ -51,9 +51,9 @@ def test_client_uses_injected_transport() -> None:
         return "canned response"
 
     client = LLMClient(_invoke=fake_invoke)
-    out = client.complete(model="claude-opus-4-7", system="sys", user="usr")
+    out = client.complete(model="claude-opus-4-8", system="sys", user="usr")
     assert out == "canned response"
-    assert calls[0]["model"] == "claude-opus-4-7"
+    assert calls[0]["model"] == "claude-opus-4-8"
 
 
 def test_client_does_not_construct_sdk_when_transport_injected() -> None:
@@ -131,7 +131,7 @@ def test_generate_identity_uses_thinking_and_content_model() -> None:
     generate_identity(_brief(), LLMClient(_invoke=fake))
     assert seen["thinking"] is True
     assert seen["effort"] == "high"
-    assert seen["model"] == "claude-opus-4-7"
+    assert seen["model"] == "claude-opus-4-8"
 
 
 # --- org / agents / souls / skills generators (T018) ------------------------
@@ -232,7 +232,7 @@ def test_soul_generator_uses_thinking_and_high_effort() -> None:
     generate_soul(stub, _company(), LLMClient(_invoke=fake))
     assert seen["thinking"] is True
     assert seen["effort"] == "high"
-    assert seen["model"] == "claude-opus-4-7"
+    assert seen["model"] == "claude-opus-4-8"
 
 
 def test_structural_calls_send_no_thinking_or_effort() -> None:
@@ -504,14 +504,14 @@ def test_client_tallies_usage_from_usage_reporting_transport() -> None:
         return ("text", (10, 20))
 
     client = LLMClient(_invoke=fake)
-    client.complete(model="claude-opus-4-7", system="s", user="u")
+    client.complete(model="claude-opus-4-8", system="s", user="u")
     client.complete(model="claude-sonnet-4-6", system="s", user="u")
     summary = client.usage_summary()
     assert summary["total"]["calls"] == 2
     assert summary["total"]["input_tokens"] == 20
     assert summary["total"]["output_tokens"] == 40
     assert summary["total"]["cost_usd"] > 0
-    assert set(summary["by_model"]) == {"claude-opus-4-7", "claude-sonnet-4-6"}
+    assert set(summary["by_model"]) == {"claude-opus-4-8", "claude-sonnet-4-6"}
 
 
 def test_client_plain_text_transport_records_no_usage() -> None:
@@ -524,7 +524,7 @@ def test_estimate_cost_uses_price_table() -> None:
     from paperclip_blueprints.config import estimate_cost
 
     # Opus list price: $5/Mtok in, $25/Mtok out → 1M+1M = $30.
-    assert estimate_cost("claude-opus-4-7", 1_000_000, 1_000_000) == pytest.approx(30.0)
+    assert estimate_cost("claude-opus-4-8", 1_000_000, 1_000_000) == pytest.approx(30.0)
     # An unknown model falls back to the Sonnet price ($3 + $15 = $18).
     assert estimate_cost("mystery-model", 1_000_000, 1_000_000) == pytest.approx(18.0)
 
@@ -538,7 +538,7 @@ def test_estimate_cost_reconciles_with_real_billing() -> None:
     """
     from paperclip_blueprints.config import estimate_cost
 
-    opus = estimate_cost("claude-opus-4-7", 27854, 25703)
+    opus = estimate_cost("claude-opus-4-8", 27854, 25703)
     sonnet = estimate_cost("claude-sonnet-4-6", 37542, 42884)
     total = opus + sonnet
     assert total == pytest.approx(1.54, rel=0.05)
