@@ -22,6 +22,18 @@ amount and currency symbol as written (e.g. if it says `$30,000`, never write
 {% for c in constraints %}  - {{ c }}
 {% endfor %}
 
+## Company name (non-negotiable)
+
+This company is named **{{ company_name }}**. Refer to it ONLY as {{ company_name }} or a
+neutral noun phrase ("the company", "this company"). Platforms, tools, runtimes,
+repositories, and ecosystems named anywhere in the brief — e.g. Paperclip, Hermes,
+OpenClaw, GitHub — are **subject matter the company works with; they are never the
+company**. Never put a platform or tool name where {{ company_name }}'s name belongs, and
+never use a possessive that implies a platform owns or is the company (the discovery
+engine is **{{ company_name }}'s**, never "Paperclip's"; what the company does or does not
+do is what **{{ company_name }}** does). This is the same class of guard as the
+founder/board naming rule.
+
 ## Governance position: {{ governance_position }}
 
 Calibrate the decision rights to the governance position. These are qualitative

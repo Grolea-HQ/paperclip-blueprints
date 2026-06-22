@@ -51,6 +51,7 @@ def generate_agent(
         slug=stub.slug,
         name=stub.name,
         title=stub.title,
+        company_name=company.name,
         north_star=company.north_star,
         we_are=company.we_are,
         we_are_not=company.we_are_not,

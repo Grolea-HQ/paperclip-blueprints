@@ -151,3 +151,19 @@ def test_agents_prompt_encodes_board_gate_and_ownership() -> None:
     assert "board" in low and "must_escalate" in low
     assert "ready for board review" in low
     assert "primary owner" in low and "backstop" in low
+
+
+# --- platform-name-as-company-name guard (ADR-018) --------------------------
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    ["identity_generator", "agents_generator", "soul_generator", "operations_generator"],
+)
+def test_synthesis_prompt_guards_platform_name_as_company(prompt: str) -> None:
+    # Brief subject-matter nouns (platforms/tools/repos/ecosystems) must never stand
+    # in as the company's own name/referent. Same class as the ADR-016 naming guard.
+    # Normalize whitespace so prose line-wrapping doesn't hide the phrase.
+    low = " ".join(load_prompt(prompt).split()).lower()
+    assert "subject matter" in low
+    assert "never the company" in low
