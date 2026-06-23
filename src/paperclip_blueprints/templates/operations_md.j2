@@ -50,6 +50,23 @@ How this company runs day to day, and how it stays what it is.
 - {{ c }}
 {% endfor %}
 
+## Skill attachments
+
+{% if attachments %}
+Importing this company adds these skills to the library but does **not** attach them to
+agents — import never auto-attaches. Attach each one below after import; a future deployer
+step will automate this.
+
+{% for slug, steps in attachments %}
+- **{{ slug }}**
+{% for s in steps %}
+  - {{ s }}
+{% endfor %}
+{% endfor %}
+{% else %}
+No skills to attach.
+{% endif %}
+
 ## Budget review
 
 {% if capital_set %}

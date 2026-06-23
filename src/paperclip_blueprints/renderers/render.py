@@ -20,6 +20,7 @@ from ..models.project import ProjectDefinition
 from ..models.skill import SkillDefinition
 from ..models.task import TaskDefinition
 from .adapter import assign_adapters
+from .attachments import attachments_by_agent
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
 
@@ -159,6 +160,12 @@ def render_files(
     # from the same role buckets, emitted under each agent's `adapter`. Never `env`.
     adapters = assign_adapters(role_by_slug)
 
+    # Per-agent skill→agent attach instructions (ADR-020): import does not auto-attach,
+    # so the bundle emits explicit steps derived from each agent's declared `skills`.
+    # They render into OPERATIONS.md (full) or README.md (single-agent, no OPERATIONS).
+    attachments = attachments_by_agent(config.agents)
+    has_operations = config.operations is not None
+
     base = {
         "brief": config.brief,
         "company": config.company,
@@ -169,6 +176,8 @@ def render_files(
         "license_kind": config.license_kind,
         "budgets": allocation.cents,
         "adapters": adapters,
+        "attachments": attachments,
+        "has_operations": has_operations,
     }
 
     files: dict[str, str] = {
@@ -184,6 +193,7 @@ def render_files(
             company=config.company,
             operations=config.operations,
             capital_set=capital_set,
+            attachments=attachments,
         )
         files["PROJECT-INVENTORY.md"] = _render(
             "project_inventory_md.j2", company=config.company, projects=config.projects

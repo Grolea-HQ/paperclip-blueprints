@@ -39,3 +39,21 @@ graph TD
 {% for g in company.goals %}
 - {{ g }}
 {% endfor %}
+
+## Skill attachments
+
+{% if has_operations %}
+Importing this bundle adds each agent's skills to the company library but does **not**
+attach them. After import, run the per-agent steps under **Skill attachments** in
+[OPERATIONS.md](OPERATIONS.md).
+{% else %}
+Importing this bundle adds these skills to the company library but does **not** attach
+them to agents — attach each one after import:
+
+{% for slug, steps in attachments %}
+- **{{ slug }}**
+{% for s in steps %}
+  - {{ s }}
+{% endfor %}
+{% endfor %}
+{% endif %}

@@ -29,6 +29,7 @@ from ..models.input import CompanyBrief
 from ..models.output import CompanyConfig
 from ..patterns import get_seed
 from ..validators import BundleValidationError, validate_bundle
+from .attachments import parse_attach_steps
 from .render import render_files
 
 _TOP_LEVEL = {".paperclip.yaml", "COMPANY.md", "README.md", "LICENSE.txt"}
@@ -243,6 +244,30 @@ def _check_single(files: dict[str, str]) -> None:
     if skill_slug not in files[f"agents/{agent_slug}/AGENTS.md"]:
         raise BundleError(f"agent {agent_slug} does not reference skill {skill_slug}")
 
+    # Attachment closure (ADR-020): the single-agent bundle has no OPERATIONS.md, so the
+    # attach instructions live in README.md and must list exactly the agent's skills.
+    fm = files[f"agents/{agent_slug}/AGENTS.md"]
+    m = re.search(r"^skills:\s*\[(.*?)\]", fm, re.MULTILINE)
+    declared_pairs = {
+        (agent_slug, s.strip()) for s in (m.group(1).split(",") if m else []) if s.strip()
+    }
+    _check_attachment_closure(declared_pairs, files["README.md"])
+
+
+def _check_attachment_closure(declared_pairs: set[tuple[str, str]], instructions: str) -> None:
+    """Assert rendered attach instructions equal the declared (agent, skill) pairs.
+
+    Import does not auto-attach skills (ADR-020); the emitted instructions are the
+    wiring. They must neither drop a declared pair nor invent one.
+    """
+    rendered = parse_attach_steps(instructions)
+    missing = declared_pairs - rendered
+    if missing:
+        raise BundleError(f"skill-attachment instructions missing pairs: {sorted(missing)}")
+    extra = rendered - declared_pairs
+    if extra:
+        raise BundleError(f"skill-attachment instructions attach undeclared pairs: {sorted(extra)}")
+
 
 def _dirs_under(paths: set[str], prefix: str) -> set[str]:
     return {p.split("/")[1] for p in paths if p.startswith(prefix)}
@@ -296,17 +321,25 @@ def _check_full(files: dict[str, str]) -> None:
     # Skill closure: every skill an agent references resolves to a SKILL.md, and
     # every generated skill is referenced by some agent.
     referenced: set[str] = set()
+    declared_pairs: set[tuple[str, str]] = set()
     for slug in agent_slugs:
         fm = files[f"agents/{slug}/AGENTS.md"]
         m = re.search(r"^skills:\s*\[(.*?)\]", fm, re.MULTILINE)
         if m:
-            referenced |= {s.strip() for s in m.group(1).split(",") if s.strip()}
+            skills = {s.strip() for s in m.group(1).split(",") if s.strip()}
+            referenced |= skills
+            declared_pairs |= {(slug, s) for s in skills}
     dangling = referenced - skill_slugs
     if dangling:
         raise BundleError(f"agents reference skills with no SKILL.md: {sorted(dangling)}")
     orphan = skill_slugs - referenced
     if orphan:
         raise BundleError(f"generated skills referenced by no agent: {sorted(orphan)}")
+
+    # Attachment closure (ADR-020): the OPERATIONS skill-attachment instructions must
+    # list exactly the declared (agent, skill) pairs — import does not auto-attach, so
+    # these instructions are the wiring and must never drift from the declarations.
+    _check_attachment_closure(declared_pairs, files["OPERATIONS.md"])
 
     # Task referential integrity: project + assignee must exist.
     for slug in task_dirs:

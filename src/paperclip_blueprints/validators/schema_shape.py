@@ -28,6 +28,7 @@ _OPERATIONS_HEADINGS = (
     "## Duplicate prevention",
     "## Routine slots",
     "## Critical rules summary",
+    "## Skill attachments",
     "## Budget review",
 )
 
