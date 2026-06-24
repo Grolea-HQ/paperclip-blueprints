@@ -11,7 +11,7 @@ Prerequisites:
 
 - Python 3.11 or newer
 - [uv](https://docs.astral.sh/uv/) for dependency and environment management
-- An Anthropic API key with access to Claude Opus 4.7 and Claude Sonnet 4.6
+- An Anthropic API key with access to Claude Opus 4.8 and Claude Sonnet 4.6
   (only needed to run live generation or the integration tests — the unit
   suite mocks all API calls)
 
@@ -85,8 +85,9 @@ Issues are tracked in [GitHub Issues](https://github.com/Grolea-HQ/paperclip-blu
 
 - **Bugs** — open an issue describing what you did, what you expected, and what
   actually happened. Include the command you ran, the relevant output, and your
-  Python and tool versions. If a generated bundle fails Paperclip import,
-  include the validation output (`blueprints validate-bundle --bundle <dir>`).
+  Python and tool versions. If a generated bundle fails Paperclip import, include
+  the validator output `generate` printed (and, if generation was rejected, the
+  contents of the `<output>-failed/` directory it wrote).
 - **Feature requests** — open an issue describing the use case and why the
   current behavior is insufficient. Because the project is deliberately scoped
   to Paperclip configuration generation, proposals that broaden scope are likely

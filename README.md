@@ -6,6 +6,8 @@
 
 A CLI tool that takes a structured Markdown brief and generates a complete, deployable **Paperclip company bundle** — a directory of files conforming to the `paperclip/v1` and `agentcompanies/v1` schemas, ready to import into a Paperclip instance.
 
+> 📖 **Walkthrough:** [How to use Paperclip Blueprints](https://www.grolea.com/insights/how-to-use-paperclip-blueprints) — a step-by-step guide to writing a brief and generating your first bundle.
+
 ## What this does
 
 Give the tool a brief describing a company's identity, north star, goals, and constraints. It produces a directory tree matching Paperclip's import format:
@@ -92,7 +94,7 @@ Both worked examples show the level of detail that produces coherent bundles. Us
 ## Tech stack
 
 - Python 3.11+, Typer (CLI), Pydantic v2 (validation), Jinja2 (templating), ruamel.yaml (YAML round-trips)
-- Anthropic SDK (LLM access — Claude Opus 4.7 and Sonnet 4.6)
+- Anthropic SDK (LLM access — Claude Opus 4.8 and Sonnet 4.6)
 
 ## Project layout
 

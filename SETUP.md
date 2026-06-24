@@ -2,6 +2,8 @@
 
 This guide covers getting the paperclip-blueprints project running on a fresh machine and the daily workflow once it's set up.
 
+> 📖 For a narrative walkthrough, see [How to use Paperclip Blueprints](https://www.grolea.com/insights/how-to-use-paperclip-blueprints).
+
 ---
 
 ## First-time installation
@@ -10,7 +12,7 @@ This guide covers getting the paperclip-blueprints project running on a fresh ma
 
 - Python 3.11 or newer (`python3 --version`)
 - [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- An Anthropic API key with access to Claude Opus 4.7 and Sonnet 4.6
+- An Anthropic API key with access to Claude Opus 4.8 and Sonnet 4.6
 
 ### Clone and bootstrap
 
@@ -58,7 +60,7 @@ cp examples/input-template.md my-brief.md
 # - Constraints are non-negotiable rules, not soft preferences
 
 # 3. Generate
-blueprints generate --input my-brief.md --output examples/generated-companies/my-company/
+uv run blueprints generate --input my-brief.md --output examples/generated-companies/my-company/
 
 # 4. Inspect the bundle
 ls examples/generated-companies/my-company/
@@ -75,13 +77,13 @@ diff -r ~/Downloads/newsletter-press/ \
 For v0.1a single-agent runs, add `--single-agent`:
 
 ```bash
-blueprints generate --input my-brief.md --output my-test/ --single-agent
+uv run blueprints generate --input my-brief.md --output my-test/ --single-agent
 ```
 
 ### Validating an input without generating
 
 ```bash
-blueprints validate --input my-brief.md
+uv run blueprints validate --input my-brief.md
 ```
 
 This runs the input through Pydantic schemas and the goal-as-outcome / span-of-control rules without making any Anthropic API calls. Use it for fast iteration on the brief.
@@ -89,7 +91,7 @@ This runs the input through Pydantic schemas and the goal-as-outcome / span-of-c
 ### Previewing only COMPANY.md (fail-fast)
 
 ```bash
-blueprints preview --input my-brief.md
+uv run blueprints preview --input my-brief.md
 ```
 
 Generates only the COMPANY.md content. ~30 seconds, one Opus call. Useful for iterating on identity content before paying for a full bundle generation.
@@ -104,17 +106,20 @@ Verify Python 3.11+. uv resolves against the version in `pyproject.toml`; older 
 
 ### Anthropic API calls fail with 401
 
-Check `ANTHROPIC_API_KEY` is set in `.env` and that the key has access to both `claude-opus-4-7` and `claude-sonnet-4-6` models. Most Anthropic keys do; if yours doesn't, check the Console.
+Check `ANTHROPIC_API_KEY` is set in `.env` and that the key has access to both `claude-opus-4-8` and `claude-sonnet-4-6` models. Most Anthropic keys do; if yours doesn't, check the Console.
 
 ### Generated bundle fails Paperclip import
 
-Run schema validation in isolation:
+Every bundle is validated against the `paperclip/v1` and `agentcompanies/v1` schemas
+**before** it is written to disk (Constitution II), so a bundle that exists on disk has
+already passed the in-stack validators. There is no separate re-validation subcommand.
 
-```bash
-blueprints validate-bundle --bundle examples/generated-companies/my-company/
-```
-
-This runs the same validators that should have run before the bundle was written. If it passes here but fails at Paperclip import, the import format may have changed — check the Paperclip docs and update `src/paperclip_blueprints/validators/`.
+- If `generate` itself fails validation, it writes the **rejected** bundle to
+  `<output>-failed/` and prints the violations — inspect that directory to see what the
+  validators caught.
+- If a written bundle passed here but still fails at Paperclip import, the import format
+  may have changed — check the Paperclip docs and update
+  `src/paperclip_blueprints/validators/`.
 
 ### Re-importing duplicates agents/projects
 
