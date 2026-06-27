@@ -39,6 +39,17 @@ def _expected_files(config: CompanyConfig) -> set[str]:
         files.add(f"projects/{p.slug}/PROJECT.md")
     for t in config.tasks:
         files.add(f"tasks/{t.slug}/TASK.md")
+    # Recurring TASK.md files generated for routines (ADR-022 US3); derived deterministically
+    # from the same operations.routine_slots the renderer uses, so I10 expects exactly them.
+    if config.operations is not None:
+        from ..renderers.routines import derive_routines
+
+        for r in derive_routines(
+            config.operations.routine_slots,
+            {a.slug for a in config.agents},
+            [p.slug for p in config.projects],
+        ):
+            files.add(f"tasks/{r.slug}/TASK.md")
     return files
 
 

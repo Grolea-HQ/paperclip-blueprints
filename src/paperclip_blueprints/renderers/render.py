@@ -22,6 +22,7 @@ from ..models.task import TaskDefinition
 from .adapter import assign_adapters
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
+from .routines import derive_routines, routine_task_files
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -159,6 +160,18 @@ def render_files(
     # from the same role buckets, emitted under each agent's `adapter`. Never `env`.
     adapters = assign_adapters(role_by_slug)
 
+    # Routine slots → importable Routines (ADR-022, US3, PROVISIONAL): a `.paperclip.yaml`
+    # routines block + a recurring TASK.md per routine. Empty without operations or a project.
+    routines = (
+        derive_routines(
+            config.operations.routine_slots,
+            {a.slug for a in config.agents},
+            [p.slug for p in config.projects],
+        )
+        if config.operations is not None
+        else []
+    )
+
     base = {
         "brief": config.brief,
         "company": config.company,
@@ -169,6 +182,7 @@ def render_files(
         "license_kind": config.license_kind,
         "budgets": allocation.cents,
         "adapters": adapters,
+        "routines": routines,
     }
 
     files: dict[str, str] = {
@@ -229,5 +243,9 @@ def render_files(
         files[f"tasks/{task.slug}/TASK.md"] = (
             _task_frontmatter(task) + "\n" + _render("task_md.j2", task=task)
         )
+
+    # Recurring TASK.md files for the routines (the task half; the schedule lives in
+    # `.paperclip.yaml routines.<slug>`). ADR-022 US3, PROVISIONAL.
+    files.update(routine_task_files(routines))
 
     return files

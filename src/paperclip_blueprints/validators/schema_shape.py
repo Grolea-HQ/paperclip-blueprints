@@ -122,6 +122,12 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
     # credentials stay operator-environment).
     v += _check_adapter_fields(files.get(".paperclip.yaml", ""))
 
+    # S14 (ADR-022): the hiring board-gate ships as a structured, importable company setting.
+    if "requireBoardApprovalForNewAgents: true" not in files.get(".paperclip.yaml", ""):
+        v.append(
+            "S14: .paperclip.yaml must set company.requireBoardApprovalForNewAgents: true (ADR-022)"
+        )
+
     # S2: agentcompanies/v1 on every content file.
     for rel, text in files.items():
         if rel == "COMPANY.md" or rel.endswith(("AGENTS.md", "SKILL.md", "PROJECT.md", "TASK.md")):

@@ -122,3 +122,20 @@ def test_v_gov_flags_missing_ceo_governance() -> None:
     assert any(
         x.startswith("V-gov") and "Critical rules" in x for x in check_schema_shape(config, files)
     )
+
+
+# --- US3: the hiring board-gate ships as a structured company setting ---------
+
+
+def test_paperclip_yaml_sets_the_hiring_board_gate() -> None:
+    y = render_files(CompanyConfig(**_full_config_kwargs()))[".paperclip.yaml"]
+    assert "requireBoardApprovalForNewAgents: true" in y
+
+
+def test_s14_flags_a_missing_hiring_gate() -> None:
+    config = CompanyConfig(**_full_config_kwargs())
+    files = render_files(config)
+    files[".paperclip.yaml"] = files[".paperclip.yaml"].replace(
+        "requireBoardApprovalForNewAgents: true", "requireBoardApprovalForNewAgents: false"
+    )
+    assert any(x.startswith("S14") for x in check_schema_shape(config, files))
