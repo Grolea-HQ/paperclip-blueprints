@@ -17,6 +17,11 @@ from ..models.output import CompanyConfig
 _BODY_ONLY_SUFFIXES = ("SOUL.md", "HEARTBEAT.md", "TOOLS.md")
 _BODY_ONLY_TOP = ("README.md", "OPERATIONS.md", "PROJECT-INVENTORY.md", "LICENSE.txt")
 
+# S13 (ADR-022): filesystem-read markers an agent file must never carry — a UI-imported
+# company is database-backed with no company-root tree, so the constitution/governance must
+# reach agents via the instruction bundle, never as files.
+_FS_MARKERS = ("## File system", "Company root", "Own memory", "memory/<date>", "para-memory-files")
+
 _OPERATIONS_HEADINGS = (
     "## Phase model",
     "## Idle-state protocol",
@@ -168,6 +173,17 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
             if "schema: agentcompanies/v1" in text or "schema: paperclip/v1" in text:
                 v.append(f"S9: body-only file {rel} must not carry a schema frontmatter")
 
+    # S13 (ADR-022): agent files must not instruct reading the constitution/governance from a
+    # filesystem path — a UI-imported company is DB-backed with no company-root tree.
+    for rel, text in files.items():
+        if rel.endswith(("AGENTS.md", "SOUL.md", "HEARTBEAT.md", "TOOLS.md")):
+            for marker in _FS_MARKERS:
+                if marker in text:
+                    v.append(
+                        f"S13: {rel} instructs a filesystem read ({marker!r}); the import "
+                        "provides no company-root filesystem (ADR-022)"
+                    )
+
     return v
 
 
@@ -254,7 +270,40 @@ def _check_operations(config: CompanyConfig, ops: str) -> list[str]:
         terms = _key_terms(item)
         if terms and not any(t in haystack for t in terms):
             v.append(f"S7: OPERATIONS.md anti-drift checks do not cover {item!r}")
+    v += _check_idle_state(config.operations.idle_state_protocol)
     return v
+
+
+def _check_idle_state(protocol: str) -> list[str]:
+    """V-idle (ADR-022): the idle-state protocol must not leave an issue ``in_progress`` as a
+    liveness/continuation marker — the routine schedule is the liveness.
+
+    Sentence-level negation check: a sentence mentioning ``in_progress`` together with a
+    leave/keep/liveness/continuation cue is a violation UNLESS negated (the correct protocol
+    says "never leave an issue in_progress as a liveness marker", which is negated and passes).
+    A lingering ``in_progress`` issue is health-check-demanded and re-wakes the agent endlessly.
+    """
+    text = protocol.lower()
+    cues = ("leave", "keep", "liveness", "continuation", "alive", "stay open", "kept open")
+    negations = (
+        "never",
+        "not ",
+        "n't",
+        "rather than",
+        "instead of",
+        "avoid",
+        "without",
+        "no longer",
+    )
+    for sentence in re.split(r"[.\n;]", text):
+        if not any(s in sentence for s in ("in_progress", "in progress", "inprogress")):
+            continue
+        if any(c in sentence for c in cues) and not any(n in sentence for n in negations):
+            return [
+                "V-idle: idle-state protocol must not leave an issue in_progress as a "
+                "liveness/continuation marker (the routine schedule is the liveness) — ADR-022"
+            ]
+    return []
 
 
 def _check_inventory(config: CompanyConfig, inv: str) -> list[str]:
