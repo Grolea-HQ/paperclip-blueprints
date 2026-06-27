@@ -1,7 +1,8 @@
 """Feature 010 — object-model constitution & governance delivery (ADR-022).
 
-This file covers US2 (no filesystem-read assumptions) and US5 (idle-state correction).
-All offline — no live API. US1/US3/US4 land in later increments.
+This file covers US2 (no filesystem-read assumptions), US5 (idle-state correction), and
+US1 (governance reaches agents via the instruction bundle). All offline — no live API.
+US3/US4 land in later increments.
 """
 
 from __future__ import annotations
@@ -76,3 +77,48 @@ def test_full_fixture_operations_passes_v_idle() -> None:
     config = CompanyConfig(**_full_config_kwargs())
     files = render_files(config)
     assert not any(x.startswith("V-idle") for x in check_schema_shape(config, files))
+
+
+# --- US1: governance reaches agents via the instruction bundle ---------------
+
+
+def test_ceo_agents_md_carries_governance() -> None:
+    ceo = render_files(CompanyConfig(**_full_config_kwargs()))["agents/ceo/AGENTS.md"]
+    for sec in (
+        "## Idle-state protocol",
+        "## Company goals",
+        "## Board-gate and approval",
+        "## Critical rules",
+    ):
+        assert sec in ceo, sec
+    assert "Never ship without sign-off." in ceo  # the critical rule reached the carrier
+
+
+def test_non_ceo_agents_md_has_idle_but_not_ceo_sections() -> None:
+    cto = render_files(CompanyConfig(**_full_config_kwargs()))["agents/cto/AGENTS.md"]
+    assert "## Idle-state protocol" in cto
+    for sec in ("## Company goals", "## Board-gate and approval", "## Critical rules"):
+        assert sec not in cto
+
+
+def test_idle_state_protocol_reaches_each_agents_md() -> None:
+    files = render_files(CompanyConfig(**_full_config_kwargs()))
+    assert "Idle is a success state." in files["agents/ceo/AGENTS.md"]
+    assert "Idle is a success state." in files["agents/cto/AGENTS.md"]
+
+
+def test_v_gov_is_clean_on_full_bundle() -> None:
+    config = CompanyConfig(**_full_config_kwargs())
+    files = render_files(config)
+    assert not any(x.startswith("V-gov") for x in check_schema_shape(config, files))
+
+
+def test_v_gov_flags_missing_ceo_governance() -> None:
+    config = CompanyConfig(**_full_config_kwargs())
+    files = render_files(config)
+    files["agents/ceo/AGENTS.md"] = files["agents/ceo/AGENTS.md"].replace(
+        "## Critical rules", "## Removed"
+    )
+    assert any(
+        x.startswith("V-gov") and "Critical rules" in x for x in check_schema_shape(config, files)
+    )

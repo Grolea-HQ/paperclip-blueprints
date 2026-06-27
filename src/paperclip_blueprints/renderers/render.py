@@ -188,13 +188,24 @@ def render_files(
         files["PROJECT-INVENTORY.md"] = _render(
             "project_inventory_md.j2", company=config.company, projects=config.projects
         )
+    # Governance reaches agents via the instruction bundle, not OPERATIONS.md/COMPANY.md files
+    # (ADR-022): every AGENTS.md carries the idle-state protocol; the CEO/root additionally
+    # carries the company goals (which do not survive import), the board-gate/approval language,
+    # and the company critical rules. Targeted per role — not the whole manual.
+    ops = config.operations
     for agent in config.agents:
+        is_root = agent.reports_to is None
         actx = {
             "brief": config.brief,
             "company": config.company,
             "agent": agent,
             "soul": agent.soul,
             "role_bucket": _role_bucket(agent, agent.slug in manager_slugs),
+            "is_root": is_root,
+            "idle_state_protocol": ops.idle_state_protocol if ops is not None else None,
+            "company_goals": config.company.goals if is_root else [],
+            "critical_rules": ops.critical_rules if (is_root and ops is not None) else [],
+            "board_gate": ops.approval_merge_rules if (is_root and ops is not None) else None,
         }
         adir = f"agents/{agent.slug}"
         files[f"{adir}/AGENTS.md"] = (

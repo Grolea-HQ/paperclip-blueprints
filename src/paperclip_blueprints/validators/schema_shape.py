@@ -161,11 +161,12 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
         if rel.endswith("SOUL.md") and "idle" not in text.lower():
             v.append(f"S6: {rel} must include an idle-state belief")
 
-    # S7 + S8 + S11: full-bundle-only checks.
+    # S7 + S8 + S11 + V-gov: full-bundle-only checks.
     if config.operations is not None:
         v += _check_operations(config, files.get("OPERATIONS.md", ""))
         v += _check_inventory(config, files.get("PROJECT-INVENTORY.md", ""))
         v += _check_board_authority(files.get("OPERATIONS.md", ""))
+        v += _check_governance_delivery(config, files)
 
     # S9: body-only files carry no schema frontmatter.
     for rel, text in files.items():
@@ -271,6 +272,31 @@ def _check_operations(config: CompanyConfig, ops: str) -> list[str]:
         if terms and not any(t in haystack for t in terms):
             v.append(f"S7: OPERATIONS.md anti-drift checks do not cover {item!r}")
     v += _check_idle_state(config.operations.idle_state_protocol)
+    return v
+
+
+def _check_governance_delivery(config: CompanyConfig, files: dict[str, str]) -> list[str]:
+    """V-gov (ADR-022): governance reaches agents via the instruction bundle.
+
+    Every agent's ``AGENTS.md`` carries the idle-state protocol; the CEO/root additionally
+    carries the company goals, the board-gate/approval language, and the company critical rules.
+    (Full bundles only — gated by the caller on ``config.operations``.)
+    """
+    v: list[str] = []
+    for a in config.agents:
+        am = files.get(f"agents/{a.slug}/AGENTS.md", "")
+        if "## Idle-state protocol" not in am:
+            v.append(
+                f"V-gov: agents/{a.slug}/AGENTS.md is missing the idle-state protocol (ADR-022)"
+            )
+    for r in (a for a in config.agents if a.reports_to is None):
+        am = files.get(f"agents/{r.slug}/AGENTS.md", "")
+        for section in ("## Company goals", "## Board-gate and approval", "## Critical rules"):
+            if section not in am:
+                v.append(
+                    f"V-gov: CEO agents/{r.slug}/AGENTS.md is missing section {section!r} "
+                    "(governance must reach the CEO via AGENTS.md, not OPERATIONS.md — ADR-022)"
+                )
     return v
 
 

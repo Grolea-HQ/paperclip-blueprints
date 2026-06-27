@@ -47,3 +47,33 @@
 ## Escalation
 
 {{ agent.escalation_text }}
+
+## Idle-state protocol
+
+{% if idle_state_protocol %}
+{{ idle_state_protocol }}
+{% else %}
+Idle is a success state. Between scheduled triggers I wait; I do not invent work to look busy, and I never leave an issue `in_progress` as a liveness marker — the schedule is the liveness.
+{% endif %}
+{% if is_root %}
+
+## Company goals
+
+{% for g in company_goals %}
+- {{ g }}
+{% endfor %}
+{% if board_gate %}
+
+## Board-gate and approval
+
+{{ board_gate }}
+{% endif %}
+{% if critical_rules %}
+
+## Critical rules
+
+{% for c in critical_rules %}
+- {{ c }}
+{% endfor %}
+{% endif %}
+{% endif %}
