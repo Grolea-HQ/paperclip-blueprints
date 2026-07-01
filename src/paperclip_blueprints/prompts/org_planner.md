@@ -26,6 +26,8 @@ single-root tree holds this property: every agent ultimately escalates to the CE
 - North star: {{ north_star }}
 - We are: {{ we_are }}
 {% if governance_position %}- Governance position: {{ governance_position }}{% endif %}
+{% if free_text %}- Operating context: {{ free_text }}{% endif %}
+{% if use_case_notes %}- Customization notes (BINDING — see the roster rule below): {{ use_case_notes }}{% endif %}
 
 {% if single_agent %}
 ## Your task — SINGLE agent
@@ -42,6 +44,12 @@ directly, and NO projects and NO tasks.
 
 Design a complete org for THIS company:
 
+- **Binding customization notes (non-negotiable).** When the customization notes state an
+  explicit roster (named agents), a headcount cap, or which work is scheduled, treat them as
+  BINDING and DECISIVE — they override the sizing guidance below. Produce EXACTLY the stated
+  agents: do NOT add roles beyond the stated roster, do NOT split a stated role into a sub-team
+  or add reports under it, and respect any stated headcount cap. Set each task's `recurrence`
+  ONLY from the cadences the notes state are scheduled, and leave every other task `null`.
 - Exactly ONE root agent (`reports_to: null`) — the owner / CEO-equivalent.
 - Every other agent reports to exactly one existing agent (by slug).
 - **Span of control**: no manager — the CEO included — may have more than 7 direct
@@ -55,6 +63,20 @@ Design a complete org for THIS company:
 - Produce 2–4 starter `projects`, each `owned` by an agent that exists.
 - Produce 4–8 starter `tasks`, each linked to an existing `project` and assigned to an
   existing `assignee` agent.
+- **Recurrence (scheduled work ONLY).** Set a task's `recurrence` to a cadence **only** when
+  the brief states that work runs on a STANDING SCHEDULE (e.g. "every Monday", "Mon/Wed/Fri",
+  "monthly board package"). Otherwise set `recurrence` to `null`. Most tasks are
+  handoff- or heartbeat-driven and MUST be `null` — do NOT flag a task recurring just because
+  it repeats "each cycle"; only genuinely clock-driven standing work gets a cadence. Normalize
+  the cadence to one of `daily`, `weekly`, `monthly`, `quarterly`, or a comma-separated
+  lowercase weekday list (e.g. `mon,wed,fri`). Each recurring task still needs a real
+  `assignee` and `project` — the routine runs as that agent, in that project.
+- **One cadence → one recurring task.** A single stated scheduled cadence maps to EXACTLY ONE
+  recurring task. Do NOT split one scheduled activity into multiple recurring tasks: if that
+  activity has sub-steps (e.g. "scan then log"), fold them into that one recurring task's
+  description, or model the follow-ons as handoff-driven tasks (`recurrence: null`) — never as
+  additional recurring tasks on the same cadence. Genuinely-distinct cadences still get
+  separate recurring tasks (e.g. a `mon,wed,fri` scan and a `monthly` board package are two).
 - `title` and `name` should read like real roles for THIS company.
 {% endif %}
 {% if seed %}
@@ -80,7 +102,7 @@ Return ONE fenced ```json block and nothing else, matching this shape exactly:
     {"slug": "project-slug", "name": "Readable Project Name", "owner": "an-agent-slug"}
   ],
   "tasks": [
-    {"slug": "task-slug", "name": "Readable Task Name", "project": "project-slug", "assignee": "an-agent-slug"}
+    {"slug": "task-slug", "name": "Readable Task Name", "project": "project-slug", "assignee": "an-agent-slug", "recurrence": null}
   ]
 }
 ```

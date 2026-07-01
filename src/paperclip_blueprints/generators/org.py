@@ -54,6 +54,8 @@ def generate_org_plan(
         governance_position=brief.governance_position,
         single_agent=single_agent,
         seed=seed,
+        free_text=brief.free_text,
+        use_case_notes=brief.use_case_notes,
     )
     payload = client.complete_json(
         model=model or STRUCTURAL_MODEL,

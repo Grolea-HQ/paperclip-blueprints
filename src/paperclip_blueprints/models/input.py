@@ -63,6 +63,10 @@ class CompanyBrief(BaseModel):
     constraints: list[str]
     governance_position: GovernancePosition
     use_case_pattern: str | None = None
+    use_case_notes: str | None = None
+    """Section-7 "Notes if customizing the pattern" prose — the operator's binding
+    org-customization channel (explicit roster, headcount cap, which work is scheduled).
+    Threaded into org_planner so a stated roster/cadence is honored, not expanded past."""
     hours_per_week: int | None = None
     capital_monthly_eur: int | None = None
     capital_setup_eur: int | None = None
@@ -256,6 +260,8 @@ def parse_brief(markdown: str) -> CompanyBrief:
 
     if (v := _inline_value(sec.get(7, ""), "choice")) is not None:
         data["use_case_pattern"] = v
+    if (v := _anchored_block(sec.get(7, ""), "Notes if customizing")) is not None:
+        data["use_case_notes"] = v
     if (v := _inline_value(sec.get(8, ""), "choice")) is not None:
         data["governance_position"] = v
 
