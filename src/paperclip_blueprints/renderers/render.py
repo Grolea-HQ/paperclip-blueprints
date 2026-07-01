@@ -22,6 +22,7 @@ from ..models.task import TaskDefinition
 from .adapter import assign_adapters
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
+from .routines import RoutineSpec, derive_routines
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -106,15 +107,18 @@ def _project_frontmatter(project: ProjectDefinition) -> str:
 
 
 def _task_frontmatter(task: TaskDefinition) -> str:
-    return dump_frontmatter(
-        {
-            "schema": "agentcompanies/v1",
-            "slug": task.slug,
-            "name": task.name,
-            "project": task.project,
-            "assignee": task.assignee,
-        }
-    )
+    fields: dict[str, object] = {
+        "schema": "agentcompanies/v1",
+        "slug": task.slug,
+        "name": task.name,
+        "project": task.project,
+        "assignee": task.assignee,
+    }
+    # A scheduled task is flagged recurring (ADR-022 US3); its schedule rides `.paperclip.yaml`
+    # routines.<slug>. One task set — recurring ones are flagged, never duplicated.
+    if task.recurrence:
+        fields["recurring"] = True
+    return dump_frontmatter(fields)
 
 
 def _role_bucket(agent: AgentDefinition, is_manager: bool) -> str:
@@ -129,6 +133,26 @@ def _role_bucket(agent: AgentDefinition, is_manager: bool) -> str:
     ):
         return "engineering"
     return "generic"
+
+
+def _routine_cadence_smells(routines: list[RoutineSpec]) -> list[str]:
+    """Soft smell-detector (ADR-022 US3): two recurring tasks on the SAME cadence AND assignee
+    are likely one scheduled activity split into two (the org_planner one-cadence rule).
+
+    Advisory only — surfaced via the ``warn`` sink, NEVER a validation error: a genuinely
+    doubled cadence on one owner is legitimate, so the operator judges. Grouped by
+    ``(cron, assignee)`` (not cron alone — two owners can share a cadence without a smell).
+    """
+    groups: dict[tuple[str, str], list[str]] = {}
+    for r in routines:
+        groups.setdefault((r.cron, r.assignee), []).append(r.slug)
+    return [
+        f"routines {sorted(slugs)} share cadence {cron!r} and assignee {assignee!r} — likely one "
+        "scheduled activity split into multiple recurring tasks; consider folding into one "
+        "recurring task (org_planner one-cadence rule)"
+        for (cron, assignee), slugs in groups.items()
+        if len(slugs) > 1
+    ]
 
 
 def render_files(
@@ -159,6 +183,14 @@ def render_files(
     # from the same role buckets, emitted under each agent's `adapter`. Never `env`.
     adapters = assign_adapters(role_by_slug)
 
+    # Tasks with a `recurrence` cadence → importable Routines (ADR-022, US3, PROVISIONAL cron):
+    # a `.paperclip.yaml` routines.<task-slug> block; the recurring task itself is flagged
+    # `recurring: true` (no shadow task). Empty when no task is scheduled.
+    routines = derive_routines(config.tasks)
+    if warn is not None:
+        for message in _routine_cadence_smells(routines):
+            warn(message)
+
     base = {
         "brief": config.brief,
         "company": config.company,
@@ -169,6 +201,7 @@ def render_files(
         "license_kind": config.license_kind,
         "budgets": allocation.cents,
         "adapters": adapters,
+        "routines": routines,
     }
 
     files: dict[str, str] = {
@@ -188,13 +221,24 @@ def render_files(
         files["PROJECT-INVENTORY.md"] = _render(
             "project_inventory_md.j2", company=config.company, projects=config.projects
         )
+    # Governance reaches agents via the instruction bundle, not OPERATIONS.md/COMPANY.md files
+    # (ADR-022): every AGENTS.md carries the idle-state protocol; the CEO/root additionally
+    # carries the company goals (which do not survive import), the board-gate/approval language,
+    # and the company critical rules. Targeted per role — not the whole manual.
+    ops = config.operations
     for agent in config.agents:
+        is_root = agent.reports_to is None
         actx = {
             "brief": config.brief,
             "company": config.company,
             "agent": agent,
             "soul": agent.soul,
             "role_bucket": _role_bucket(agent, agent.slug in manager_slugs),
+            "is_root": is_root,
+            "idle_state_protocol": ops.idle_state_protocol if ops is not None else None,
+            "company_goals": config.company.goals if is_root else [],
+            "critical_rules": ops.critical_rules if (is_root and ops is not None) else [],
+            "board_gate": ops.approval_merge_rules if (is_root and ops is not None) else None,
         }
         adir = f"agents/{agent.slug}"
         files[f"{adir}/AGENTS.md"] = (

@@ -1,4 +1,6 @@
 schema: paperclip/v1
+company:
+  requireBoardApprovalForNewAgents: true
 sidebar:
   agents: [{{ agents | map(attribute='slug') | join(', ') }}]
   projects: [{{ projects | map(attribute='slug') | join(', ') }}]
@@ -25,4 +27,19 @@ projects:
 {% endfor %}
 {% else %}
 projects: {}
+{% endif %}
+{% if routines %}
+# Routines (ADR-022, PROVISIONAL — shape derived from the Paperclip importer source; the live
+# import is the acceptance check for the routines.<task-slug> key match, cron validity, and the
+# assignee/project resolution). Keyed by the recurring task's slug.
+routines:
+{% for r in routines %}
+  {{ r.slug }}:
+    concurrencyPolicy: {{ r.concurrency_policy }}
+    catchUpPolicy: {{ r.catch_up_policy }}
+    triggers:
+      - kind: schedule
+        cronExpression: "{{ r.cron }}"
+        timezone: {{ r.timezone }}
+{% endfor %}
 {% endif %}

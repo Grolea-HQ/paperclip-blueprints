@@ -39,6 +39,8 @@ def _expected_files(config: CompanyConfig) -> set[str]:
         files.add(f"projects/{p.slug}/PROJECT.md")
     for t in config.tasks:
         files.add(f"tasks/{t.slug}/TASK.md")
+    # Routines (ADR-022 US3) add NO files: a recurring task is the existing task flagged
+    # `recurring: true`, not a separate shadow task — so the expected set is unchanged.
     return files
 
 

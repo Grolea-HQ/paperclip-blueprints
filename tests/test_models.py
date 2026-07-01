@@ -206,6 +206,9 @@ def test_parse_valid_brief() -> None:
     assert len(brief.we_are_not) == 2
     assert len(brief.constraints) == 2
     assert brief.use_case_pattern == "custom"
+    # Section-7 "Notes if customizing the pattern" prose is captured (the binding
+    # org-customization channel threaded into org_planner — ADR-022 US3 follow-up).
+    assert brief.use_case_notes == "Keep it lean."
     assert brief.governance_position == "balanced"
     assert brief.hours_per_week == 6
     assert brief.capital_monthly_eur == 150

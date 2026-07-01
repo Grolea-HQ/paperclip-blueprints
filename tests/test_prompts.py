@@ -151,3 +151,37 @@ def test_agents_prompt_encodes_board_gate_and_ownership() -> None:
     assert "board" in low and "must_escalate" in low
     assert "ready for board review" in low
     assert "primary owner" in low and "backstop" in low
+
+
+# --- routines: org_planner sets recurrence only for scheduled work (ADR-022 US3) -----------
+
+
+def test_org_planner_recurrence_rule_is_scheduled_work_only() -> None:
+    text = load_prompt("org_planner")
+    low = text.lower()
+    assert "recurrence" in low
+    # gated to genuinely scheduled standing work, default null
+    assert "null" in low and ("standing schedule" in low or "scheduled" in low)
+    # the cadence vocabulary incl. a weekday-list example
+    assert "mon,wed,fri" in low
+    assert '"recurrence"' in text  # emitted in the task output shape
+
+
+def test_org_planner_treats_customization_notes_as_binding() -> None:
+    low = load_prompt("org_planner").lower()
+    assert "{{ use_case_notes }}" in load_prompt("org_planner")  # the notes reach the prompt
+    assert "binding" in low
+    assert "roster" in low and "headcount" in low
+    # an explicit roster must not be expanded or split into sub-teams
+    assert "do not add roles" in low or "exactly the stated agents" in low
+    assert "sub-team" in low
+
+
+def test_org_planner_one_cadence_one_recurring_task() -> None:
+    low = load_prompt("org_planner").lower()
+    assert "one cadence" in low and "one recurring task" in low
+    # a single scheduled activity must not become multiple recurring tasks
+    assert "do not split" in low
+    assert "sub-step" in low and ("fold" in low or "handoff" in low)
+    # genuinely-distinct cadences still get separate recurring tasks
+    assert "distinct cadences" in low

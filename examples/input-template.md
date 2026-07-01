@@ -16,7 +16,7 @@ Fill out this template to describe the company you want the tool to generate. Th
 
 **Name:** [Display name, e.g., "Newsletter Press" or "Niche Site Empire"]
 
-**Slug:** [Lowercase hyphenated, e.g., `newsletter-press`. This becomes the bundle directory name and the company ID in Paperclip.]
+**Slug:** [Lowercase hyphenated, e.g., newsletter-press. This becomes the bundle directory name and the company ID in Paperclip.]
 
 **One-sentence description:** [The pitch in 20 words or fewer. Used in `COMPANY.md` description, README, and as the company's identifying line in Paperclip's UI.]
 
@@ -163,9 +163,11 @@ If you pick a pattern, the tool uses it as a starting template — suggested age
 - `seo-bureau` — derived from the `seo-bureau` reference. ~15 agents covering technical SEO, content, link acquisition, reporting. For SEO-led service businesses.
 - `custom` — no template; the org_planner designs from scratch.
 
-**Your choice:** [pattern slug, or `custom`]
+**Your choice:** [pattern slug, or custom]
 
-**Notes if customizing the pattern:** [Free text — e.g., "use newsletter but drop the Cross-Promo Lead, we're not running swaps"]
+**These notes are binding.** The org planner treats what you write here as decisive. State an explicit roster (named agents) or a headcount cap and the tool produces exactly that org — it will not add roles or split one role into a sub-team. State which work runs on a **standing schedule** (a cadence like "Mon/Wed/Fri" or "monthly") and those tasks become **recurring** — each yields a routine in `.paperclip.yaml`, and one stated cadence maps to exactly one recurring task. Everything else is handoff- or heartbeat-driven, not a standing schedule.
+
+**Notes if customizing the pattern:** [Free text — e.g., "Exactly four agents: CEO, signal-scanner, opportunity-strategist, senior-analyst; no sub-teams. Only two cadences are scheduled — a Mon/Wed/Fri signal scan and a monthly board package; everything else is handoff/heartbeat-driven."]
 
 ---
 
@@ -181,7 +183,7 @@ Where on the autonomy ↔ approval spectrum do you want this company to sit? Thi
 - `balanced` — board approves: strategy, hires, budget overrides, custom escalations the agent surfaces. Routine task completion runs autonomously. Suitable for most companies after the first 2-4 weeks.
 - `loose` — board approves: strategy + hires only. Agents have wide latitude on budget and execution. Suitable for operators who have run the company for a quarter+ and trust the agents.
 
-**Your choice:** [`tight` | `balanced` | `loose`]
+**Your choice:** [tight | balanced | loose]
 
 **Notes:** [Free text — e.g., "balanced overall but I want tight approval on anything customer-facing for the first 30 days"]
 

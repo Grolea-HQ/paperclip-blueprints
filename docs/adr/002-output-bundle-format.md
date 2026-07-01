@@ -1,8 +1,15 @@
 # ADR-002 — Output Bundle Format
 
-**Status:** Accepted
+**Status:** Accepted (the `OPERATIONS.md` role revised by ADR-022)
 **Date:** Pre-v0.1, during the rework after reference example configs landed
 **Supersedes:** The output specification in the original CLAUDE.md and MASTER_PROMPTS.md (which described a 7-file bundle: `company-spec.md`, `thesis.md`, per-agent SOULs and AGENTS, `ORG.md`, `routines.yml`, `deployment-plan.md`).
+
+> **Revision (ADR-022):** `OPERATIONS.md` is **human/operator documentation only** — it is **not**
+> an agent constitution carrier. A Paperclip import has no "Operations" object, so `OPERATIONS.md`
+> is dropped on import and never reaches running agents. Governance now reaches agents via the
+> per-agent instruction bundle (`AGENTS.md` primary; `SOUL.md` persona anti-drift), routine slots
+> via Routines, and the hiring board-gate via `requireBoardApprovalForNewAgents` in `.paperclip.yaml`.
+> `OPERATIONS.md` stays in the bundle as the operator's readable operating manual. See ADR-022.
 
 ---
 

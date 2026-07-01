@@ -14,6 +14,11 @@ class TaskDefinition(BaseModel):
     assignee: str
     objective: str
     completion_criteria: list[str]
+    recurrence: str | None = None
+    """Cadence hint for genuinely schedule-driven standing work (ADR-022, US3): a normalized
+    token (``daily``/``weekly``/``monthly``/``quarterly``) or a comma-separated lowercase
+    weekday list (e.g. ``mon,wed,fri``). ``None`` = not recurring (handoff/heartbeat-driven).
+    Set by org_planner (whole-org structural decision); drives routine emission."""
 
     @field_validator("completion_criteria")
     @classmethod
