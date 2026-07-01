@@ -165,7 +165,9 @@ If you pick a pattern, the tool uses it as a starting template — suggested age
 
 **Your choice:** [pattern slug, or custom]
 
-**Notes if customizing the pattern:** [Free text — e.g., "use newsletter but drop the Cross-Promo Lead, we're not running swaps"]
+**These notes are binding.** The org planner treats what you write here as decisive. State an explicit roster (named agents) or a headcount cap and the tool produces exactly that org — it will not add roles or split one role into a sub-team. State which work runs on a **standing schedule** (a cadence like "Mon/Wed/Fri" or "monthly") and those tasks become **recurring** — each yields a routine in `.paperclip.yaml`, and one stated cadence maps to exactly one recurring task. Everything else is handoff- or heartbeat-driven, not a standing schedule.
+
+**Notes if customizing the pattern:** [Free text — e.g., "Exactly four agents: CEO, signal-scanner, opportunity-strategist, senior-analyst; no sub-teams. Only two cadences are scheduled — a Mon/Wed/Fri signal scan and a monthly board package; everything else is handoff/heartbeat-driven."]
 
 ---
 

@@ -12,18 +12,20 @@ A CLI tool that takes a structured Markdown brief and generates a complete, depl
 
 Give the tool a brief describing a company's identity, north star, goals, and constraints. It produces a directory tree matching Paperclip's import format:
 
-- `.paperclip.yaml` (runtime config: sidebar, agents map, projects map)
+- `.paperclip.yaml` (runtime config: sidebar, per-agent adapter/model/budget, the board-approval company setting, and routines for scheduled work)
 - `COMPANY.md` (Identity, We are, We are not, Constraints, Goals, North star)
 - `README.md` (auto-generated overview with mermaid org chart)
-- `OPERATIONS.md` (phase model, idle-state protocol, approval rules, anti-drift checks)
+- `OPERATIONS.md` (operator-facing operating manual — phase model, idle-state protocol, approval rules, anti-drift; **human docs**, not read by agents)
 - `PROJECT-INVENTORY.md` (starter projects, in-flight + completed tables)
 - `agents/<slug>/` per agent: `AGENTS.md`, `SOUL.md`, `HEARTBEAT.md`, `TOOLS.md`
 - `projects/<slug>/PROJECT.md` per starter project
-- `tasks/<slug>/TASK.md` per starter task
+- `tasks/<slug>/TASK.md` per starter task (a scheduled task is flagged `recurring` and gets a matching routine)
 - `skills/<slug>/SKILL.md` per shared skill
 - `LICENSE.txt`
 
 The result is a Paperclip-importable bundle ready to use.
+
+**How governance reaches agents (ADR-022).** A UI-imported company is database-backed — there is no company-root filesystem for agents to read. So the constitution and rules each agent enforces are folded into its `AGENTS.md` (the carrier the import surfaces to the agent), the board-approval gate ships as a `.paperclip.yaml` company setting, and schedule-driven work becomes routines. `OPERATIONS.md` stays as the operator's readable operating manual, not an agent-facing file.
 
 ## Why this exists
 
