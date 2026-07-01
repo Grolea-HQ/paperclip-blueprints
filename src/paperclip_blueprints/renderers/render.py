@@ -19,7 +19,7 @@ from ..models.output import CompanyConfig
 from ..models.project import ProjectDefinition
 from ..models.skill import SkillDefinition
 from ..models.task import TaskDefinition
-from .adapter import assign_adapters
+from .adapter import assign_adapters, parse_model_preferences
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
 from .routines import RoutineSpec, derive_routines
@@ -181,7 +181,19 @@ def render_files(
 
     # Per-agent portable model preference (ADR-017): (adapter type, model id) derived
     # from the same role buckets, emitted under each agent's `adapter`. Never `env`.
-    adapters = assign_adapters(role_by_slug)
+    # Explicit per-role model preferences from the brief (section 10 adapter_preferences)
+    # override the coarse role default's MODEL for the named roles; unspecified roles keep
+    # the default. Adapter type is unchanged (env-free, import-safe).
+    model_overrides, unmatched_prefs = parse_model_preferences(
+        config.brief.adapter_preferences, config.agents
+    )
+    adapters = assign_adapters(role_by_slug, model_overrides)
+    if warn is not None:
+        for line in unmatched_prefs:
+            warn(
+                f"adapter preference {line!r} names a model tier but matched no agent role — "
+                "that role keeps its default model"
+            )
 
     # Tasks with a `recurrence` cadence → importable Routines (ADR-022, US3, PROVISIONAL cron):
     # a `.paperclip.yaml` routines.<task-slug> block; the recurring task itself is flagged

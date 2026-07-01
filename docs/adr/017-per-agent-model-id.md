@@ -101,10 +101,12 @@ agents:
    out to require `env` at import (so type+model-without-env breaks import), **stop
    and report — do not emit `env` to compensate.**
 
-5. **Deferred (out of scope for v0.1).** Parsing the free-text
-   `input.adapter_preferences` into structured per-role overrides; `opencode_local`
-   + Manifest routing; `hermes_local` for persistent-memory roles. These need
-   instance/env knowledge and stay with the v0.2 deployer (`adapter_assigner.py`).
+5. **Deferred (out of scope for v0.1).** ~~Parsing the free-text
+   `input.adapter_preferences` into structured per-role overrides~~ — the per-role **model
+   tier** part is **now honored in v0.1** (see the 2026-07-01 amendment below); `opencode_local`
+   + Manifest routing and adapter-**type** overrides (`codex_local`/`hermes_local` per role)
+   remain deferred — they need instance/env knowledge and stay with the v0.2 deployer
+   (`adapter_assigner.py`).
 
 ## Consequences
 
@@ -141,6 +143,23 @@ agents:
 - **Add a per-agent model field to `AgentDefinition`.** Rejected (YAGNI) — the
   assignment is a render-time derivation from the role bucket, like budgets; no
   model change.
+
+## Amendment — 2026-07-01: per-role model preferences honored (was deferred)
+
+The coarse four-bucket role→model default (owner→Opus, every other role→Sonnet) silently
+ignored the brief's explicit per-role model preferences (section 10 `adapter_preferences`), so a
+brief that requested e.g. `Senior Analyst → Opus-tier` shipped `claude-sonnet-4-6` in
+`.paperclip.yaml` — output that contradicted the brief. Fixed in v0.1: `renderers/adapter.py`
+`parse_model_preferences` resolves each `adapter_preferences` line that names a Claude **tier**
+(`opus`→`OPUS_MODEL`, `sonnet`→`SONNET_MODEL`) to the agent(s) it references (boundary-safe
+slug / title-slug / name-slug, most-specific match), and `assign_adapters` applies it as a
+per-slug **model** override — the adapter **type** stays the env-free, import-safe default, so
+the no-`env` / type-allowlist rules (Decision §1, S12) are unchanged. Unspecified roles keep the
+coarse default; a tier line matching no agent is surfaced through the render `warn` sink.
+
+Adapter-**type** preferences (`codex_local`/`hermes_local`/`opencode_local`, Manifest routing)
+remain deferred to the v0.2 deployer (they need instance/env knowledge). This amendment removes
+only the **model-tier** part from Decision §5's deferred list.
 
 ## References
 
