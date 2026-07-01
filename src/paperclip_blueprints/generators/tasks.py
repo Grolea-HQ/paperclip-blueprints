@@ -41,6 +41,7 @@ def generate_task(
             name=stub.name,
             project=stub.project,
             assignee=stub.assignee,
+            recurrence=stub.recurrence,
             **payload,
         )
     except Exception as exc:  # noqa: BLE001

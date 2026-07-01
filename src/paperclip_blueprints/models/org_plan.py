@@ -68,6 +68,10 @@ class TaskStub(BaseModel):
     name: str
     project: str
     assignee: str
+    recurrence: str | None = None
+    """Cadence for genuinely schedule-driven standing work, else None (ADR-022, US3). The
+    org_planner sets this — a whole-org structural decision so only the truly scheduled tasks
+    are flagged recurring; threaded into TaskDefinition and keyed off by routine emission."""
 
     @field_validator("slug")
     @classmethod

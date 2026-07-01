@@ -1,71 +1,163 @@
-"""Focused tests for the PROVISIONAL routines emission (ADR-022, US3).
+"""Focused tests for the PROVISIONAL routines emission (ADR-022, US3) — tasks-driven.
 
-Isolated on purpose: a live-import correction to the routine shape should be a contained,
-single-file change to ``renderers/routines.py`` (+ this test file). All offline.
+Routines come from tasks that carry a `recurrence` cadence: each becomes a `.paperclip.yaml`
+routines.<task-slug> block, and the existing TASK.md is flagged `recurring: true` (no shadow
+task). The cron honors the cadence; cron validity + the routines shape stay live-confirm only.
+All offline. Isolated so a live correction is a contained, single-file change.
 """
 
 from __future__ import annotations
 
 from paperclip_blueprints.models.output import CompanyConfig
+from paperclip_blueprints.models.task import TaskDefinition
 from paperclip_blueprints.renderers.render import render_files
-from paperclip_blueprints.renderers.routines import derive_routines, routine_task_files
+from paperclip_blueprints.renderers.routines import cron_for, derive_routines
+from paperclip_blueprints.validators.schema_shape import check_schema_shape
 from test_models import _full_config_kwargs
+from test_templates import _config
 
 
-def test_derive_routines_maps_slot_to_spec() -> None:
-    specs = derive_routines(["ceo: weekly review"], {"ceo", "cto"}, ["launch-v1"])
-    assert len(specs) == 1
-    r = specs[0]
-    assert r.assignee == "ceo"
-    assert r.project == "launch-v1"  # provisional anchor: first project
-    assert r.slug == "ceo-weekly-review"
-    assert r.cron == "0 9 * * 1"  # weekly cadence keyword
-    assert r.timezone == "UTC"
-    assert r.concurrency_policy == "coalesce_if_active"
-    assert r.catch_up_policy == "skip_missed"
+def _task(
+    slug: str, name: str, recurrence: str | None = None, assignee: str = "cto"
+) -> TaskDefinition:
+    return TaskDefinition(
+        slug=slug,
+        name=name,
+        project="launch-v1",  # a real project in the full fixture
+        assignee=assignee,  # "cto"/"ceo" are real agents in the full fixture
+        objective="o",
+        completion_criteria=["done"],
+        recurrence=recurrence,
+    )
 
 
-def test_derive_routines_cadence_keywords() -> None:
-    def cron(slot: str) -> str:
-        return derive_routines([slot], {"a"}, ["p"])[0].cron
-
-    assert cron("a: daily standup") == "0 9 * * *"
-    assert cron("a: monthly report") == "0 9 1 * *"
-    assert cron("a: something custom") == "0 9 * * 1"  # weekly fallback
+# --- cadence → cron translator ----------------------------------------------
 
 
-def test_derive_routines_empty_without_project_or_unknown_agent() -> None:
-    assert derive_routines(["ceo: weekly review"], {"ceo"}, []) == []  # no project to anchor
-    assert derive_routines(["ghost: weekly"], {"ceo"}, ["p"]) == []  # unknown agent
+def test_cron_for_named_cadences() -> None:
+    assert cron_for("daily") == "0 9 * * *"
+    assert cron_for("weekly") == "0 9 * * 1"
+    assert cron_for("monthly") == "0 9 1 * *"
+    assert cron_for("quarterly") == "0 9 1 1,4,7,10 *"
 
 
-def test_derive_routines_dedupes_slugs() -> None:
-    specs = derive_routines(["ceo: review", "ceo: review"], {"ceo"}, ["p"])
-    assert [s.slug for s in specs] == ["ceo-review", "ceo-review-2"]
+def test_cron_for_weekday_list_honors_the_brief_cadence() -> None:
+    assert cron_for("mon,wed,fri") == "0 9 * * 1,3,5"
+    assert cron_for("Monday, Wednesday, Friday") == "0 9 * * 1,3,5"
+    assert cron_for("tue/thu") == "0 9 * * 2,4"
 
 
-def test_routine_task_files_carry_required_frontmatter() -> None:
-    specs = derive_routines(["ceo: weekly review"], {"ceo"}, ["launch-v1"])
-    files = routine_task_files(specs)
-    task = files["tasks/ceo-weekly-review/TASK.md"]
-    assert "recurring: true" in task
-    assert "assignee: ceo" in task
-    assert "project: launch-v1" in task
-    assert "schema: agentcompanies/v1" in task
+def test_cron_for_unknown_falls_back_to_weekly() -> None:
+    assert cron_for("whenever") == "0 9 * * 1"
 
 
-def test_routines_block_and_recurring_task_emitted_in_full_bundle() -> None:
-    files = render_files(CompanyConfig(**_full_config_kwargs()))
+# --- derive_routines (tasks-driven) -----------------------------------------
+
+
+def test_derive_routines_emits_only_recurring_tasks() -> None:
+    tasks = [
+        _task("scan-infra-landscape", "Scan the infra landscape"),  # not recurring
+        _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
+        _task("board-package", "Monthly board package", recurrence="monthly"),
+    ]
+    routines = derive_routines(tasks)
+    assert [r.slug for r in routines] == ["signal-scan", "board-package"]  # short, real slugs
+    assert routines[0].cron == "0 9 * * 1,3,5"
+    assert routines[1].cron == "0 9 1 * *"
+
+
+def test_derive_routines_inherits_task_assignee_and_project() -> None:
+    # Part-2 acceptance: each routine resolves a real assignee + project from its task.
+    (routine,) = derive_routines([_task("signal-scan", "Signal scan", recurrence="mon,wed,fri")])
+    assert routine.assignee == "cto"
+    assert routine.project == "launch-v1"
+
+
+def test_derive_routines_empty_when_no_task_is_scheduled() -> None:
+    assert derive_routines([_task("ship", "Ship"), _task("review", "Review")]) == []
+
+
+# --- render: one task set, recurring flagged, routines keyed off real slug ---
+
+
+def test_recurring_task_renders_routine_block_and_recurring_flag() -> None:
+    config = CompanyConfig(
+        **_full_config_kwargs(
+            tasks=[
+                _task("ship", "Ship"),
+                _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
+            ]
+        )
+    )
+    files = render_files(config)
     y = files[".paperclip.yaml"]
     assert "routines:" in y
-    assert "ceo-weekly-review:" in y
-    assert 'cronExpression: "0 9 * * 1"' in y
-    assert "tasks/ceo-weekly-review/TASK.md" in files
+    assert "signal-scan:" in y
+    assert 'cronExpression: "0 9 * * 1,3,5"' in y
+    # the recurring task is the EXISTING task, flagged — no shadow task
+    assert "recurring: true" in files["tasks/signal-scan/TASK.md"]
+    assert "recurring: true" not in files["tasks/ship/TASK.md"]
+    # one task set: exactly the two declared tasks, no extra routine task dir
+    task_dirs = {p.split("/")[1] for p in files if p.startswith("tasks/")}
+    assert task_dirs == {"ship", "signal-scan"}
+
+
+def test_no_recurring_task_means_no_routines_block() -> None:
+    files = render_files(CompanyConfig(**_full_config_kwargs()))  # fixture "ship" is not recurring
+    assert "routines:" not in files[".paperclip.yaml"]
+    assert "recurring: true" not in files["tasks/ship/TASK.md"]
 
 
 def test_single_agent_bundle_has_no_routines() -> None:
-    from test_templates import _config
-
-    files = render_files(_config())  # single-agent: no operations → no routines
+    files = render_files(_config())  # single-agent: no tasks
     assert "routines:" not in files[".paperclip.yaml"]
     assert not any(p.startswith("tasks/") for p in files)
+
+
+# --- S15 routines closure ----------------------------------------------------
+
+
+def test_s15_clean_when_routines_match_recurring_tasks() -> None:
+    config = CompanyConfig(
+        **_full_config_kwargs(
+            tasks=[_task("ship", "Ship"), _task("signal-scan", "Signal scan", recurrence="weekly")]
+        )
+    )
+    files = render_files(config)
+    assert not any(x.startswith("S15") for x in check_schema_shape(config, files))
+
+
+def test_s15_flags_an_orphan_routine_block() -> None:
+    config = CompanyConfig(**_full_config_kwargs())  # no recurring task → no routines
+    files = render_files(config)
+    files[".paperclip.yaml"] += "\nroutines:\n  ghost:\n    triggers: []\n"
+    assert any(x.startswith("S15") and "ghost" in x for x in check_schema_shape(config, files))
+
+
+# --- soft warning: a split scheduled activity (same cadence + assignee) ------
+
+
+def _warnings_for(*tasks: TaskDefinition) -> list[str]:
+    config = CompanyConfig(**_full_config_kwargs(tasks=list(tasks)))
+    captured: list[str] = []
+    render_files(config, warn=captured.append)
+    return captured
+
+
+def test_same_cadence_same_assignee_routines_warn() -> None:
+    warnings = _warnings_for(
+        _task("scan-landscape", "Scan", recurrence="mon,wed,fri", assignee="cto"),
+        _task("log-signal-patterns", "Log", recurrence="mon,wed,fri", assignee="cto"),
+    )
+    smell = [w for w in warnings if "split into multiple recurring" in w]
+    assert smell, warnings
+    assert "scan-landscape" in smell[0] and "log-signal-patterns" in smell[0]
+    assert "one-cadence rule" in smell[0]
+
+
+def test_same_cadence_different_assignee_routines_do_not_warn() -> None:
+    warnings = _warnings_for(
+        _task("scan-landscape", "Scan", recurrence="mon,wed,fri", assignee="cto"),
+        _task("board-package", "Board", recurrence="mon,wed,fri", assignee="ceo"),
+    )
+    assert not any("split into multiple recurring" in w for w in warnings)

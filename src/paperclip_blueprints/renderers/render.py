@@ -22,7 +22,7 @@ from ..models.task import TaskDefinition
 from .adapter import assign_adapters
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
-from .routines import derive_routines, routine_task_files
+from .routines import RoutineSpec, derive_routines
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -107,15 +107,18 @@ def _project_frontmatter(project: ProjectDefinition) -> str:
 
 
 def _task_frontmatter(task: TaskDefinition) -> str:
-    return dump_frontmatter(
-        {
-            "schema": "agentcompanies/v1",
-            "slug": task.slug,
-            "name": task.name,
-            "project": task.project,
-            "assignee": task.assignee,
-        }
-    )
+    fields: dict[str, object] = {
+        "schema": "agentcompanies/v1",
+        "slug": task.slug,
+        "name": task.name,
+        "project": task.project,
+        "assignee": task.assignee,
+    }
+    # A scheduled task is flagged recurring (ADR-022 US3); its schedule rides `.paperclip.yaml`
+    # routines.<slug>. One task set — recurring ones are flagged, never duplicated.
+    if task.recurrence:
+        fields["recurring"] = True
+    return dump_frontmatter(fields)
 
 
 def _role_bucket(agent: AgentDefinition, is_manager: bool) -> str:
@@ -130,6 +133,26 @@ def _role_bucket(agent: AgentDefinition, is_manager: bool) -> str:
     ):
         return "engineering"
     return "generic"
+
+
+def _routine_cadence_smells(routines: list[RoutineSpec]) -> list[str]:
+    """Soft smell-detector (ADR-022 US3): two recurring tasks on the SAME cadence AND assignee
+    are likely one scheduled activity split into two (the org_planner one-cadence rule).
+
+    Advisory only — surfaced via the ``warn`` sink, NEVER a validation error: a genuinely
+    doubled cadence on one owner is legitimate, so the operator judges. Grouped by
+    ``(cron, assignee)`` (not cron alone — two owners can share a cadence without a smell).
+    """
+    groups: dict[tuple[str, str], list[str]] = {}
+    for r in routines:
+        groups.setdefault((r.cron, r.assignee), []).append(r.slug)
+    return [
+        f"routines {sorted(slugs)} share cadence {cron!r} and assignee {assignee!r} — likely one "
+        "scheduled activity split into multiple recurring tasks; consider folding into one "
+        "recurring task (org_planner one-cadence rule)"
+        for (cron, assignee), slugs in groups.items()
+        if len(slugs) > 1
+    ]
 
 
 def render_files(
@@ -160,17 +183,13 @@ def render_files(
     # from the same role buckets, emitted under each agent's `adapter`. Never `env`.
     adapters = assign_adapters(role_by_slug)
 
-    # Routine slots → importable Routines (ADR-022, US3, PROVISIONAL): a `.paperclip.yaml`
-    # routines block + a recurring TASK.md per routine. Empty without operations or a project.
-    routines = (
-        derive_routines(
-            config.operations.routine_slots,
-            {a.slug for a in config.agents},
-            [p.slug for p in config.projects],
-        )
-        if config.operations is not None
-        else []
-    )
+    # Tasks with a `recurrence` cadence → importable Routines (ADR-022, US3, PROVISIONAL cron):
+    # a `.paperclip.yaml` routines.<task-slug> block; the recurring task itself is flagged
+    # `recurring: true` (no shadow task). Empty when no task is scheduled.
+    routines = derive_routines(config.tasks)
+    if warn is not None:
+        for message in _routine_cadence_smells(routines):
+            warn(message)
 
     base = {
         "brief": config.brief,
@@ -243,9 +262,5 @@ def render_files(
         files[f"tasks/{task.slug}/TASK.md"] = (
             _task_frontmatter(task) + "\n" + _render("task_md.j2", task=task)
         )
-
-    # Recurring TASK.md files for the routines (the task half; the schedule lives in
-    # `.paperclip.yaml routines.<slug>`). ADR-022 US3, PROVISIONAL.
-    files.update(routine_task_files(routines))
 
     return files

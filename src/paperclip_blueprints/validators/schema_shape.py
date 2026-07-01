@@ -128,6 +128,10 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
             "S14: .paperclip.yaml must set company.requireBoardApprovalForNewAgents: true (ADR-022)"
         )
 
+    # S15 (ADR-022): routines.<slug> blocks ⇔ tasks flagged `recurring: true` (one task set;
+    # no shadow routine tasks, no orphan routine blocks).
+    v += _check_routines_closure(files)
+
     # S2: agentcompanies/v1 on every content file.
     for rel, text in files.items():
         if rel == "COMPANY.md" or rel.endswith(("AGENTS.md", "SKILL.md", "PROJECT.md", "TASK.md")):
@@ -209,6 +213,34 @@ def _check_board_authority(ops: str) -> list[str]:
         "board-gated decisions and that agents escalate (ready for Board review) "
         "rather than self-approving"
     ]
+
+
+def _check_routines_closure(files: dict[str, str]) -> list[str]:
+    """S15 (ADR-022): every ``.paperclip.yaml`` ``routines.<slug>`` key matches a task whose
+    ``TASK.md`` is flagged ``recurring: true``, and vice versa.
+
+    Guards the routines↔task invariant: routines are emitted only from recurring tasks (no
+    over-generation), keyed off the real task slug (no shadow tasks, no orphan routine blocks).
+    """
+    yaml_text = files.get(".paperclip.yaml", "")
+    try:
+        data = YAML(typ="safe").load(yaml_text) or {}
+    except Exception:  # noqa: BLE001 - I9 reports unparseable YAML; don't double-fault
+        return []
+    routine_keys = set((data.get("routines") or {}).keys())
+    recurring_tasks = {
+        rel.split("/")[1]
+        for rel, text in files.items()
+        if rel.startswith("tasks/")
+        and rel.endswith("/TASK.md")
+        and re.search(r"^recurring:\s*true\b", text, re.MULTILINE | re.IGNORECASE)
+    }
+    v: list[str] = []
+    for missing in sorted(recurring_tasks - routine_keys):
+        v.append(f"S15: recurring task {missing!r} has no .paperclip.yaml routines.<slug> block")
+    for orphan in sorted(routine_keys - recurring_tasks):
+        v.append(f"S15: routines.{orphan} has no matching task flagged 'recurring: true'")
+    return v
 
 
 def _check_adapter_fields(yaml_text: str) -> list[str]:

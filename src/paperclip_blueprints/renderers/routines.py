@@ -1,30 +1,32 @@
-"""Routine emission (ADR-022, US3) — PROVISIONAL, pending live-import confirmation.
+"""Routine emission (ADR-022, US3) — PROVISIONAL cron, pending live-import confirmation.
 
-Converts coarse routine slots ("agent-slug: cadence …") into importable Paperclip Routines.
-A routine is two coordinated pieces (Paperclip importer source, ADR-007 tier-3):
+Routines are driven by the **tasks**: a task carries a ``recurrence`` cadence (set by org_planner
+for genuinely schedule-driven standing work, else ``None``). Each recurring task becomes a
+Paperclip Routine — two coordinated pieces:
 
-1. a **recurring task** — ``tasks/<slug>/TASK.md`` with ``recurring: true`` + ``assignee`` +
-   ``project`` (the project is MANDATORY; the importer rejects a routine without one);
+1. the **existing** ``tasks/<slug>/TASK.md`` is flagged ``recurring: true`` (it keeps its real
+   ``assignee`` + ``project`` — the routine runs as that agent, in that project; the importer
+   requires the project). There is **no** separate "routine task": one task set, recurring ones
+   flagged.
 2. a top-level ``.paperclip.yaml`` ``routines.<task-slug>`` block with a ``schedule`` trigger
    (``cronExpression`` + ``timezone``) and concurrency/catch-up policies (defaults
    ``coalesce_if_active`` / ``skip_missed``).
 
-**PROVISIONAL** — the live import is the acceptance gate for: the ``routines.<slug>`` key
-matching the recurring task's slug, cron validity, and assignee/project resolution. Kept in this
-one module on purpose so a live correction is a contained, single-file change.
+The cadence→cron translation honors the brief's stated cadence (``mon,wed,fri`` → ``0 9 * * 1,3,5``,
+``monthly`` → ``0 9 1 * *``). The cron string and the ``routines.<slug>`` shape stay **PROVISIONAL**
+— confirmed only at live import. Kept in this one module so a live correction is contained.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from ..paperclip_slug import slugify_project_name
-from .frontmatter import dump_frontmatter
+from ..models.task import TaskDefinition
 
-# Provisional cron map: a coarse cadence keyword -> a 09:00 cron. The live import confirms cron
-# validity; these are sensible defaults, not operator-authored schedules.
-_CRON = {
+# Named cadence -> 09:00 cron (provisional defaults; live import confirms cron validity).
+_NAMED_CRON = {
     "daily": "0 9 * * *",
     "weekly": "0 9 * * 1",
     "biweekly": "0 9 * * 1",
@@ -33,14 +35,18 @@ _CRON = {
     "yearly": "0 9 1 1 *",
     "annual": "0 9 1 1 *",
 }
-_DEFAULT_CRON = "0 9 * * 1"  # weekly fallback
+_DEFAULT_CRON = "0 9 * * 1"  # weekly fallback for an unrecognized cadence
+
+# Weekday token -> cron day-of-week (Sun=0 … Sat=6). Keyed on the 3-letter prefix so both
+# "mon" and "monday" resolve.
+_DOW = {"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
 
 
 @dataclass(frozen=True)
 class RoutineSpec:
-    """One routine: the recurring-task fields plus the ``.paperclip.yaml`` schedule trigger."""
+    """One routine: the recurring task's identity + its ``.paperclip.yaml`` schedule trigger."""
 
-    slug: str
+    slug: str  # == the recurring task's slug (short, stable)
     name: str
     assignee: str
     project: str
@@ -48,73 +54,39 @@ class RoutineSpec:
     timezone: str = "UTC"
     concurrency_policy: str = "coalesce_if_active"
     catch_up_policy: str = "skip_missed"
-    description: str = ""
 
 
-def _cron_for(cadence: str) -> str:
-    low = cadence.lower()
-    for key, cron in _CRON.items():
-        if key in low:
-            return cron
+def cron_for(cadence: str) -> str:
+    """Translate a cadence hint to a cron expression (PROVISIONAL — live import confirms validity).
+
+    Handles the named cadences (daily/weekly/monthly/quarterly/…) and a weekday list
+    (``mon,wed,fri`` / ``monday wednesday friday`` → ``0 9 * * 1,3,5``). Unrecognized → weekly.
+    """
+    c = cadence.strip().lower()
+    if c in _NAMED_CRON:
+        return _NAMED_CRON[c]
+    days = sorted({_DOW[tok[:3]] for tok in re.split(r"[^a-z]+", c) if tok[:3] in _DOW})
+    if days:
+        return f"0 9 * * {','.join(str(d) for d in days)}"
     return _DEFAULT_CRON
 
 
-def derive_routines(
-    routine_slots: Sequence[str], agent_slugs: set[str], project_slugs: Sequence[str]
-) -> list[RoutineSpec]:
-    """Map ``routine_slots`` ("agent-slug: cadence") to RoutineSpecs (PROVISIONAL).
+def derive_routines(tasks: Sequence[TaskDefinition]) -> list[RoutineSpec]:
+    """Build a RoutineSpec for each task that carries a ``recurrence`` cadence.
 
-    Returns ``[]`` when there is no project to anchor a routine (the importer requires one) or no
-    recognizable agent. The project anchor is provisional — the first project — and the cron is
-    derived from a coarse cadence keyword; both are exactly what a live import confirms.
+    Routines are keyed off the real task slug (short, stable) and inherit the task's own
+    ``assignee`` + ``project`` (so each routine resolves to a real agent and project on import).
+    Non-recurring tasks contribute nothing — this is what keeps emission to the genuinely
+    scheduled work.
     """
-    if not project_slugs:
-        return []
-    project = project_slugs[0]
-    specs: list[RoutineSpec] = []
-    seen: set[str] = set()
-    for slot in routine_slots:
-        agent, sep, cadence = slot.partition(":")
-        agent = agent.strip()
-        cadence = (cadence.strip() if sep else "") or slot.strip()
-        if agent not in agent_slugs:
-            continue
-        base = slugify_project_name(f"{agent}-{cadence}") or f"{agent}-routine"
-        slug, n = base, 2
-        while slug in seen:
-            slug, n = f"{base}-{n}", n + 1
-        seen.add(slug)
-        specs.append(
-            RoutineSpec(
-                slug=slug,
-                name=cadence[:80] or "Routine",
-                assignee=agent,
-                project=project,
-                cron=_cron_for(cadence),
-                description=f"Routine: {cadence}",
-            )
+    return [
+        RoutineSpec(
+            slug=t.slug,
+            name=t.name,
+            assignee=t.assignee,
+            project=t.project,
+            cron=cron_for(t.recurrence),
         )
-    return specs
-
-
-def routine_task_files(routines: Sequence[RoutineSpec]) -> dict[str, str]:
-    """The recurring ``TASK.md`` files (the task half of each routine)."""
-    files: dict[str, str] = {}
-    for r in routines:
-        frontmatter = dump_frontmatter(
-            {
-                "schema": "agentcompanies/v1",
-                "slug": r.slug,
-                "name": r.name,
-                "project": r.project,
-                "assignee": r.assignee,
-                "recurring": True,
-            }
-        )
-        body = (
-            f"# {r.name}\n\n{r.description}\n\n"
-            f"This is a recurring (routine) task; its schedule lives in `.paperclip.yaml` "
-            f"under `routines.{r.slug}`.\n"
-        )
-        files[f"tasks/{r.slug}/TASK.md"] = frontmatter + "\n" + body
-    return files
+        for t in tasks
+        if t.recurrence
+    ]
