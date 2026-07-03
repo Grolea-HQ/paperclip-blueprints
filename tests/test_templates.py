@@ -189,14 +189,28 @@ def test_soul_md_has_seven_sections_no_frontmatter() -> None:
     assert "idle" in out.lower()
 
 
-def test_heartbeat_is_stub() -> None:
+def test_heartbeat_is_empty() -> None:
     out = render_files(_config())["agents/ceo/HEARTBEAT.md"]
-    assert "intentionally near-empty" in out
-    assert "*(Empty" in out
-    # Everything below the H1 must match the canonical stub verbatim (Q2): the
-    # stub is hand-authored, so the generated file must not drift from it. The
-    # canonical body is frozen in a first-party fixture (the reference-companies
-    # oracle was removed from the public repo — see open-source release prep).
+    # ADR-022: HEARTBEAT.md is a genuinely-empty runtime journal — a header line
+    # and at most one neutral "(intentionally empty)" line. No instructional
+    # scaffolding, no section headings, no cross-references to other bundle files
+    # or the Paperclip API (those assumed the pre-010 company-root filesystem).
+    assert "intentionally empty" in out
+    for absent in (
+        "How to use this file",
+        "## Steps",
+        "## Routines",
+        "## Notes to self",
+        "SOUL.md",
+        "TOOLS.md",
+        "AGENTS.md",
+        "Paperclip API",
+    ):
+        assert absent not in out, absent
+    # Everything below the H1 must match the canonical body verbatim (Q2): it is
+    # hand-authored, so the generated file must not drift from it. The canonical
+    # body is frozen in a first-party fixture (the reference-companies oracle was
+    # removed from the public repo — see open-source release prep).
     ref = Path("tests/fixtures/heartbeat_canonical_body.md").read_text(encoding="utf-8")
     assert out.split("\n", 1)[1].rstrip("\n") == ref.rstrip("\n")
 
