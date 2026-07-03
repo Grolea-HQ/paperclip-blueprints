@@ -46,6 +46,10 @@ examples/generated-companies/*
 !examples/generated-companies/.gitkeep
 !examples/generated-companies/example-*/
 
+# Briefs contain real customer/internal content — never commit. Only sanitized example-brief-* are public.
+examples/*brief*.md
+!examples/example-brief-*.md
+
 # Logs
 *.log
 logs/

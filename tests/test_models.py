@@ -11,6 +11,7 @@ from paperclip_blueprints.models.input import (
     BriefValidationError,
     CompanyBrief,
     parse_brief,
+    slug_divergence_warning,
 )
 from paperclip_blueprints.models.operations import OperationsDefinition
 from paperclip_blueprints.models.org_plan import (
@@ -135,6 +136,29 @@ def test_valid_brief_constructs() -> None:
     brief = CompanyBrief(**_brief_kwargs())
     assert brief.slug == "indie-game-studio"
     assert brief.governance_position == "balanced"
+
+
+def test_slug_divergence_warning_none_when_slug_matches_slugified_name() -> None:
+    # "Indie Game Studio" slugifies to "indie-game-studio" — the default slug.
+    brief = CompanyBrief(**_brief_kwargs())
+    assert slug_divergence_warning(brief) is None
+
+
+def test_slug_divergence_warning_names_both_values_on_divergence() -> None:
+    brief = CompanyBrief(**_brief_kwargs(slug="keying-test"))
+    warning = slug_divergence_warning(brief)
+    assert warning is not None
+    # names both the operator slug and the derived form, and stays advisory
+    assert "keying-test" in warning
+    assert "indie-game-studio" in warning
+    assert "slugify(name)" in warning
+
+
+def test_slug_divergence_warning_none_for_non_ascii_name() -> None:
+    # An all-non-ASCII name has no derivable ASCII slug (slugify → ""), which is a
+    # separate concern — no spurious "differs from ''" warning here.
+    brief = CompanyBrief(**_brief_kwargs(name="株式会社", slug="kabushiki-gaisha"))
+    assert slug_divergence_warning(brief) is None
 
 
 def test_slug_must_be_lowercase_hyphenated() -> None:
