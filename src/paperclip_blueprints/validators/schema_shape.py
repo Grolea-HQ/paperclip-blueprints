@@ -20,7 +20,11 @@ _BODY_ONLY_TOP = ("README.md", "OPERATIONS.md", "PROJECT-INVENTORY.md", "LICENSE
 # S13 (ADR-022): filesystem-read markers an agent file must never carry — a UI-imported
 # company is database-backed with no company-root tree, so the constitution/governance must
 # reach agents via the instruction bundle, never as files.
-_FS_MARKERS = ("## File system", "Company root", "Own memory", "memory/<date>", "para-memory-files")
+# NOTE (ADR-023): `para-memory-files` was previously a marker (it named the pre-010 prose
+# that assumed a company-root memory tree). It is now a legitimate built-in skill slug an
+# agent declares in its `skills:` list, so it is no longer a marker; the memory-path prose
+# is still caught by the `Own memory` / `memory/<date>` markers.
+_FS_MARKERS = ("## File system", "Company root", "Own memory", "memory/<date>")
 
 _OPERATIONS_HEADINGS = (
     "## Phase model",

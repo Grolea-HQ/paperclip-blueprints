@@ -15,6 +15,7 @@ from ruamel.yaml import YAML
 from ..models.org_plan import SPAN_OF_CONTROL
 from ..models.output import CompanyConfig
 from ..paperclip_slug import slugify_project_name
+from ..patterns.builtins import BUILTIN_SKILLS
 
 # Reserved human-principal role-words (ADR-016): an agent name/title must not collide
 # with the human founder/board, who sit above the company as its approver and are
@@ -96,7 +97,9 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
     for a in agents:
         for s in a.skills:
             referenced.add(s)
-            if s not in skill_set:
+            # Built-in skills (ADR-023) resolve against the instance catalog, not the
+            # bundle, so a reference to one is valid without a SKILL.md.
+            if s not in skill_set and s not in BUILTIN_SKILLS:
                 v.append(f"I5: agent {a.slug!r} references skill {s!r} with no SKILL.md")
     for s in sorted(skill_set - referenced):
         v.append(f"I5: skill {s!r} is referenced by no agent")

@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from ..patterns.builtins import BUILTIN_SKILLS
 from .agent import AgentDefinition
 from .company import CompanyDefinition
 from .input import CompanyBrief
@@ -60,9 +61,11 @@ class CompanyConfig(BaseModel):
                 raise ValueError("full bundle must have at least one task")
             if self.operations is None:
                 raise ValueError("full bundle must have operations")
+            # Built-in skills (ADR-023) resolve against the instance catalog, not the
+            # bundle, so they are valid references even without a generated SKILL.md.
             skill_slugs = {s.slug for s in self.skills}
             for a in self.agents:
-                missing = set(a.skills) - skill_slugs
+                missing = set(a.skills) - skill_slugs - BUILTIN_SKILLS
                 if missing:
                     raise ValueError(
                         f"agent {a.slug!r} references skill(s) with no SKILL.md: {sorted(missing)}"

@@ -28,6 +28,7 @@ from ..generators.tasks import generate_task
 from ..models.input import CompanyBrief
 from ..models.output import CompanyConfig
 from ..patterns import get_seed
+from ..patterns.builtins import BUILTIN_SKILLS, attach_builtin_skills
 from ..validators import BundleValidationError, validate_bundle
 from .render import render_files
 
@@ -61,6 +62,9 @@ def generate_bundle(
     company = generate_identity(brief, client, model=model)
     emit("→ Generating agent...")
     stub = generate_org(brief, company, client, model=model)
+    # Attach role-appropriate built-in skills (ADR-023). The lone agent is the org root
+    # (CEO), so it declares the full built-in set; the custom skill stays at skills[0].
+    attach_builtin_skills([stub])
     soul = generate_soul(stub, company, client, model=model)
     agent = generate_agent(stub, company, brief, soul, client, single_agent=True, model=model)
     skill = generate_skill(stub.skills[0], company, [agent.name], client, model=model)
@@ -97,6 +101,11 @@ async def _gather_full(
         seed=seed.render() if seed is not None else None,
         model=model,
     )
+    # Attach role-appropriate built-in skills to each planned agent (ADR-023), now that
+    # reportsTo (and thus CEO/lead roles) is fixed. Done BEFORE the fan-out so each
+    # agent's AGENTS.md declares them; built-ins are excluded from skill_slugs, so no
+    # SKILL.md is generated for them.
+    attach_builtin_skills(plan.agents)
 
     sem = asyncio.Semaphore(_CONCURRENCY)
 
@@ -301,7 +310,9 @@ def _check_full(files: dict[str, str]) -> None:
         m = re.search(r"^skills:\s*\[(.*?)\]", fm, re.MULTILINE)
         if m:
             referenced |= {s.strip() for s in m.group(1).split(",") if s.strip()}
-    dangling = referenced - skill_slugs
+    # Built-in skills (ADR-023) resolve against the instance catalog, not the bundle, so
+    # they are valid references without a SKILL.md.
+    dangling = referenced - skill_slugs - BUILTIN_SKILLS
     if dangling:
         raise BundleError(f"agents reference skills with no SKILL.md: {sorted(dangling)}")
     orphan = skill_slugs - referenced

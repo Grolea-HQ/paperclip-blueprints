@@ -1,0 +1,92 @@
+"""Built-in Paperclip skills attached to agents by role (ADR-023).
+
+Every Paperclip instance ships a catalog of built-in skills that a company already
+has — they are resolved by slug against the instance catalog, NOT synthesized into
+the bundle. So a generated agent must *declare* the role-appropriate built-ins in its
+skill list (they surface in the agent's ``skills:`` frontmatter and, once skill
+attachment is wired, in ``.paperclip.yaml`` ``desiredSkills``), but the generator must
+NOT emit a ``skills/<slug>/SKILL.md`` for them and the closure check must treat their
+slugs as resolvable without one.
+
+Role rule (ADR-023):
+
+* **All agents** — ``paperclip`` (control plane: tasks, coordination, governance) and
+  ``para-memory-files`` (durable cross-wake memory).
+* **CEO + any lead** (an agent with ≥1 direct report) — also
+  ``paperclip-converting-plans-to-tasks``.
+* **CEO only** (org root / ``role: ceo``) — also ``paperclip-create-agent``.
+* **Never auto-attached** — ``paperclip-board`` (the human board member's skill) and
+  ``paperclip-dev`` (operator / instance ops). They are still recognized as built-ins
+  (so a hand-authored reference resolves without a SKILL.md), just never added here.
+
+This module is the single source of truth for both the catalog and the rule; it is a
+leaf (no runtime imports from the package) so ``models`` may import ``BUILTIN_SKILLS``
+without a cycle.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # type-only; never executed, so no import cycle with models.org_plan
+    from ..models.org_plan import AgentStub
+
+# Built-in slugs attached to every agent.
+BUILTIN_ALL: tuple[str, ...] = ("paperclip", "para-memory-files")
+
+# Added for the CEO and any lead (an agent with at least one direct report).
+BUILTIN_LEAD: tuple[str, ...] = ("paperclip-converting-plans-to-tasks",)
+
+# Added for the CEO (org root) only.
+BUILTIN_CEO: tuple[str, ...] = ("paperclip-create-agent",)
+
+# Recognized built-ins the generator never auto-attaches: the human board member's
+# skill and operator/instance-ops skill.
+BUILTIN_NEVER: frozenset[str] = frozenset({"paperclip-board", "paperclip-dev"})
+
+# Every built-in slug the generator recognizes as instance-provided. A slug in this set
+# resolves against the instance catalog, so it is valid in an agent's skill list WITHOUT
+# a bundle ``skills/<slug>/SKILL.md``, and must be excluded from SKILL.md generation.
+BUILTIN_SKILLS: frozenset[str] = frozenset(
+    {*BUILTIN_ALL, *BUILTIN_LEAD, *BUILTIN_CEO, *BUILTIN_NEVER}
+)
+
+
+def builtin_skills_for(*, is_ceo: bool, is_lead: bool) -> list[str]:
+    """Return the built-in skill slugs a role should declare, in canonical order.
+
+    Args:
+        is_ceo: The agent is the org root / ``role: ceo``.
+        is_lead: The agent has at least one direct report.
+
+    Returns:
+        The ordered built-in slugs for the role (``BUILTIN_ALL`` for everyone, plus the
+        lead/CEO tiers as they apply). Never includes a ``BUILTIN_NEVER`` slug.
+    """
+    slugs: list[str] = [*BUILTIN_ALL]
+    if is_ceo or is_lead:
+        slugs += BUILTIN_LEAD
+    if is_ceo:
+        slugs += BUILTIN_CEO
+    return slugs
+
+
+def attach_builtin_skills(agents: list[AgentStub]) -> list[AgentStub]:
+    """Append each agent's role-appropriate built-in skills to its skill list, de-duped.
+
+    Pure over the planned org: the CEO is the single root (``reports_to is None``); a
+    lead is any agent that some other agent reports to. Built-ins are appended AFTER the
+    agent's existing (custom) skills so ``skills[0]`` stays the primary custom skill, and
+    a built-in already present (e.g. listed by the org planner) is not added twice.
+
+    Mutates each stub's ``skills`` in place and returns the same list for chaining.
+    """
+    lead_slugs = {a.reports_to for a in agents if a.reports_to is not None}
+    for agent in agents:
+        additions = builtin_skills_for(
+            is_ceo=agent.reports_to is None,
+            is_lead=agent.slug in lead_slugs,
+        )
+        existing = set(agent.skills)
+        agent.skills = [*agent.skills, *(s for s in additions if s not in existing)]
+    return agents
