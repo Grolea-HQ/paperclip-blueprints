@@ -30,10 +30,11 @@ def test_tools_md_has_no_filesystem_section() -> None:
 
 def test_heartbeat_has_no_file_or_rules_refs() -> None:
     hb = render_files(_config())["agents/ceo/HEARTBEAT.md"]
-    for bad in ("OPERATIONS.md", "memory/<date>", "para-memory-files"):
+    # ADR-022: the empty runtime journal references NO other bundle file — not
+    # OPERATIONS.md (dropped on import), not the filesystem-memory paths, and not
+    # even AGENTS.md. Rules live in AGENTS.md; HEARTBEAT.md just stays empty.
+    for bad in ("OPERATIONS.md", "memory/<date>", "para-memory-files", "AGENTS.md"):
         assert bad not in hb
-    # rules now live in AGENTS.md, not echoed from OPERATIONS.md here
-    assert "AGENTS.md" in hb
 
 
 def test_s13_is_clean_on_a_generated_bundle() -> None:
