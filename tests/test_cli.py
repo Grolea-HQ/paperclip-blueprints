@@ -172,6 +172,22 @@ def test_generate_happy_path(tmp_path, monkeypatch) -> None:
     assert (dest / "agents/ceo/SOUL.md").exists()
 
 
+def test_generate_warns_but_succeeds_on_slug_divergence(tmp_path, monkeypatch) -> None:
+    # A brief whose slug diverges from slugify(name) must still generate (divergence
+    # can be intentional), while surfacing a non-blocking warning on stderr.
+    _patch_client(monkeypatch)
+    brief = tmp_path / "brief.md"
+    brief.write_text(VALID_BRIEF.replace("**Slug:** indie-game-studio", "**Slug:** keying-test"))
+    out = tmp_path / "out"
+    result = runner.invoke(
+        app, ["generate", "--input", str(brief), "--output", str(out), "--single-agent"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "warning:" in result.output
+    assert "keying-test" in result.output
+    assert (out / "COMPANY.md").exists()
+
+
 def test_generate_default_is_full_multi_agent(tmp_path, monkeypatch) -> None:
     _patch_client(monkeypatch, _dispatch_full)
     brief = _write_brief(tmp_path)

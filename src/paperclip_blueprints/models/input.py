@@ -14,6 +14,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError, field_validator
 
+from ..paperclip_slug import slugify_project_name
+
 GovernancePosition = Literal["tight", "balanced", "loose"]
 
 _SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -147,6 +149,34 @@ class CompanyBrief(BaseModel):
                 f"unknown use-case pattern {v!r}; available: {', '.join(KNOWN_PATTERNS)}"
             )
         return v
+
+
+def slug_divergence_warning(brief: CompanyBrief) -> str | None:
+    """Return a non-blocking warning if ``brief.slug`` differs from ``slugify(name)``.
+
+    Paperclip may key a company/project on the derived ``slugify(name)`` form, and the
+    v0.2 deployer reconciles on that same derived form (ADR-013). An operator-set
+    ``slug`` that diverges can therefore mis-key on import. This is advisory only:
+    divergence is sometimes intended (e.g. a keying-test company whose name and slug
+    differ on purpose), so the model stays pure and generation still proceeds — the
+    caller (CLI) decides how to surface the string. No printing happens here.
+
+    Args:
+        brief: The parsed, validated company brief.
+
+    Returns:
+        A human-readable warning naming both values, or ``None`` when they already
+        match — or when the name has no derivable ASCII slug (an empty derived form,
+        a separate non-ASCII concern the slug module handles with a UUID suffix).
+    """
+    derived = slugify_project_name(brief.name)
+    if not derived or derived == brief.slug:
+        return None
+    return (
+        f"brief slug {brief.slug!r} differs from slugify(name) {derived!r}; "
+        "Paperclip may key on the derived form while the deployer reconciles on "
+        "slugify(name) — align them unless the divergence is intended."
+    )
 
 
 class BriefValidationError(Exception):

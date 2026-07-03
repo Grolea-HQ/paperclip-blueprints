@@ -14,7 +14,7 @@ import typer
 from .config import MissingAPIKeyError
 from .generators.client import GenerationError, LLMClient
 from .generators.identity import generate_identity
-from .models.input import BriefValidationError, parse_brief
+from .models.input import BriefValidationError, parse_brief, slug_divergence_warning
 from .renderers.bundle import BundleError, build_and_write
 from .renderers.render import render_company_md
 from .validators import BundleValidationError
@@ -65,6 +65,8 @@ def generate(
     the minimal one-agent bundle (the size-one special case).
     """
     brief = _load_brief(input)
+    if (warning := slug_divergence_warning(brief)) is not None:
+        typer.echo(f"warning: {warning}", err=True)
     if verbose:
         kind = "single-agent" if single_agent else "multi-agent"
         typer.echo(f"brief OK: {brief.name} ({brief.slug}) — generating {kind} bundle", err=True)
