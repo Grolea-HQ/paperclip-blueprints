@@ -14,6 +14,8 @@ import re
 
 from pydantic import BaseModel, field_validator, model_validator
 
+from ..patterns.builtins import BUILTIN_SKILLS
+
 _SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 # P-PAT-3: no manager (CEO included) owns more than this many direct reports.
@@ -138,11 +140,17 @@ class OrgPlan(BaseModel):
 
     @property
     def skill_slugs(self) -> list[str]:
-        """The de-duplicated union of every agent's skills, in first-seen order."""
+        """The custom skills that need a ``SKILL.md``: the de-duplicated union of every
+        agent's skills in first-seen order, EXCLUDING built-in slugs (ADR-023).
+
+        Built-in skills are instance-provided and resolved by slug against the catalog,
+        so they never get a generated ``skills/<slug>/SKILL.md``. Excluding them here is
+        the single point that keeps them out of the skill-generation fan-out.
+        """
         seen: list[str] = []
         for a in self.agents:
             for s in a.skills:
-                if s not in seen:
+                if s not in seen and s not in BUILTIN_SKILLS:
                     seen.append(s)
         return seen
 

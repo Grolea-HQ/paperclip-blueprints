@@ -14,7 +14,9 @@ from paperclip_blueprints.validators.schema_shape import _check_idle_state, chec
 from test_models import _full_config_kwargs
 from test_templates import _config
 
-_FS_MARKERS = ("## File system", "Company root", "Own memory", "memory/<date>", "para-memory-files")
+# `para-memory-files` dropped from the marker set in ADR-023 — it is now a legitimate
+# built-in skill slug, not filesystem-read prose (still caught by the memory-path markers).
+_FS_MARKERS = ("## File system", "Company root", "Own memory", "memory/<date>")
 
 
 # --- US2: no filesystem-read assumptions; HEARTBEAT empty --------------------
