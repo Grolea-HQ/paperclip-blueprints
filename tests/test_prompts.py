@@ -47,6 +47,21 @@ def test_org_planner_enforces_single_owner() -> None:
     assert "reports_to" in text and "null" in text
 
 
+def test_task_generator_defers_to_governing_skill() -> None:
+    # ADR-024: a task that maps to a skill-governed process must reference the governing
+    # skill and NOT restate its format/storage/step-by-step process. The prompt must (a)
+    # be given the assignee's attached skills, and (b) instruct deference.
+    text = load_prompt("task_generator")
+    assert "assignee_skills" in text  # the attached-skills context is threaded in
+    low = text.lower()
+    assert "skill" in low
+    # deference wording: name the governing skill, do not duplicate its how
+    assert "per the" in low  # "perform <work> per the <skill> skill"
+    assert "do not" in low or "must not" in low
+    for how_word in ("format", "storage"):
+        assert how_word in low  # names the things a task must NOT restate
+
+
 def test_agents_generator_calibrates_governance_without_token_enum() -> None:
     text = load_prompt("agents_generator")
     assert "{{ governance_position }}" in text
