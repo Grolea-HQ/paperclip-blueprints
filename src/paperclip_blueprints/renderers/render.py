@@ -155,6 +155,70 @@ def _routine_cadence_smells(routines: list[RoutineSpec]) -> list[str]:
     ]
 
 
+# Concrete format/storage tokens that constitute restating a skill's "how" (ADR-024). Kept
+# to *concrete* nouns (file formats, structural elements, path words) — NOT meta-words like
+# "format"/"storage"/"protocol", so the recommended deferential phrasing ("produce its
+# prescribed output, format, and storage per the <skill> skill") does NOT trip the heuristic.
+_PROTOCOL_TERMS = frozenset(
+    {
+        "markdown",
+        "json",
+        "yaml",
+        "csv",
+        "toml",
+        "frontmatter",
+        "heading",
+        "headings",
+        "bullet",
+        "table",
+        "directory",
+        "folder",
+        "filename",
+        "filepath",
+    }
+)
+
+
+def _protocol_tokens(text: str) -> set[str]:
+    low = text.lower()
+    return {t for t in _PROTOCOL_TERMS if t in low}
+
+
+def _routine_skill_incoherence(config: CompanyConfig) -> list[str]:
+    """Soft coherence check (ADR-024): a recurring task should defer the "how" (format,
+    storage, protocol) to the skill that governs its work, not restate it.
+
+    Heuristic and advisory only — surfaced via the ``warn`` sink, NEVER a validation error.
+    For each recurring task, if its objective/criteria restate concrete format/storage
+    tokens that a co-attached skill (a skill the assignee holds) also defines in its
+    description/procedure/outputs, emit one warning per (task, skill) overlap. A false
+    positive is harmless: the operator judges, and a deferential task trips nothing.
+    """
+    skills_by_agent = {a.slug: set(a.skills) for a in config.agents}
+    skill_by_slug = {s.slug: s for s in config.skills}
+    warnings: list[str] = []
+    for task in config.tasks:
+        if not task.recurrence:
+            continue
+        task_tokens = _protocol_tokens(task.objective + " " + " ".join(task.completion_criteria))
+        if not task_tokens:
+            continue
+        for skill_slug in sorted(skills_by_agent.get(task.assignee, set())):
+            skill = skill_by_slug.get(skill_slug)
+            if skill is None:  # built-in / catalog skill with no SKILL.md (ADR-023)
+                continue
+            skill_text = " ".join([skill.description, *skill.procedure, *skill.outputs])
+            shared = task_tokens & _protocol_tokens(skill_text)
+            if shared:
+                warnings.append(
+                    f"recurring task {task.slug!r} restates format/storage language "
+                    f"{sorted(shared)} that its co-attached skill {skill.slug!r} also defines "
+                    "— a recurring task should defer the how (format/storage/protocol) to the "
+                    "governing skill and keep only the trigger and this-run scope (ADR-024)"
+                )
+    return warnings
+
+
 def render_files(
     config: CompanyConfig, *, warn: Callable[[str], None] | None = None
 ) -> dict[str, str]:
@@ -201,6 +265,9 @@ def render_files(
     routines = derive_routines(config.tasks)
     if warn is not None:
         for message in _routine_cadence_smells(routines):
+            warn(message)
+        # ADR-024: a recurring task must defer format/storage/protocol to the governing skill.
+        for message in _routine_skill_incoherence(config):
             warn(message)
 
     base = {

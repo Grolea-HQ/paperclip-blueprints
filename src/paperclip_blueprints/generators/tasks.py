@@ -16,15 +16,26 @@ def generate_task(
     company: CompanyDefinition,
     client: LLMClient,
     *,
+    assignee_skills: list[str] | None = None,
     model: str | None = None,
 ) -> TaskDefinition:
-    """Generate the TASK.md content for one planned task."""
+    """Generate the TASK.md content for one planned task.
+
+    Args:
+        assignee_skills: The skill slugs the assignee agent holds. Threaded into the
+            prompt (ADR-024) so a task that maps to a skill-governed process references
+            the governing skill and defers the how (format/storage/protocol) to it, rather
+            than restating — and drifting from — the skill. Especially load-bearing for a
+            recurring task, whose text is the wake instruction that wins over the skill.
+    """
     prompt = render_prompt(
         "task_generator",
         slug=stub.slug,
         name=stub.name,
         project=stub.project,
         assignee=stub.assignee,
+        assignee_skills=assignee_skills or [],
+        is_recurring=stub.recurrence is not None,
         we_are=company.we_are,
         north_star=company.north_star,
     )

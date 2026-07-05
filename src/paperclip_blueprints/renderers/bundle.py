@@ -141,6 +141,10 @@ async def _gather_full(
     def _used_by(slug: str) -> list[str]:
         return [a.name for a in plan.agents if slug in a.skills]
 
+    # The assignee's attached skills, so a task can name and defer to the skill that
+    # governs its work instead of restating its format/storage/protocol (ADR-024).
+    skills_by_agent = {a.slug: a.skills for a in plan.agents}
+
     emit(f"→ Generating {len(plan.agents)} agents and their skills, projects, tasks...")
     agents, skills, projects, tasks = await asyncio.gather(
         asyncio.gather(*(make_agent(s) for s in plan.agents)),
@@ -153,7 +157,19 @@ async def _gather_full(
         asyncio.gather(
             *(run(generate_project, p, company, client, model=model) for p in plan.projects)
         ),
-        asyncio.gather(*(run(generate_task, t, company, client, model=model) for t in plan.tasks)),
+        asyncio.gather(
+            *(
+                run(
+                    generate_task,
+                    t,
+                    company,
+                    client,
+                    assignee_skills=skills_by_agent.get(t.assignee, []),
+                    model=model,
+                )
+                for t in plan.tasks
+            )
+        ),
     )
 
     emit("→ Writing operations...")

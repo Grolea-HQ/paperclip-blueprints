@@ -496,6 +496,27 @@ def test_generate_project_and_task() -> None:
     assert task.project == "launch" and task.completion_criteria == ["done"]
 
 
+def test_generate_task_threads_assignee_skills_into_prompt() -> None:
+    """ADR-024: the assignee's attached skills reach the prompt so the task can name and
+    defer to the governing skill instead of restating its format/storage/protocol."""
+    from paperclip_blueprints.generators.tasks import generate_task
+    from paperclip_blueprints.models.org_plan import TaskStub
+
+    seen: dict[str, str] = {}
+
+    def capturing(**kwargs: object) -> str:
+        seen["user"] = str(kwargs["user"])
+        return '```json\n{"objective": "o", "completion_criteria": ["done"]}\n```'
+
+    generate_task(
+        TaskStub(slug="weekly-scan", name="Weekly scan", project="p", assignee="scout"),
+        _company(),
+        LLMClient(_invoke=capturing),
+        assignee_skills=["market-scan-note"],
+    )
+    assert "market-scan-note" in seen["user"]
+
+
 # --- US4 cost tracking (T051) -----------------------------------------------
 
 
