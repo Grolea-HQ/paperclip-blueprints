@@ -10,11 +10,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from ..models.agent import AgentDefinition
 from ..models.company import CompanyDefinition
+from ..models.goal import GoalHierarchy
 from ..models.output import CompanyConfig
 from ..models.project import ProjectDefinition
 from ..models.skill import SkillDefinition
@@ -40,12 +42,38 @@ def _render(template: str, **ctx: object) -> str:
     return _env.get_template(template).render(**ctx)
 
 
-def render_company_md(company: CompanyDefinition) -> str:
-    """Render COMPANY.md (frontmatter + body) from identity content alone.
+def render_company_md(
+    company: CompanyDefinition, goal_hierarchy: GoalHierarchy | None = None
+) -> str:
+    """Render COMPANY.md (frontmatter + body) from identity content.
 
-    Shared by the full bundle and ``blueprints preview`` (US3), which emits only
-    this file.
+    Shared by the full bundle and ``blueprints preview`` (US3), which emits only this file.
+
+    Args:
+        company: The identity content (carries the flat ``goals`` list).
+        goal_hierarchy: The reasoned north-star → sub-goals tree (ADR-025). When given, it
+            is emitted additively under ``metadata.paperclip.goalHierarchy`` for the
+            deployer; the flat ``goals`` list is always preserved for backward-compat.
+            ``None`` (e.g. ``preview``, which runs before the org exists) omits the block.
     """
+    paperclip_meta: dict[str, Any] = {
+        # `mono` is the company monogram letter, derived from the name
+        # (matches the reference companies: Newsletter→N, Agency→A, …).
+        "tone": company.tone,
+        "mono": company.name[0].upper(),
+    }
+    if goal_hierarchy is not None:
+        paperclip_meta["goalHierarchy"] = [
+            {
+                "slug": g.slug,
+                "title": g.title,
+                "description": g.description,
+                "level": g.level,
+                "parent": g.parent,
+                "owner": g.owner,
+            }
+            for g in goal_hierarchy.goals
+        ]
     frontmatter = dump_frontmatter(
         {
             "schema": "agentcompanies/v1",
@@ -55,9 +83,7 @@ def render_company_md(company: CompanyDefinition) -> str:
             "tags": company.tags,
             "goals": company.goals,
             "metadata": {
-                # `mono` is the company monogram letter, derived from the name
-                # (matches the reference companies: Newsletter→N, Agency→A, …).
-                "paperclip": {"tone": company.tone, "mono": company.name[0].upper()},
+                "paperclip": paperclip_meta,
                 "sources": [{"kind": "url"}],
             },
         },
@@ -285,7 +311,7 @@ def render_files(
 
     files: dict[str, str] = {
         ".paperclip.yaml": _render("paperclip_yaml.j2", **base),
-        "COMPANY.md": render_company_md(config.company),
+        "COMPANY.md": render_company_md(config.company, config.goal_hierarchy),
         "README.md": _render("readme_md.j2", **base),
         "LICENSE.txt": _render("license_txt.j2", **base),
     }

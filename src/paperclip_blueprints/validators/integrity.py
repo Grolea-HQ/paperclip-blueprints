@@ -150,6 +150,22 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
                     f"Founder/Board"
                 )
 
+    # I14: goal-hierarchy closure (ADR-025). Structural invariants (one root, resolvable/
+    # acyclic parents, unique slugs) are guaranteed by the GoalHierarchy model; here we
+    # re-assert them plus owner-resolves-to-a-real-agent on the assembled bundle, so a
+    # malformed hierarchy is a hard failure in the aggregated report, not a silent pass.
+    if config.goal_hierarchy is not None:
+        goals = config.goal_hierarchy.goals
+        goal_slugs = {g.slug for g in goals}
+        roots = [g.slug for g in goals if g.parent is None]
+        if len(roots) != 1:
+            v.append(f"I14: goal hierarchy must have exactly one root, found {sorted(roots)}")
+        for g in goals:
+            if g.parent is not None and g.parent not in goal_slugs:
+                v.append(f"I14: goal {g.slug!r} has unknown parent {g.parent!r}")
+            if g.owner not in agent_slugs:
+                v.append(f"I14: goal {g.slug!r} owner {g.owner!r} is not an agent in the org")
+
     # I10: file set matches the mode contract exactly.
     expected = _expected_files(config)
     actual = set(files)

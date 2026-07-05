@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 from ..patterns.builtins import BUILTIN_SKILLS
 from .agent import AgentDefinition
 from .company import CompanyDefinition
+from .goal import GoalHierarchy
 from .input import CompanyBrief
 from .operations import OperationsDefinition
 from .project import ProjectDefinition
@@ -35,6 +36,10 @@ class CompanyConfig(BaseModel):
     projects: list[ProjectDefinition] = Field(default_factory=list)
     tasks: list[TaskDefinition] = Field(default_factory=list)
     operations: OperationsDefinition | None = None
+    goal_hierarchy: GoalHierarchy | None = None
+    """The reasoned north-star → sub-goals tree (ADR-025). Additive and optional: a bundle
+    may carry only the flat ``company.goals`` list (backward-compat), but when present every
+    goal's ``owner`` must resolve to a real agent in the org."""
     license_kind: str = "Proprietary"
 
     @model_validator(mode="after")
@@ -69,5 +74,15 @@ class CompanyConfig(BaseModel):
                 if missing:
                     raise ValueError(
                         f"agent {a.slug!r} references skill(s) with no SKILL.md: {sorted(missing)}"
+                    )
+        # Goal-hierarchy owner closure (ADR-025): the tree's structural invariants are
+        # enforced on GoalHierarchy; here — where the org is known — every goal owner must
+        # resolve to a real agent. Applies in either mode when a hierarchy is present.
+        if self.goal_hierarchy is not None:
+            agent_slugs = {a.slug for a in self.agents}
+            for goal in self.goal_hierarchy.goals:
+                if goal.owner not in agent_slugs:
+                    raise ValueError(
+                        f"goal {goal.slug!r} owner {goal.owner!r} is not an agent in the org"
                     )
         return self
