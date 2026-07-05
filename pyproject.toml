@@ -20,7 +20,9 @@ blueprints = "paperclip_blueprints.cli:app"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "ruff>=0.6",
+    # ruff is pinned exactly: the formatter is not stable across versions, so a bump can
+    # reformat already-merged files mid-session. Keep in sync with .pre-commit-config.yaml.
+    "ruff==0.15.15",
     "pyright>=1.1.380",
 ]
 
@@ -32,6 +34,10 @@ build-backend = "hatchling.build"
 packages = ["src/paperclip_blueprints"]
 
 [tool.ruff]
+# Pinned exactly (matches the `ruff==` dev-dep and the pre-commit rev): ruff refuses to run
+# under a different version, so a bump can't silently reformat already-merged files. Bump all
+# three together.
+required-version = "==0.15.15"
 target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
