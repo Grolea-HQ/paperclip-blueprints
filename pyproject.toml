@@ -20,7 +20,9 @@ blueprints = "paperclip_blueprints.cli:app"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "ruff>=0.6",
+    # ruff is pinned exactly: the formatter is not stable across versions, so a bump can
+    # reformat already-merged files mid-session. Keep in sync with .pre-commit-config.yaml.
+    "ruff==0.15.15",
     "pyright>=1.1.380",
 ]
 

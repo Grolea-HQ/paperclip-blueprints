@@ -4,7 +4,9 @@
 repos:
   # Python linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.0
+    # Pinned exactly to match the `ruff==` pin in pyproject.toml — the formatter is not
+    # stable across versions, so a bump can reformat already-merged files. Bump both together.
+    rev: v0.15.15
     hooks:
       - id: ruff
         args: [--fix]
