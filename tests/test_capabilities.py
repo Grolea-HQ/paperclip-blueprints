@@ -42,19 +42,28 @@ def test_research_role_gets_web_fetch() -> None:
 
 
 def test_role_with_no_web_need_gets_nothing() -> None:
-    assert derive_capabilities(
-        role="ceo", title="CEO", mandate="Owns the north star and ships the title."
-    ) == []
-    assert derive_capabilities(
-        role=None, title="Editor", mandate="Edit and polish drafts before publication."
-    ) == []
+    assert (
+        derive_capabilities(
+            role="ceo", title="CEO", mandate="Owns the north star and ships the title."
+        )
+        == []
+    )
+    assert (
+        derive_capabilities(
+            role=None, title="Editor", mandate="Edit and polish drafts before publication."
+        )
+        == []
+    )
 
 
 def test_derivation_is_word_boundaried_not_substring() -> None:
     # "resource"/"outsource" contain "source" but must NOT trip the web-fetch grant.
-    assert derive_capabilities(
-        role=None, title="Ops Lead", mandate="Allocate resources and outsource nothing."
-    ) == []
+    assert (
+        derive_capabilities(
+            role=None, title="Ops Lead", mandate="Allocate resources and outsource nothing."
+        )
+        == []
+    )
 
 
 # --- attach + model validation -----------------------------------------------

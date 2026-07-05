@@ -19,6 +19,11 @@ agents:
 {% if a.slug in budgets %}
     budgetMonthlyCents: {{ budgets[a.slug] }}
 {% endif %}
+{% if a.slug in run_policies %}
+    runPolicy:
+      maxTurnsPerRun: {{ run_policies[a.slug].max_turns_per_run }}
+      maxConcurrentRuns: {{ run_policies[a.slug].max_concurrent_runs }}
+{% endif %}
 {% endfor %}
 {% if projects %}
 projects:
