@@ -25,6 +25,7 @@ from .adapter import assign_adapters, parse_model_preferences
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
 from .routines import RoutineSpec, derive_routines
+from .run_policy import assign_run_policies
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -307,6 +308,9 @@ def render_files(
         "license_kind": config.license_kind,
         "budgets": allocation.cents,
         "adapters": adapters,
+        # Per-agent run-policy caps (ADR-027): bundle-driven maxTurnsPerRun /
+        # maxConcurrentRuns reasoned from role, defaults matching the deployer's.
+        "run_policies": assign_run_policies(config.agents),
         "routines": routines,
     }
 
