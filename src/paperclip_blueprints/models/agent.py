@@ -6,7 +6,7 @@ TOOLS.md is rendered deterministically from the agent's slug, the company slug, 
 
 from __future__ import annotations
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class AgentSoul(BaseModel):
@@ -47,6 +47,10 @@ class AgentDefinition(BaseModel):
     derive from reports_to and verify additional role values against the
     importer enum before emitting them."""
     skills: list[str]
+    capabilities: list[str] = Field(default_factory=list)
+    """Structured per-agent platform capabilities the deployer (D7) grants (ADR-026),
+    e.g. ``web-fetch`` (read-only external web access). Derived conservatively from the
+    role/mandate; empty by default (D7 no-op). Additive: a bundle without it still validates."""
     mandate: str
     triggers: list[str]
     receives_from: list[str]
@@ -63,4 +67,19 @@ class AgentDefinition(BaseModel):
     def _at_least_one_skill(cls, v: list[str]) -> list[str]:
         if not v:
             raise ValueError("an agent must reference at least one skill")
+        return v
+
+    @field_validator("capabilities")
+    @classmethod
+    def _known_capabilities(cls, v: list[str]) -> list[str]:
+        # Each capability must be one the deployer knows how to grant (ADR-026).
+        # Imported locally so the model stays loadable without importing the patterns
+        # package at module load.
+        from ..patterns.capabilities import KNOWN_CAPABILITIES
+
+        unknown = [c for c in v if c not in KNOWN_CAPABILITIES]
+        if unknown:
+            raise ValueError(
+                f"unknown capability slug(s): {unknown}; known: {sorted(KNOWN_CAPABILITIES)}"
+            )
         return v

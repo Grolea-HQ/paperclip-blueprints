@@ -101,8 +101,9 @@ def _agent_frontmatter(agent: AgentDefinition) -> str:
             "title": agent.title,
             "reportsTo": agent.reports_to,
             "skills": agent.skills,
+            "capabilities": agent.capabilities,
         },
-        flow_seq_keys={"skills"},
+        flow_seq_keys={"skills", "capabilities"},
     )
 
 

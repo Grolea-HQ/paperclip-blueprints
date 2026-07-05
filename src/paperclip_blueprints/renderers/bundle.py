@@ -30,6 +30,7 @@ from ..models.input import CompanyBrief
 from ..models.output import CompanyConfig
 from ..patterns import get_seed
 from ..patterns.builtins import BUILTIN_SKILLS, attach_builtin_skills
+from ..patterns.capabilities import attach_capabilities
 from ..validators import BundleValidationError, validate_bundle
 from .render import render_files
 
@@ -68,6 +69,7 @@ def generate_bundle(
     attach_builtin_skills([stub])
     soul = generate_soul(stub, company, client, model=model)
     agent = generate_agent(stub, company, brief, soul, client, single_agent=True, model=model)
+    attach_capabilities([agent])  # derive capabilities from the lone agent's role/mandate (ADR-026)
     skill = generate_skill(stub.skills[0], company, [agent.name], client, model=model)
     # The lone agent is the org root/CEO; the hierarchy degrades deterministically (no LLM
     # call) to that agent owning the north star and every goal at company level (ADR-025).
@@ -181,10 +183,13 @@ async def _gather_full(
         ),
     )
 
+    # Derive each agent's structured capabilities from its role/mandate (ADR-026), now that
+    # the mandates exist. Deterministic and conservative; empty for roles with no need.
+    agent_defs = attach_capabilities(list(agents))
+
     # The goal hierarchy and operations both run after the fan-out — they need the generated
     # agents (the hierarchy for mandate-based owner reasoning, ADR-025; operations for routine
     # slots). Sequenced so operations stays the last call (it echoes the whole company).
-    agent_defs = list(agents)
     emit("→ Reasoning goal hierarchy...")
     goal_hierarchy = await asyncio.to_thread(
         generate_goal_hierarchy, company, brief, agent_defs, client, model=model
