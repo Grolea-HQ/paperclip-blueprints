@@ -18,6 +18,7 @@ from typing import Any
 
 from ..generators.agents import generate_agent
 from ..generators.client import GenerationError, LLMClient
+from ..generators.goal_hierarchy import generate_goal_hierarchy
 from ..generators.identity import generate_identity
 from ..generators.operations import generate_operations
 from ..generators.org import AgentStub, generate_org, generate_org_plan
@@ -68,8 +69,16 @@ def generate_bundle(
     soul = generate_soul(stub, company, client, model=model)
     agent = generate_agent(stub, company, brief, soul, client, single_agent=True, model=model)
     skill = generate_skill(stub.skills[0], company, [agent.name], client, model=model)
+    # The lone agent is the org root/CEO; the hierarchy degrades deterministically (no LLM
+    # call) to that agent owning the north star and every goal at company level (ADR-025).
+    goal_hierarchy = generate_goal_hierarchy(company, brief, [agent], client, model=model)
     return CompanyConfig(
-        mode="single", brief=brief, company=company, agents=[agent], skills=[skill]
+        mode="single",
+        brief=brief,
+        company=company,
+        agents=[agent],
+        skills=[skill],
+        goal_hierarchy=goal_hierarchy,
     )
 
 
@@ -172,6 +181,14 @@ async def _gather_full(
         ),
     )
 
+    # The goal hierarchy and operations both run after the fan-out — they need the generated
+    # agents (the hierarchy for mandate-based owner reasoning, ADR-025; operations for routine
+    # slots). Sequenced so operations stays the last call (it echoes the whole company).
+    agent_defs = list(agents)
+    emit("→ Reasoning goal hierarchy...")
+    goal_hierarchy = await asyncio.to_thread(
+        generate_goal_hierarchy, company, brief, agent_defs, client, model=model
+    )
     emit("→ Writing operations...")
     operations = await asyncio.to_thread(
         generate_operations, company, brief, plan.agents, client, model=model
@@ -182,11 +199,12 @@ async def _gather_full(
             mode="full",
             brief=brief,
             company=company,
-            agents=list(agents),
+            agents=agent_defs,
             skills=list(skills),
             projects=list(projects),
             tasks=list(tasks),
             operations=operations,
+            goal_hierarchy=goal_hierarchy,
         )
     except Exception as exc:  # noqa: BLE001 - pydantic ValidationError surfaces cleanly
         raise GenerationError(f"assembled bundle failed validation: {exc}") from exc

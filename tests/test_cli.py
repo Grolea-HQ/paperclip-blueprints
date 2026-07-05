@@ -123,6 +123,13 @@ _TASK = """```json
  "completion_criteria": ["Build uploads to the store", "Smoke pass is green"]}
 ```"""
 
+# Goal-hierarchy owner assignment (ADR-025): one {owner, level} per company goal, in order.
+# _IDENTITY carries two goals; assign one to the engineer and keep one cross-cutting.
+_GOAL_ASSIGN = """```json
+{"assignments": [{"owner": "engineer", "level": "agent"},
+                 {"owner": "company", "level": "company"}]}
+```"""
+
 
 def _dispatch_full(**kwargs: object) -> str:
     system = str(kwargs["system"]).lower()
@@ -134,6 +141,8 @@ def _dispatch_full(**kwargs: object) -> str:
         return _SOUL
     if "mandate" in system:
         return _AGENT
+    if "ownership" in system:  # goal-hierarchy owner assignment
+        return _GOAL_ASSIGN
     if "operations" in system:
         return _OPERATIONS
     if "project" in system:
