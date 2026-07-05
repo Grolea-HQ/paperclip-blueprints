@@ -34,6 +34,10 @@ build-backend = "hatchling.build"
 packages = ["src/paperclip_blueprints"]
 
 [tool.ruff]
+# Pinned exactly (matches the `ruff==` dev-dep and the pre-commit rev): ruff refuses to run
+# under a different version, so a bump can't silently reformat already-merged files. Bump all
+# three together.
+required-version = "==0.15.15"
 target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
