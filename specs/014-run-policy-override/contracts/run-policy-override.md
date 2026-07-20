@@ -117,8 +117,13 @@ rendered block is byte-identical to today's. (SC-002)
 
 - Unmatched reference: `run-policy override <line> names no agent — no run policy is set for it`
   (advisory; generation proceeds). Mirrors the adapter unmatched-preference warning. (FR-009)
-- Cross-reference collision on one agent+field: `run-policy overrides conflict for agent <slug> on
-  <field>; taking the last (<value>)` (advisory; deterministic last-wins). (D4)
+- Cross-reference collision on one agent+field: resolved **deterministically last-in-line-order
+  with no warning**. Two distinct references legitimately overlapping on one agent — a broad
+  default plus a specific exception (e.g. `All watchers: max turns 5` then
+  `lead-watcher: max turns 12`) — is a **supported, intentional pattern**, so a collision warning
+  would fire on correct usage. The later line wins per field; determinism holds (FR-008). See
+  ADR-034 (recorded as a deliberate deviation from this contract's original draft, which specified
+  an advisory warning here). (D4)
 
 ## 6. Input-template section text (added to `examples/input-template.md`, FR-013)
 

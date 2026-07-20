@@ -87,6 +87,21 @@ Scope is the emit/carrier side only. The deployer that consumes `runPolicy` (inc
   because the field defaults to `None` and renders nothing.
 - The role rule (ADR-027) is untouched — this ADR extends it, it does not supersede it.
 
+### Deviation from the draft contract — cross-reference collision resolves silently
+
+The `contracts/run-policy-override.md` §5 draft specified that when two **distinct** brief lines
+overlap on one agent+field, generation emits an advisory collision warning. The implementation
+**deliberately does not**: a collision resolves deterministically last-in-line-order with **no
+warning**, and the contract §5 has been updated to match.
+
+Rationale: broad-then-specific overlap is a **supported, intentional pattern** — an operator can
+write a broad default (`All watchers: max turns 5`) and then a specific exception
+(`lead-watcher: max turns 12`) for the same agent. A collision warning would therefore fire on
+*correct* usage, training operators to ignore it. The determinism guarantee (FR-008) is unaffected:
+the later line wins per field, in stable brief-line order. Recorded here as a decision, not a silent
+omission — the unmatched-reference warning (FR-009) is retained because a reference that matches
+*no* agent is a likely typo, whereas an overlap on a real agent is not.
+
 ## Alternatives considered
 
 - **Supersede ADR-027 — remove the role heuristics, emit only brief-stated values.** Rejected: the
