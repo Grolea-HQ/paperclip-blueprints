@@ -252,6 +252,75 @@ def test_parse_aggregates_all_errors() -> None:
     assert "north" in messages.lower()
 
 
+# --- run-policy override channel (feature 014) ------------------------------
+
+_RUN_POLICY_SECTION = """
+
+## 12. Run-policy overrides (optional)
+
+**Your overrides:**
+
+- engineer: max turns 8, heartbeat off
+- ceo: max concurrent 1
+"""
+
+
+def test_parse_brief_reads_run_policy_section() -> None:
+    brief = parse_brief(VALID_BRIEF + _RUN_POLICY_SECTION)
+    assert brief.run_policy_preferences == [
+        "engineer: max turns 8, heartbeat off",
+        "ceo: max concurrent 1",
+    ]
+
+
+def test_parse_brief_run_policy_none_when_section_absent() -> None:
+    # An otherwise-unchanged brief with no run-policy section yields None.
+    assert parse_brief(VALID_BRIEF).run_policy_preferences is None
+
+
+def test_run_policy_preferences_none_by_default() -> None:
+    assert CompanyBrief(**_brief_kwargs()).run_policy_preferences is None
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "ceo: max turns 0",
+        "ceo: max turns abc",
+        "ceo: max concurrent -1",
+        "ceo: heartbeat maybe",
+        "ceo: frobnicate 5",
+        "ceo:",  # no clause
+        "no colon here",
+    ],
+)
+def test_malformed_run_policy_value_rejected(line: str) -> None:
+    with pytest.raises(ValidationError):
+        CompanyBrief(**_brief_kwargs(run_policy_preferences=[line]))
+
+
+def test_same_reference_conflicting_values_rejected() -> None:
+    with pytest.raises(ValidationError):
+        CompanyBrief(
+            **_brief_kwargs(run_policy_preferences=["ceo: max turns 8", "ceo: max turns 5"])
+        )
+
+
+def test_malformed_run_policy_via_parse_brief_raises_brief_error() -> None:
+    bad_section = (
+        "\n\n## 12. Run-policy overrides (optional)\n\n**Your overrides:**\n\n- ceo: max turns 0\n"
+    )
+    with pytest.raises(BriefValidationError):
+        parse_brief(VALID_BRIEF + bad_section)
+
+
+def test_valid_run_policy_preferences_accepted() -> None:
+    brief = CompanyBrief(
+        **_brief_kwargs(run_policy_preferences=["engineer: max turns 8", "ceo: heartbeat off"])
+    )
+    assert brief.run_policy_preferences == ["engineer: max turns 8", "ceo: heartbeat off"]
+
+
 # --- US1 models: agent, skill, output (T017) --------------------------------
 
 

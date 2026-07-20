@@ -73,6 +73,12 @@ class CompanyBrief(BaseModel):
     capital_monthly_eur: int | None = None
     capital_setup_eur: int | None = None
     adapter_preferences: list[str] | None = None
+    run_policy_preferences: list[str] | None = None
+    """Section-12 optional per-agent run-policy override lines (feature 014 / ADR-034), e.g.
+    ``"research-analyst: max turns 8, heartbeat off"``. Free-text, one override per line,
+    naming an agent and any of max turns / max concurrent / heartbeat on|off. ``None`` ⇒ the
+    role-derived caps stand unchanged. Values are validated here; agent matching happens at
+    render time."""
     free_text: str | None = None
 
     @field_validator("name", "description", "north_star", "we_are")
@@ -148,6 +154,47 @@ class CompanyBrief(BaseModel):
             raise ValueError(
                 f"unknown use-case pattern {v!r}; available: {', '.join(KNOWN_PATTERNS)}"
             )
+        return v
+
+    @field_validator("run_policy_preferences")
+    @classmethod
+    def _valid_run_policy_lines(cls, v: list[str] | None) -> list[str] | None:
+        """Syntactic validation of run-policy override lines (feature 014, FR-010).
+
+        Rejects a malformed value (non-positive / non-integer turns or concurrency, unknown
+        clause or heartbeat token, a line with no clause/agent) and the same reference given
+        conflicting values for one field. No agent knowledge here — matching is a render
+        concern. Imported locally so the model stays loadable without the renderers package.
+        """
+        if not v:
+            return v
+        # Local import (mirrors the KNOWN_PATTERNS pattern) — models depend on renderers only
+        # for this pure, shared line parser; no runtime cycle (run_policy imports models only
+        # under TYPE_CHECKING).
+        from ..renderers.run_policy import parse_run_policy_line
+
+        errors: list[str] = []
+        by_ref: dict[str, dict[str, object]] = {}
+        for line in v:
+            try:
+                ref, override = parse_run_policy_line(line)
+            except ValueError as exc:
+                errors.append(str(exc))
+                continue
+            prior = by_ref.setdefault(slugify_project_name(ref), {})
+            for field in ("max_turns_per_run", "max_concurrent_runs", "heartbeat_enabled"):
+                new = getattr(override, field)
+                if new is None:
+                    continue
+                if field in prior and prior[field] != new:
+                    errors.append(
+                        f"run-policy override for {ref!r} sets {field} to conflicting "
+                        f"values ({prior[field]!r} then {new!r})"
+                    )
+                else:
+                    prior[field] = new
+        if errors:
+            raise ValueError("; ".join(errors))
         return v
 
 
@@ -304,6 +351,8 @@ def parse_brief(markdown: str) -> CompanyBrief:
         data["adapter_preferences"] = overrides
     if (v := _anchored_block(sec.get(11, ""), "other context")) is not None:
         data["free_text"] = v
+    if rp := _list_items(_anchored_block(sec.get(12, ""), "overrides")):
+        data["run_policy_preferences"] = rp
 
     data = {k: v for k, v in data.items() if v is not None}
 

@@ -25,6 +25,26 @@ def test_valid_full_bundle_passes() -> None:
     validate_bundle(config, files)  # must not raise
 
 
+def test_s16_run_policy_heartbeat_must_be_boolean() -> None:
+    # S16 (feature 014): runPolicy.heartbeatEnabled, when present, must be a boolean.
+    from paperclip_blueprints.validators.schema_shape import _check_run_policy_fields
+
+    ok = (
+        "agents:\n  ceo:\n    runPolicy:\n      maxTurnsPerRun: 30\n"
+        "      maxConcurrentRuns: 1\n      heartbeatEnabled: false\n"
+    )
+    assert _check_run_policy_fields(ok) == []
+
+    bad = (
+        "agents:\n  ceo:\n    runPolicy:\n      maxTurnsPerRun: 30\n"
+        "      maxConcurrentRuns: 1\n      heartbeatEnabled: maybe\n"
+    )
+    problems = _check_run_policy_fields(bad)
+    assert len(problems) == 1
+    assert "S16" in problems[0]
+    assert "ceo" in problems[0]
+
+
 def test_valid_single_bundle_passes() -> None:
     from test_templates import _config
 

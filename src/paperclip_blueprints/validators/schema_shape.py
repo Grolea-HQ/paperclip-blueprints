@@ -126,6 +126,10 @@ def check_schema_shape(config: CompanyConfig, files: dict[str, str]) -> list[str
     # credentials stay operator-environment).
     v += _check_adapter_fields(files.get(".paperclip.yaml", ""))
 
+    # S16 (feature 014 / ADR-034): any per-agent runPolicy.heartbeatEnabled is a boolean —
+    # a non-boolean would be rejected at import; catch it in-process before write.
+    v += _check_run_policy_fields(files.get(".paperclip.yaml", ""))
+
     # S14 (ADR-022): the hiring board-gate ships as a structured, importable company setting.
     if "requireBoardApprovalForNewAgents: true" not in files.get(".paperclip.yaml", ""):
         v.append(
@@ -273,6 +277,33 @@ def _check_adapter_fields(yaml_text: str) -> list[str]:
             v.append(
                 f"S12: agent {slug!r} adapter.config.env must not be emitted "
                 f"(provider routing/base URLs/credentials stay operator-environment)"
+            )
+    return v
+
+
+def _check_run_policy_fields(yaml_text: str) -> list[str]:
+    """S16 (ADR-034): every emitted ``runPolicy.heartbeatEnabled`` is a boolean.
+
+    The turns/concurrency caps are role-derived integers (ADR-027); only the brief-driven
+    heartbeat toggle can carry an operator-shaped value, so it is the one field checked here.
+    """
+    if not yaml_text or "runPolicy" not in yaml_text:
+        return []
+    try:
+        data = YAML(typ="safe").load(yaml_text)
+    except Exception:  # noqa: BLE001 - I9 reports unparseable YAML; don't double-fault
+        return []
+    v: list[str] = []
+    for slug, agent in (data.get("agents") or {}).items():
+        if not isinstance(agent, dict) or not isinstance(agent.get("runPolicy"), dict):
+            continue
+        run_policy = agent["runPolicy"]
+        if "heartbeatEnabled" in run_policy and not isinstance(
+            run_policy["heartbeatEnabled"], bool
+        ):
+            v.append(
+                f"S16: agent {slug!r} runPolicy.heartbeatEnabled must be a boolean, "
+                f"got {run_policy['heartbeatEnabled']!r}"
             )
     return v
 
