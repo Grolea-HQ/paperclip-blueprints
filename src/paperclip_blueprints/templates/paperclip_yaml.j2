@@ -23,6 +23,9 @@ agents:
     runPolicy:
       maxTurnsPerRun: {{ run_policies[a.slug].max_turns_per_run }}
       maxConcurrentRuns: {{ run_policies[a.slug].max_concurrent_runs }}
+{% if run_policies[a.slug].heartbeat_enabled is not none %}
+      heartbeatEnabled: {{ run_policies[a.slug].heartbeat_enabled | lower }}
+{% endif %}
 {% endif %}
 {% endfor %}
 {% if projects %}

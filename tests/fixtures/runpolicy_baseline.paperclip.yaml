@@ -1,0 +1,26 @@
+schema: paperclip/v1
+company:
+  requireBoardApprovalForNewAgents: true
+sidebar:
+  agents: [ceo, engineer]
+  projects: [launch-v1]
+agents:
+  ceo:
+    role: ceo
+    adapter:
+      type: claude_local
+      config:
+        model: claude-opus-4-8
+    runPolicy:
+      maxTurnsPerRun: 30
+      maxConcurrentRuns: 1
+  engineer:
+    adapter:
+      type: claude_local
+      config:
+        model: claude-sonnet-4-6
+    runPolicy:
+      maxTurnsPerRun: 30
+      maxConcurrentRuns: 2
+projects:
+  launch-v1:

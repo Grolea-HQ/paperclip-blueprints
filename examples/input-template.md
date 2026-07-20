@@ -243,6 +243,25 @@ Free text for anything important that doesn't fit above. The tool incorporates t
 
 ---
 
+## 12. Run-policy overrides (optional)
+
+By default the tool sets each agent's per-run turn cap and concurrent-run limit by role. If you want a specific agent bounded differently — or run only on demand, never on a heartbeat — state it here. An agent wake with no bound on turns or concurrency can loop and burn budget before anything stops it; these overrides let you cap that. **Leave this blank to keep the defaults — an empty section changes nothing.**
+
+One override per line, naming the agent and any of the three values (combine on one line, comma-separated):
+
+- `<agent>: max turns <N>` — cap turns per wake (guards against a run that loops)
+- `<agent>: max concurrent <N>` — cap simultaneous runs of that agent
+- `<agent>: heartbeat off` — do not wake this agent on a heartbeat (`on`/`off`)
+
+Name the agent by role, title, or slug — the same way as adapter preferences. A name that matches no agent is skipped with a warning; a bad value (e.g. `max turns 0`) is rejected before generation.
+
+**Your overrides:**
+
+- [e.g., "research-analyst: max turns 8, heartbeat off"]
+- [e.g., "CEO: max concurrent 1"]
+
+---
+
 ## Validation checklist
 
 Before passing this to the tool, verify:

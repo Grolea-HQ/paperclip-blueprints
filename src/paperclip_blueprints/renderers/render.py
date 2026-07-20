@@ -25,7 +25,7 @@ from .adapter import assign_adapters, parse_model_preferences
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
 from .routines import RoutineSpec, derive_routines
-from .run_policy import assign_run_policies
+from .run_policy import assign_run_policies, parse_run_policy_preferences
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -287,6 +287,17 @@ def render_files(
                 "that role keeps its default model"
             )
 
+    # Per-agent run-policy overrides from the brief (feature 014 / ADR-034): a pure carrier
+    # layering brief-stated caps / heartbeat toggle over the ADR-027 role base. Empty ⇒ the
+    # role base alone (byte-identical to today). Values are brief-validated; a reference that
+    # matches no agent is advisory only.
+    run_overrides, run_unmatched = parse_run_policy_preferences(
+        config.brief.run_policy_preferences, config.agents
+    )
+    if warn is not None:
+        for line in run_unmatched:
+            warn(f"run-policy override {line!r} names no agent — no run policy is set for it")
+
     # Tasks with a `recurrence` cadence → importable Routines (ADR-022, US3, PROVISIONAL cron):
     # a `.paperclip.yaml` routines.<task-slug> block; the recurring task itself is flagged
     # `recurring: true` (no shadow task). Empty when no task is scheduled.
@@ -308,9 +319,9 @@ def render_files(
         "license_kind": config.license_kind,
         "budgets": allocation.cents,
         "adapters": adapters,
-        # Per-agent run-policy caps (ADR-027): bundle-driven maxTurnsPerRun /
-        # maxConcurrentRuns reasoned from role, defaults matching the deployer's.
-        "run_policies": assign_run_policies(config.agents),
+        # Per-agent run-policy caps (ADR-027): role-derived maxTurnsPerRun /
+        # maxConcurrentRuns, with brief overrides overlaid per field (feature 014 / ADR-034).
+        "run_policies": assign_run_policies(config.agents, run_overrides),
         "routines": routines,
     }
 
