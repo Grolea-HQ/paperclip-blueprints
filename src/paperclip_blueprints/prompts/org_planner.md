@@ -12,6 +12,14 @@ collides with the human principal: do not use **"Founder"**, **"Co-founder"**, o
 (e.g. "Managing Editor", "Studio Head") — kept clearly distinct from the human
 Founder/Board. Every agent name is a working role INSIDE the company.
 
+Separately, Paperclip ships **built-in agents** that already exist in every company
+and own their names. Never name an agent, and never give an agent a title, that
+matches any of: **"Summarizer"**, **"Reflection Coach"**, **"Briefs Agent"**,
+**"Learning Agent"** (in any casing or punctuation). A qualified name is fine when it
+does not reduce to one of those — "Content Summarizer" and "Learning Designer" are
+allowed; a bare "Summarizer" is not. If a role genuinely is summarization, name it for
+the work it owns (e.g. "Digest Editor").
+
 ## Ownership chains (how to shape the tree)
 
 Design the org so every capability the company needs has exactly ONE accountable
