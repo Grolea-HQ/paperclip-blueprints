@@ -32,6 +32,22 @@ def slugify_project_name(name: str) -> str:
     return _TRIM_DASH_RE.sub("", dashed)
 
 
+def slugify_agent_name(name: str) -> str:
+    """Return the Paperclip agent URL key for a display name.
+
+    Mirrors ``normalizeAgentUrlKey`` in ``packages/shared/src/agent-url-key.ts``
+    (read at ``v2026.720.0``), which Paperclip uses to derive an agent's key from its
+    display ``name`` — the ``agents`` table has no ``slug`` column. The algorithm is
+    character-for-character the same as :func:`slugify_project_name`
+    (trim → lowercase → collapse ``[^a-z0-9]+`` to ``-`` → strip edge ``-``); it is
+    exposed under its own name so agent-side callers cite the agent source, and so the
+    two stay independently updatable if Paperclip ever diverges them.
+
+    Returns ``""`` where Paperclip returns ``null`` (empty or all-non-ASCII name).
+    """
+    return slugify_project_name(name)
+
+
 def dedupe_slug(base: str, used: set[str]) -> str:
     """Return a unique slug for ``base``, mirroring Paperclip's ``uniqueSlug``.
 

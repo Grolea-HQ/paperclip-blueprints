@@ -52,6 +52,54 @@ BUILTIN_SKILLS: frozenset[str] = frozenset(
 )
 
 
+# --- Built-in Paperclip AGENTS (reserved name space) -------------------------
+#
+# SOURCE: ``server/src/services/built-in-agents.ts`` → the ``DEFINITIONS`` array
+#         (``const DEFINITIONS = validateBuiltInAgentDefinitions([...])``, line 302)
+#         in ``paperclipai/paperclip``.
+# READ AT: Paperclip **v2026.720.0** (tag), on 2026-07-21.
+#
+# WHY THIS IS RESERVED, and why it is a hardcoded platform fact:
+#   Built-in agents are ordinary rows in the ``agents`` table carrying immutable
+#   ``metadata.paperclipBuiltInAgent``. That table has **no ``slug`` column and no
+#   unique constraint on ``(company_id, name)``** — Paperclip derives an agent's key at
+#   runtime with ``normalizeAgentUrlKey(name)``, i.e. from the DISPLAY NAME. The two
+#   ``bundle`` definitions (``reflection-coach``, ``summarizer``) are auto-provisioned
+#   into EVERY company by ``companies.create`` → ``autoProvisionBundledAgents``, and
+#   re-reconciled on every server boot. So a generated agent whose name normalizes onto
+#   one of these keys lands in an occupied namespace: on a ``new_company`` import the
+#   collision check never runs at all (it is gated on ``existing_company``), yielding two
+#   same-named agents and NO error; on ``existing_company`` + ``replace`` it instead hits
+#   ``built_in_agent_marker_readonly``. Built-ins are also undeletable, so an import can
+#   never clean up after itself. The failure is therefore silent or unrecoverable, never
+#   a clean rejection — which is why this is enforced at generation time.
+#
+#   NOTE: the ``enableBuiltInAgents`` experimental setting gates the built-in agent
+#   ROUTES only, not ``autoProvisionBundledAgents``. Turning the feature off leaves the
+#   rows — and this collision surface — in place. Do not treat it as a mitigation.
+#
+# MAINTENANCE — this list WILL go stale; Paperclip's registry is designed to grow, and
+# its keys are permanent once released ("Do not rename keys after release",
+# ``docs/built-in-agents.md``). On a new Paperclip release, re-read the ``DEFINITIONS``
+# array above and add any new entry's *derived slug* here, then bump READ AT.
+#
+# The reserved values below are the ``slugify_agent_name(displayName)`` of each
+# definition — the actual collision surface. Registry ``key`` is recorded alongside for
+# traceability, and deliberately NOT reserved where it differs from the derived slug
+# (``briefs``/``learning``), since reserving those would block legitimate agent names
+# like "Learning Designer" for a collision that cannot occur.
+#
+#   registry key      | displayName        | derived slug (reserved)
+#   ------------------|--------------------|------------------------
+#   briefs            | "Briefs Agent"     | briefs-agent
+#   learning          | "Learning Agent"   | learning-agent
+#   reflection-coach  | "Reflection Coach" | reflection-coach   (auto-provisioned)
+#   summarizer        | "Summarizer"       | summarizer         (auto-provisioned)
+BUILTIN_AGENT_SLUGS: frozenset[str] = frozenset(
+    {"briefs-agent", "learning-agent", "reflection-coach", "summarizer"}
+)
+
+
 def builtin_skills_for(*, is_ceo: bool, is_lead: bool) -> list[str]:
     """Return the built-in skill slugs a role should declare, in canonical order.
 

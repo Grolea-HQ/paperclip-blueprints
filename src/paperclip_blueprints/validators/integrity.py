@@ -14,8 +14,8 @@ from ruamel.yaml import YAML
 
 from ..models.org_plan import SPAN_OF_CONTROL
 from ..models.output import CompanyConfig
-from ..paperclip_slug import slugify_project_name
-from ..patterns.builtins import BUILTIN_SKILLS
+from ..paperclip_slug import slugify_agent_name, slugify_project_name
+from ..patterns.builtins import BUILTIN_AGENT_SLUGS, BUILTIN_SKILLS
 
 # Reserved human-principal role-words (ADR-016): an agent name/title must not collide
 # with the human founder/board, who sit above the company as its approver and are
@@ -148,6 +148,20 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
                     f"I13: agent {a.slug!r} {field} {value!r} collides with the human "
                     f"founder/board role; name agents for working roles (e.g. CEO), not "
                     f"Founder/Board"
+                )
+
+    # I15: no agent name/title collides with a built-in Paperclip agent. Paperclip
+    # derives an agent's key from its DISPLAY NAME, so the check normalizes name and
+    # title the same way (`normalizeAgentUrlKey`) rather than matching literal tokens.
+    # See `patterns.builtins.BUILTIN_AGENT_SLUGS` for the source and the version it was
+    # read at — the reserved set is a platform fact that needs re-reading each release.
+    for a in agents:
+        for field, value in (("name", a.name), ("title", a.title)):
+            if slugify_agent_name(value) in BUILTIN_AGENT_SLUGS:
+                v.append(
+                    f"I15: agent {a.slug!r} {field} {value!r} collides with the built-in "
+                    f"Paperclip agent {slugify_agent_name(value)!r}, which is "
+                    f"auto-provisioned into every company; rename the agent"
                 )
 
     # I14: goal-hierarchy closure (ADR-025). Structural invariants (one root, resolvable/

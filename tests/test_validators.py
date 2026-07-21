@@ -271,6 +271,61 @@ def test_i13_ignores_substrings(value: str) -> None:
     assert not any(x.startswith("I13") for x in check_integrity(config, files))
 
 
+# --- platform: built-in agent name collision I15 ----------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Summarizer",
+        "summarizer",
+        "Reflection Coach",
+        "reflection-coach",
+        "Briefs Agent",
+        "Learning Agent",
+        "  Summarizer  ",
+        "REFLECTION COACH",
+        "Reflection  Coach",
+    ],
+)
+def test_i15_rejects_builtin_agent_name(value: str) -> None:
+    # Paperclip derives an agent's key from its display name, so any name that
+    # normalizes onto a built-in's key collides in the shared namespace.
+    config, files = _valid()
+    config.agents[0].name = value
+    violations = check_integrity(config, files)
+    assert any(x.startswith("I15") for x in violations)
+    assert config.agents[0].slug in " ".join(v for v in violations if v.startswith("I15"))
+
+
+def test_i15_rejects_builtin_in_title() -> None:
+    config, files = _valid()
+    config.agents[0].title = "Summarizer"
+    assert any(x.startswith("I15") for x in check_integrity(config, files))
+
+
+@pytest.mark.parametrize(
+    "value",
+    # Near-misses that do NOT normalize onto a reserved key, and the two registry
+    # *keys* whose derived slugs differ ("briefs"/"learning" vs "briefs-agent"/
+    # "learning-agent") — reserving those would block legitimate roles.
+    [
+        "Content Summarizer",
+        "Summary Writer",
+        "Coach",
+        "Briefs",
+        "Learning",
+        "Learning Designer",
+        "Reflection Lead",
+    ],
+)
+def test_i15_allows_non_colliding_names(value: str) -> None:
+    config, files = _valid()
+    config.agents[0].name = value
+    config.agents[0].title = value
+    assert not any(x.startswith("I15") for x in check_integrity(config, files))
+
+
 # --- governance: board-authority presence S11 (ADR-016) ---------------------
 
 
