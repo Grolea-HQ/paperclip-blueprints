@@ -106,10 +106,10 @@ that matter on a given day.
 
 **Other context:**
 
-**The source-tiering rule.** Every claim inherits the tier of its weakest supporting source, and that tier travels with the claim into the published issue.
-(1) *Source independence* — how far the source sits from the party it describes.
-(2) *Recency against topic decay* — age judged against how fast the topic moves, not against the calendar.
-(3) *Outcome verification* — whether a result was measured after the fact or projected beforehand.
+**The claim-support rule.** Every claim inherits the tier of its weakest support, and that tier travels with the claim into the published issue.
+(1) *Byline traceability* — whether a named person stands behind the claim.
+(2) *Corroboration depth* — how many unrelated outlets carry it independently.
+(3) *Correction history* — whether the outlet has amended this story before.
 
 ---
 

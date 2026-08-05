@@ -52,7 +52,7 @@ _BLOCK_HEADS = {
     "A definitional question the client's brief leaves open",
     "Source discipline",
     "The Tier C honesty note",
-    "The berth-scoring rubric",
+    "The maintenance-priority rubric",
     "Evidence tiers and the active-list entry rule",
     "The commissioning-date rule",
     "The provenance citation format",
@@ -63,11 +63,11 @@ _BLOCK_HEADS = {
 
 # Enumerated italic inside a block names a part of that item. Sentence case, not Title Case.
 _ENUMERATED = {
-    "Freshness against class decay",
-    "Structural comparability",
-    "Scale transferability",
-    "Evidential independence",
-    "Outcome verification",
+    "Spare lead time",
+    "Access difficulty",
+    "Downtime exposure",
+    "Failure precedent",
+    "Certification window",
 }
 
 _EXPECTED = _BLOCK_HEADS | _ENUMERATED
@@ -87,8 +87,8 @@ def test_extraction_recovers_enumerated_italic_rubric_parts() -> None:
 def test_extraction_records_which_block_a_rubric_part_belongs_to() -> None:
     """Block context is what makes a missing part placeable in the operator's brief."""
     by_text = {t.text: t for t in extract_canon_terms(_canon())}
-    assert by_text["Structural comparability"].block == "The berth-scoring rubric"
-    assert by_text["The berth-scoring rubric"].block is None
+    assert by_text["Access difficulty"].block == "The maintenance-priority rubric"
+    assert by_text["The maintenance-priority rubric"].block is None
 
 
 def test_canon_terms_are_sentence_case_not_title_case() -> None:
@@ -253,11 +253,10 @@ def test_a_phrase_carried_by_another_brief_field_is_not_a_canon_term() -> None:
     existing path, so its coverage says nothing about THIS defect and would be noise.
     """
     found = {
-        t.text
-        for t in extract_canon_terms(_canon(), exclude_texts=["We track Structural comparability."])
+        t.text for t in extract_canon_terms(_canon(), exclude_texts=["We track Access difficulty."])
     }
-    assert "Structural comparability" not in found
-    assert "Outcome verification" in found, "excluding one phrase must not drop the others"
+    assert "Access difficulty" not in found
+    assert "Certification window" in found, "excluding one phrase must not drop the others"
 
 
 # --- matching (FR-015) ------------------------------------------------------
@@ -277,7 +276,7 @@ def test_matching_tolerates_case_and_hyphen_variation() -> None:
 
 def test_matching_does_not_count_an_accidental_substring() -> None:
     cov = canon_coverage(
-        _terms_for("Outcome verification"), {"a.md": "outcome verifications are unrelated"}
+        _terms_for("Certification window"), {"a.md": "certification windows are unrelated"}
     )
     assert cov[0].carriers == []
 
@@ -293,24 +292,22 @@ def test_missing_canon_is_reported_by_name() -> None:
     rather than delivering an aggregate verdict the operator would learn to skip.
     """
     warnings = canon_warnings(
-        canon_coverage(_terms_for("Outcome verification"), {"a.md": "nothing relevant"})
+        canon_coverage(_terms_for("Certification window"), {"a.md": "nothing relevant"})
     )
     assert warnings, "the coverage check did not fire on absent canon"
-    assert any("Outcome verification" in w for w in warnings)
+    assert any("Certification window" in w for w in warnings)
     assert not any("coverage incomplete" in w.lower() for w in warnings)
 
 
 def test_a_missing_rubric_part_names_its_block() -> None:
-    warnings = canon_warnings(
-        canon_coverage(_terms_for("Structural comparability"), {"a.md": "nothing"})
-    )
-    assert "The berth-scoring rubric" in warnings[0]
+    warnings = canon_warnings(canon_coverage(_terms_for("Access difficulty"), {"a.md": "nothing"}))
+    assert "The maintenance-priority rubric" in warnings[0]
 
 
 def test_fully_covered_canon_is_silent() -> None:
     """C-C4: quiet on a clean bundle, so the signal stays worth reading."""
-    files = {"a.md": "Outcome verification here", "b.md": "Outcome verification again"}
-    assert canon_warnings(canon_coverage(_terms_for("Outcome verification"), files)) == []
+    files = {"a.md": "Certification window here", "b.md": "Certification window again"}
+    assert canon_warnings(canon_coverage(_terms_for("Certification window"), files)) == []
 
 
 def test_a_single_carrier_is_reported_as_thin_and_names_the_file() -> None:
@@ -342,7 +339,7 @@ def test_warnings_make_no_claim_about_quality() -> None:
     banned = ("correct", "proper", "faithful", "accurate", "good", "well", "quality")
     warnings = canon_warnings(
         canon_coverage(
-            _terms_for("Outcome verification", "Backtest scope"), {"a.md": "Backtest scope"}
+            _terms_for("Certification window", "Backtest scope"), {"a.md": "Backtest scope"}
         )
     )
     assert warnings
@@ -368,7 +365,7 @@ def test_output_is_identical_across_differing_hash_seeds() -> None:
         "canon_coverage,canon_warnings;"
         f"c=pathlib.Path({str(_FIXTURE)!r}).read_text(encoding='utf-8');"
         "t=extract_canon_terms(c);"
-        "f={'b.md':'Backtest scope','a.md':'Backtest scope and Outcome verification'};"
+        "f={'b.md':'Backtest scope','a.md':'Backtest scope and Certification window'};"
         "print(json.dumps([x.text for x in t]+canon_warnings(canon_coverage(t,f))))"
     )
     outs = []

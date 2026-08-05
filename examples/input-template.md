@@ -267,7 +267,7 @@ Four details that matter to the check:
 
 - **Name the rule in its heading; don't describe it.** A heading that is a *name* — `**The provenance citation format.**` — can be looked for in the bundle. A heading that is a *sentence* — `**The daily recap does two jobs.**` — cannot: no generated file ever restates a sentence, so that item is reported as **coverage unknown** rather than pretended about. Both are threaded to the generators either way; only the named one can be verified.
 - **Enumerate the parts wherever a rule has them.** A rule with named parts is checked part by part, which is precise. A rule with no enumerated parts is checked only by its heading — a weaker signal, since a rule can be encoded faithfully without any file repeating the phrase that names it.
-- **Sentence case for part names** — `*Structural comparability*`, not `*Structural Comparability*`. Either reads fine; only one is consistent, and consistency is what makes a missing part recognisable.
+- **Sentence case for part names** — `*Handover completeness*`, not `*Handover Completeness*`. Either reads fine; only one is consistent, and consistency is what makes a missing part recognisable.
 - **Italic is only a signal when enumerated.** `*Some Registry*` mid-paragraph is read as a proper noun and ignored, which is what you want — it means you can italicise source names and ordinary emphasis freely without polluting the check.
 
 **Other context:**

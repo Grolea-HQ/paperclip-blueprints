@@ -18,21 +18,17 @@ be italicised, and must never be extracted as canon.
 trailing clause. The whole heading is the canon item's name; everything after the closing
 marker is its body.
 
-**The berth-scoring rubric.** Every observation is scored on five dimensions, and the
-composite decides whether a terminal enters the active list or the watchlist.
-(1) *Freshness against class decay* — observation classes decay at very different rates, so
-age is scored relative to the working decay window of the class, not against the calendar:
-tidal and channel survey data roughly four years; terminal ownership and concession structure
-roughly three years; tariff schedules in force are event-driven and do not decay smoothly,
-being valid until a published revision and then instantly wrong; throughput and handling-cost
-figures roughly two years; crane and automation unit cost roughly six months; equipment
-capability roughly six months; operator landscape roughly twelve months.
-(2) *Structural comparability* — how close the observed terminal is to the target class.
-(3) *Scale transferability* — whether the observation was made at a scale that maps onto the
-target. (4) *Evidential independence* — an audited filing outranks an independent survey,
-which outranks an operator self-report, which outranks vendor material.
-(5) *Outcome verification* — whether the claimed gain was measured after commissioning or
-projected in a business case beforehand; this dimension carries the heaviest weight.
+**The maintenance-priority rubric.** Every component is scored on five dimensions, and
+the composite decides whether it enters the standing work list or the watch list.
+(1) *Downtime exposure* — throughput lost while the component is out of service.
+(2) *Spare lead time* — how long replacement parts take to arrive: gaskets and seals
+typically two weeks; hydraulic assemblies six weeks; control boards twelve weeks;
+structural steel is fabricated to order and has no standing lead time.
+(3) *Access difficulty* — how hard the component is to reach without taking neighbouring
+systems offline.
+(4) *Failure precedent* — whether this component has already failed elsewhere in the fleet.
+(5) *Certification window* — how close the mandatory inspection deadline is; this dimension
+carries the heaviest weight.
 
 **Evidence tiers and the active-list entry rule.** States a numeric threshold and what happens
 above and below it.

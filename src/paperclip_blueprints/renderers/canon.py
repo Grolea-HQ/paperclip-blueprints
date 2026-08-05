@@ -19,7 +19,7 @@ canon:
 
 1. **Bold-headed blocks.** A line beginning ``**Some heading.**`` opens a canon item; the
    heading names it.
-2. **Enumerated italic inside such a block.** ``(1) *Structural comparability*`` names a
+2. **Enumerated italic inside such a block.** ``(1) *Access difficulty*`` names a
    part of that item.
 
 The enumeration marker is the discriminator, not the italic. Italic alone is used at least
@@ -128,8 +128,8 @@ class CanonTerm:
     """The bold-headed block this term was enumerated under, if any.
 
     Carried so a warning can say *which* item a missing part belongs to — "Structural
-    comparability" alone is harder to place than "Structural comparability, from 'The
-    berth-scoring rubric'". ``None`` for the block headings themselves.
+    comparability" alone is harder to place than "Access difficulty, from 'The
+    maintenance-priority rubric'". ``None`` for the block headings themselves.
     """
 
 
@@ -187,7 +187,8 @@ def _clean(text: str) -> str:
 
 
 def normalise(text: str) -> str:
-    """Casefold and flatten punctuation so ``berth-scoring`` matches ``berth scoring``."""
+    """Casefold and flatten punctuation, so a hyphenated term still matches its
+    spaced form in the bundle."""
     return _SPACE.sub(" ", _PUNCT.sub(" ", _clean(text))).strip().casefold()
 
 

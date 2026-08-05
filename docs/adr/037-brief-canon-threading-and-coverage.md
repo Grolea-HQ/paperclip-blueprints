@@ -102,7 +102,7 @@ existing `warn` sink at the end of `render_files`, any term that reaches zero fi
 
 **Extraction keys on markdown structure, not the shape of words.** Canon items are
 **bold-headed blocks** (`**The provenance citation format.**`); named parts are **enumerated
-italic** inside such a block (`(1) *Structural comparability*`). The enumeration marker is
+italic** inside such a block (`(1) *Access difficulty*`). The enumeration marker is
 the discriminator, not the italic: in a real brief italic serves at least three purposes —
 enumerated rubric parts (canon), proper nouns and source names (noise), and ordinary
 mid-sentence emphasis (noise) — so extracting every italic span reproduces a milder form of

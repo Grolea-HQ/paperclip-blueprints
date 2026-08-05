@@ -450,12 +450,12 @@ def test_preview_invalid_brief_aborts_before_api(tmp_path, monkeypatch) -> None:
 def _brief_with_canon(tmp_path: Path) -> Path:
     """A valid brief whose section 11 carries canon unique to it."""
     canon = (
-        "**The berth-scoring rubric.** Scored on two dimensions.\n"
-        "(1) *Structural comparability* — closeness to the target class.\n"
-        "(2) *Outcome verification* — measured after the fact, or merely projected.\n"
+        "**The maintenance-priority rubric.** Scored on two dimensions.\n"
+        "(1) *Access difficulty* — closeness to the target class.\n"
+        "(2) *Certification window* — measured after the fact, or merely projected.\n"
     )
     text = VALID_BRIEF.replace("**Other context:**\n", "**Other context:**\n\n" + canon)
-    assert "Structural comparability" in text, "fixture error: canon was not injected"
+    assert "Access difficulty" in text, "fixture error: canon was not injected"
     p = tmp_path / "brief.md"
     p.write_text(text, encoding="utf-8")
     return p
@@ -472,16 +472,16 @@ def test_check_canon_reports_missing_terms_without_any_api_call(tmp_path, monkey
     bundle = tmp_path / "bundle"
     (bundle / "skills" / "s").mkdir(parents=True)
     (bundle / "skills" / "s" / "SKILL.md").write_text(
-        "Scoring uses Structural comparability.", encoding="utf-8"
+        "Scoring uses Access difficulty.", encoding="utf-8"
     )
     (bundle / "COMPANY.md").write_text("Company doc.", encoding="utf-8")
 
     result = runner.invoke(app, ["check-canon", "--input", str(brief), "--bundle", str(bundle)])
     assert result.exit_code == 0, result.output
-    assert "Structural comparability" in result.output
+    assert "Access difficulty" in result.output
     # Carried once → thin, naming the file; never carried → missing, naming the term.
     assert "only one file" in result.output
-    assert "Outcome verification" in result.output
+    assert "Certification window" in result.output
     assert "appears in no generated file" in result.output
 
 
