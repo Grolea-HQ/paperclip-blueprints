@@ -450,11 +450,12 @@ def test_preview_invalid_brief_aborts_before_api(tmp_path, monkeypatch) -> None:
 def _brief_with_canon(tmp_path: Path) -> Path:
     """A valid brief whose section 11 carries canon unique to it."""
     canon = (
-        "Score each enquiry on Persuadability-Index and Margin-Headroom.\n"
-        "An Observed-Signal stays valid for 30 days.\n"
+        "**The berth-scoring rubric.** Scored on two dimensions.\n"
+        "(1) *Structural comparability* — closeness to the target class.\n"
+        "(2) *Outcome verification* — measured after the fact, or merely projected.\n"
     )
     text = VALID_BRIEF.replace("**Other context:**\n", "**Other context:**\n\n" + canon)
-    assert "Persuadability-Index" in text, "fixture error: canon was not injected"
+    assert "Structural comparability" in text, "fixture error: canon was not injected"
     p = tmp_path / "brief.md"
     p.write_text(text, encoding="utf-8")
     return p
@@ -471,25 +472,27 @@ def test_check_canon_reports_missing_terms_without_any_api_call(tmp_path, monkey
     bundle = tmp_path / "bundle"
     (bundle / "skills" / "s").mkdir(parents=True)
     (bundle / "skills" / "s" / "SKILL.md").write_text(
-        "Scoring uses Persuadability-Index.", encoding="utf-8"
+        "Scoring uses Structural comparability.", encoding="utf-8"
     )
     (bundle / "COMPANY.md").write_text("Company doc.", encoding="utf-8")
 
     result = runner.invoke(app, ["check-canon", "--input", str(brief), "--bundle", str(bundle)])
     assert result.exit_code == 0, result.output
-    assert "Persuadability-Index" in result.output
+    assert "Structural comparability" in result.output
     # Carried once → thin, naming the file; never carried → missing, naming the term.
     assert "only one file" in result.output
-    assert "Margin-Headroom" in result.output
+    assert "Outcome verification" in result.output
     assert "appears in no generated file" in result.output
 
 
-def test_check_canon_stays_quiet_when_section_11_is_ordinary_prose(tmp_path, monkeypatch) -> None:
-    """FR-016: plain narrative must not produce a wall of warnings.
+def test_check_canon_says_so_when_section_11_carries_no_marked_canon(tmp_path, monkeypatch) -> None:
+    """A zero-term run must announce itself rather than reading as "all clear".
 
-    The standard fixture's section 11 is an ordinary aside ("Evenings only; optimize for
-    async review."). A check that flagged prose like this on every run would be noise the
-    operator learns to skip — operationally identical to no check at all.
+    The standard fixture's section 11 is unmarked prose ("Evenings only; optimize for
+    async review."). Extraction keys on markdown emphasis, so nothing is recognised — and
+    printing nothing would be this feature's own defect wearing a new hat: a silent gap
+    one layer up, where the operator concludes the canon is carried when it was never
+    even looked for.
     """
     monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
     brief = _write_brief(tmp_path)
@@ -500,7 +503,8 @@ def test_check_canon_stays_quiet_when_section_11_is_ordinary_prose(tmp_path, mon
     result = runner.invoke(app, ["check-canon", "--input", str(brief), "--bundle", str(bundle)])
     assert result.exit_code == 0, result.output
     assert "extracted 0 canon term(s)" in result.output
-    assert "warning:" not in result.output
+    assert "no canon items were found" in result.output
+    assert "markdown emphasis" in result.output
 
 
 def test_check_canon_rejects_a_missing_bundle_directory(tmp_path, monkeypatch) -> None:

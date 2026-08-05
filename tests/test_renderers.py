@@ -237,8 +237,9 @@ def test_canon_coverage_fires_through_the_render_warn_sink() -> None:
     """
     config = _config()
     canon = (
-        "Score each enquiry on Persuadability-Index and Margin-Headroom. "
-        "Evidence decays: an Observed-Signal stays valid for 30 days."
+        "**The berth-scoring rubric.** Every observation is scored on two dimensions.\n"
+        "(1) *Structural comparability* — how close the observation is to the target.\n"
+        "(2) *Outcome verification* — whether the gain was measured or projected.\n"
     )
     config.brief.free_text = canon
 
@@ -247,7 +248,9 @@ def test_canon_coverage_fires_through_the_render_warn_sink() -> None:
 
     canon_lines = [w for w in seen if "operating canon" in w]
     assert canon_lines, "the canon check emitted nothing for canon absent from the bundle"
-    assert any("Persuadability-Index" in w for w in canon_lines)
+    assert any("Structural comparability" in w for w in canon_lines)
+    # the rubric block is named so a missing part can be placed in the brief
+    assert any("The berth-scoring rubric" in w for w in canon_lines)
 
 
 def test_canon_coverage_is_silent_when_the_brief_has_no_section_11() -> None:

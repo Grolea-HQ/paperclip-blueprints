@@ -254,6 +254,34 @@ run cannot expose, because the thing that varies is held constant *by the test e
 itself*. Reasoning about the code will not find them; the code looks correct, and in that process
 it is.
 
+## A third class: a fixture that agrees with the implementation
+
+The two sections above are about checks that never fire, and about state a single-process
+suite holds constant. This one is about a test that runs, fires, and measures nothing.
+
+The canon-coverage check (ADR-037) shipped with nineteen passing tests and a clean mutation
+audit. Run against a real brief it produced **twelve false positives and zero true
+positives**. The rule inferred canon from the shape of words — hyphenated compounds,
+Title-Case runs — and the calibration fixture had been written, by the same hand, to
+contain exactly those shapes. Real briefs mark canon with markdown emphasis instead, so the
+rule found none of it.
+
+**Why no existing safeguard caught it.** The check fired, so a positive-detection test
+passed. It was deterministic, so the hash-seed subprocess passed. Suppressing extraction
+failed thirteen tests — but all thirteen were confirming the same premise back to itself.
+Mutation testing proves a test *depends* on the code; it cannot prove the test describes
+**reality**, because the fixture and the implementation were two expressions of one guess.
+
+**The rule that follows.** *A calibration fixture must derive from an artifact the
+implementer did not author.* A real sample, a sanitised structural skeleton produced by
+inspecting one, an exported document — anything whose shape was fixed before the rule
+existed. When the fixture is authored alongside the rule, green tells you only that you
+were internally consistent.
+
+The corollary is a division of labour, not extra ceremony: whoever owns the real artifact
+supplies its shape, and calibration against the real thing happens on their side. The repo
+holds shapes it was given; it does not invent them.
+
 **The countermeasure is environmental, not logical.** Vary the thing the suite holds fixed:
 assert determinism from a `subprocess` in a fresh interpreter (as `tests/test_routines.py` does —
 the subprocess is the point of the test, not incidental setup), across differing hash seeds, and

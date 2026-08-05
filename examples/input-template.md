@@ -245,26 +245,28 @@ The rules your agents should actually follow — the procedures, rubrics, standa
 - Identity, positioning, what you are and are not → **sections 4–6**
 - Hard limits the whole company operates under → **section 6 constraints**
 
-**Shape it explicitly.** The generators encode structure far more reliably than prose. Name your dimensions and label your classes rather than describing them in a sentence:
+**Mark it up. This is the expected form, not a style preference.**
+
+Write each rule as a **bold-headed block**: a short bold name, then the prose. Where a rule has named parts, **enumerate them and italicise each name**:
 
 ```
-Score each <thing> on four dimensions:
-  Dimension A — <what it measures>, scored 1-5
-  Dimension B — <what it measures>, scored 1-5
-  Dimension C — <what it measures>, scored 1-5
-  Dimension D — <what it measures>, scored 1-5
-Promote only at a combined score of <N> or above.
+**<Short name for the rule.>** <The prose that states it — thresholds, bands,
+ordering, whatever the rule actually says.>
 
-Evidence classes and how long they stay valid:
-  | Class    | Valid for |
-  |----------|-----------|
-  | Class 1  | <N> days  |
-  | Class 2  | <N> days  |
-  | Class 3  | <N> days  |
-Never act on a Class 3 signal alone.
+**<Short name for a rule with named parts.>** <Lead-in sentence.>
+(1) *<Name of the first part>* — <what it means>.
+(2) *<Name of the second part>* — <what it means>.
+(3) *<Name of the third part>* — <what it means>.
 ```
 
-Those placeholders are a shape, not a recommendation — the dimensions, bands and rules must be yours. A generator given a named list produces named steps; a generator given "we score leads carefully" produces a sentence that says nothing.
+Those placeholders are a shape, not a recommendation — the rules, parts and values must be yours.
+
+**Why the markup matters.** After generation the tool checks that each rule and each named part actually reached the bundle, and it finds them **by that markup**: bold block heads and enumerated italic names. Prose canon that isn't marked this way still gets threaded to the generators, but it **cannot be checked**, so a rule that silently fails to land will not be reported. If nothing in this section is marked up, the run says so rather than staying quiet — but a mix of marked and unmarked rules will only ever report on the marked ones.
+
+Two details that matter to the check:
+
+- **Sentence case for part names** — `*Structural comparability*`, not `*Structural Comparability*`. Either reads fine; only one is consistent, and consistency is what makes a missing part recognisable.
+- **Italic is only a signal when enumerated.** `*Some Registry*` mid-paragraph is read as a proper noun and ignored, which is what you want — it means you can italicise source names and ordinary emphasis freely without polluting the check.
 
 **Other context:**
 

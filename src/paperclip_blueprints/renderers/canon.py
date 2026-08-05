@@ -9,6 +9,25 @@ It answers exactly one question, per term: **does this appear anywhere in the re
 bundle?** It asserts *presence*, never *fidelity* — whether a rubric survived as usable
 procedure is human judgement, and nothing here may appear to make it.
 
+Extraction keys on **markdown structure, not the shape of words.**
+------------------------------------------------------------------
+The first version of this module inferred canon from typography — hyphenated compounds,
+Title-Case runs. Run against a real brief it produced twelve false positives and zero true
+positives, because the operator had *already marked* what mattered, using markdown
+emphasis, and the rule was busy guessing instead of reading the marks. Two signals carry
+canon:
+
+1. **Bold-headed blocks.** A line beginning ``**Some heading.**`` opens a canon item; the
+   heading names it.
+2. **Enumerated italic inside such a block.** ``(1) *Structural comparability*`` names a
+   part of that item.
+
+The enumeration marker is the discriminator, not the italic. Italic alone is used at least
+three ways in a real brief — enumerated rubric parts (canon), proper nouns and source names
+(noise), and ordinary mid-sentence emphasis (noise) — so extracting every italic span
+reproduces a milder version of the original defect. Canon terms are **sentence case**; a
+Title-Case rule finds none of them.
+
 Three properties are load-bearing and must survive any future edit:
 
 **Term-oriented, not artifact-oriented.** The question is "does this term appear in any
@@ -38,16 +57,19 @@ from dataclasses import dataclass
 # --- calibration constants --------------------------------------------------
 #
 # Final calibration happens OUTSIDE this repository: the operator runs extraction against
-# their real section-11 text and reports whether it caught the right terms and left the
-# prose alone (ADR-037). Moving any of these three is a single-constant change — record
-# the reasoning beside it rather than reshaping the rule.
+# their real section-11 text via ``blueprints check-canon`` and reports whether it caught
+# the right terms and left the prose alone (ADR-037). Moving any of these is a
+# single-constant change — record the reasoning beside it rather than reshaping the rule.
 
-MIN_TERM_CHARS = 8
-"""Shortest accepted term. Guards against short capitalised fragments reading as canon."""
+MIN_TERM_CHARS = 6
+"""Shortest accepted term. Near-vestigial now that extraction keys on explicit operator
+marking rather than word shape; it guards only against stray one-word emphasis."""
 
-MAX_TERMS = 40
-"""Cap on reported terms. A report longer than this stops being read, which makes the
-check dead while still appearing alive."""
+MAX_TERMS = 60
+"""Cap on reported terms. A report longer than this stops being read, which makes the check
+dead while still appearing alive. Hitting the cap is itself warned about — silently
+truncating the term list would be the same silent-loss failure this module exists to
+report."""
 
 COMMON_WORDS = frozenset(
     """
@@ -69,10 +91,18 @@ class CanonTerm:
     """A distinctive fragment of the operating canon, used as the unit of coverage."""
 
     text: str
-    """As written in the canon. This is what a warning names."""
+    """As written in the canon, markdown markers stripped. This is what a warning names."""
 
     normalised: str
     """Casefolded, punctuation-flattened matching key. Never surfaced to the operator."""
+
+    block: str | None = None
+    """The bold-headed block this term was enumerated under, if any.
+
+    Carried so a warning can say *which* item a missing part belongs to — "Structural
+    comparability" alone is harder to place than "Structural comparability, from 'The
+    berth-scoring rubric'". ``None`` for the block headings themselves.
+    """
 
 
 @dataclass(frozen=True)
@@ -102,18 +132,47 @@ class CanonCoverage:
 
 # --- extraction -------------------------------------------------------------
 
-_HYPHENATED = re.compile(r"\b[A-Za-z]+(?:-[A-Za-z]+)+\b")
-_QUOTED = re.compile(r"[\"'“‘]([A-Za-z][^\"'”’\n]{2,60})[\"'”’]")
-_TITLE_RUN = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b")
-_SENTENCE_START = re.compile(r"(?:^|[.!?:]\s+|\n\s*)$")
+# A bold run at the start of a line opens a canon block. Anchoring to the line start is
+# what keeps mid-sentence bold out of the term set.
+_BLOCK_HEAD = re.compile(r"^[ \t]*\*\*(?P<head>[^\n]+?)\*\*", re.MULTILINE)
 
-_PUNCT = re.compile(r"[-_/]+")
+# Italic IMMEDIATELY preceded by an enumeration marker — "(1)", "1." or "1)". The marker is
+# the discriminator: unmarked italic is a proper noun or ordinary emphasis, not canon.
+_ENUM_ITALIC = re.compile(r"(?:\(\d{1,2}\)|\b\d{1,2}[.)])\s*\*(?P<term>[^*\n]+?)\*")
+
+# A heading names its item in the leading phrase; a dash or comma introduces gloss.
+_HEAD_GLOSS = re.compile(r"\s+[—–-]\s+|,\s")
+
+_MARKDOWN_NOISE = re.compile(r"[*_`]+")
+_PUNCT = re.compile(r"[-–—_/]+")
 _SPACE = re.compile(r"\s+")
+_APOSTROPHES = str.maketrans({"’": "'", "‘": "'", "ʼ": "'"})
+
+
+def _clean(text: str) -> str:
+    """Strip markdown markers and normalise apostrophes to their straight form.
+
+    Curly apostrophes are normalised rather than treated as separators: splitting on them
+    is what produced orphaned ``s brief leaves open`` fragments under the shape-based rule.
+    """
+    return _SPACE.sub(" ", _MARKDOWN_NOISE.sub("", text).translate(_APOSTROPHES)).strip()
 
 
 def normalise(text: str) -> str:
-    """Casefold and flatten punctuation so ``Delivery-Date`` matches ``delivery date``."""
-    return _SPACE.sub(" ", _PUNCT.sub(" ", text)).strip().casefold()
+    """Casefold and flatten punctuation so ``berth-scoring`` matches ``berth scoring``."""
+    return _SPACE.sub(" ", _PUNCT.sub(" ", _clean(text))).strip().casefold()
+
+
+def _heading_name(head: str) -> str:
+    """Reduce a block heading to the item's name, dropping any trailing gloss.
+
+    ``The Tier C honesty note — this is load-bearing`` names an item called *The Tier C
+    honesty note*; the clause after the dash is commentary. Keeping the whole sentence
+    would make a poor probe, since a full sentence never appears verbatim in a generated
+    artifact — and a term that can never match would report missing on every run.
+    """
+    name = _HEAD_GLOSS.split(_clean(head), 1)[0]
+    return name.rstrip(" .:;,")
 
 
 def _is_prose(candidate: str) -> bool:
@@ -127,12 +186,7 @@ def extract_canon_terms(
     exclude_texts: Iterable[str] = (),
     max_terms: int = MAX_TERMS,
 ) -> list[CanonTerm]:
-    """Derive the distinctive terms of a section-11 canon, precision first.
-
-    Precision over recall is deliberate, matching the rule already applied to the
-    routine-dependency check: fewer, more distinctive terms, right when they fire. An
-    over-eager extractor produces a wall of warnings the operator learns to skip, which is
-    operationally the same as no check at all.
+    """Derive the canon terms of a section-11 text from its markdown structure.
 
     Args:
         canon: The brief's section-11 text. ``None`` or blank yields no terms.
@@ -143,8 +197,8 @@ def extract_canon_terms(
         max_terms: Override for :data:`MAX_TERMS`.
 
     Returns:
-        Terms ordered by **first appearance in the canon** — never by set iteration,
-        which would be hash-seed dependent, and never alphabetically, since first-appearance
+        Terms ordered by **first appearance in the canon** — never by set iteration, which
+        would be hash-seed dependent, and never alphabetically, since first-appearance
         order lets the operator reconcile the report against their own section 11 top to
         bottom.
     """
@@ -153,35 +207,62 @@ def extract_canon_terms(
 
     excluded = {normalise(t) for t in exclude_texts}
 
-    # (start offset, surface form) so ordering follows the source text.
-    candidates: list[tuple[int, str]] = []
-    for match in _HYPHENATED.finditer(canon):
-        if any(part[:1].isupper() for part in match.group(0).split("-")):
-            candidates.append((match.start(), match.group(0)))
-    for match in _QUOTED.finditer(canon):
-        candidates.append((match.start(1), match.group(1)))
-    for match in _TITLE_RUN.finditer(canon):
-        # Skip sentence-initial runs: "Never advance an enquiry" is prose that happens to
-        # start with a capital, not a named thing.
-        if _SENTENCE_START.search(canon[: match.start()]):
-            continue
-        candidates.append((match.start(), match.group(0)))
+    heads = list(_BLOCK_HEAD.finditer(canon))
+    # (start offset, surface form, owning block) so ordering follows the source text.
+    candidates: list[tuple[int, str, str | None]] = []
 
-    candidates.sort(key=lambda pair: pair[0])
+    for index, head in enumerate(heads):
+        name = _heading_name(head.group("head"))
+        if name:
+            candidates.append((head.start(), name, None))
+        body_end = heads[index + 1].start() if index + 1 < len(heads) else len(canon)
+        body = canon[head.end() : body_end]
+        for item in _ENUM_ITALIC.finditer(body):
+            candidates.append((head.end() + item.start(), _clean(item.group("term")), name))
+
+    candidates.sort(key=lambda c: c[0])
 
     terms: list[CanonTerm] = []
     seen: set[str] = set()  # membership only — never iterated for output
-    for _, surface in candidates:
+    for _, surface, block in candidates:
         key = normalise(surface)
         if key in seen or len(surface) < MIN_TERM_CHARS or _is_prose(surface):
             continue
         if any(_contains(text, key) for text in excluded):
             continue
         seen.add(key)
-        terms.append(CanonTerm(text=surface, normalised=key))
+        terms.append(CanonTerm(text=surface, normalised=key, block=block))
         if len(terms) >= max_terms:
             break
     return terms
+
+
+def extraction_warnings(
+    canon: str | None, terms: Iterable[CanonTerm], *, max_terms: int = MAX_TERMS
+) -> list[str]:
+    """Report failures of extraction itself, as distinct from failures of coverage.
+
+    Two cases, both of which would otherwise be silent — and a silent zero-result is this
+    feature's own defect wearing a new hat:
+
+    **Canon present, nothing extracted.** Now that extraction keys on markdown emphasis,
+    that convention is load-bearing: a brief stating canon as unmarked prose yields no
+    terms, and a zero-term run that printed nothing would read as "all clear".
+
+    **The cap truncated the list.** Dropping terms silently to stay under a display limit
+    loses exactly what the check exists to report.
+    """
+    lines: list[str] = []
+    collected = list(terms)
+    if canon and canon.strip() and not collected:
+        lines.append(
+            "the brief's section 11 has content but no canon items were found — canon is "
+            "recognised from markdown emphasis (bold-headed blocks, and enumerated italic "
+            "parts within them), so unmarked prose cannot be checked for coverage"
+        )
+    if len(collected) >= max_terms:
+        lines.append(f"canon term list hit its cap of {max_terms}; further terms were not checked")
+    return lines
 
 
 # --- coverage ---------------------------------------------------------------
@@ -220,31 +301,38 @@ def canon_coverage(terms: Iterable[CanonTerm], files: Mapping[str, str]) -> list
     return results
 
 
+def _describe(term: CanonTerm) -> str:
+    """Name a term, with its owning block when it has one."""
+    if term.block:
+        return f"{term.text!r} (from {term.block!r})"
+    return repr(term.text)
+
+
 def canon_warnings(coverage: Iterable[CanonCoverage]) -> list[str]:
     """Render the advisory lines for a coverage result.
 
-    Two kinds only — missing and thin. A fully-carried term produces no line: a check
-    that prints a line per term on a healthy bundle floods its own sink, and the data is
+    Two kinds only — missing and thin. A fully-carried term produces no line: a check that
+    prints a line per term on a healthy bundle floods its own sink, and the data is
     available in the :class:`CanonCoverage` results for anyone who wants it.
 
-    Every line names the specific term. An aggregate verdict ("canon coverage
-    incomplete") is not actionable without opening the bundle, and it makes a loose
-    extractor indistinguishable from a real finding — whereas a named term shows a false
-    positive to be a false positive at a glance.
+    Every line names the specific term. An aggregate verdict ("canon coverage incomplete")
+    is not actionable without opening the bundle, and it makes a loose extractor
+    indistinguishable from a real finding — whereas a named term shows a false positive to
+    be a false positive at a glance.
 
-    Lines state reach and nothing else. They must never imply a judgement about whether
-    the canon was encoded usefully; that is the operator's call.
+    Lines state reach and nothing else. They must never imply a judgement about whether the
+    canon was encoded usefully; that is the operator's call.
     """
     lines: list[str] = []
     for item in coverage:
         if item.is_missing:
             lines.append(
-                f"operating canon term {item.term.text!r} appears in no generated file — "
-                "it is stated in the brief's section 11 and no artifact carries it"
+                f"operating canon term {_describe(item.term)} appears in no generated file "
+                "— it is stated in the brief's section 11 and no artifact carries it"
             )
         elif item.is_thin:
             lines.append(
-                f"operating canon term {item.term.text!r} appears in only one file "
+                f"operating canon term {_describe(item.term)} appears in only one file "
                 f"({item.carriers[0]})"
             )
     return lines

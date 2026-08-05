@@ -5,6 +5,15 @@ operating canon appear anywhere in the rendered bundle? It asserts *presence*, n
 fidelity — whether a rubric survived as usable procedure is human judgement, and the
 check must not appear to make it.
 
+**On the fixture.** ``tests/fixtures/canon_section11.md`` is derived from a structural
+skeleton of a real section 11 supplied by the operator — not authored here. That
+provenance is the point. The previous fixture was written from the implementer's guess at
+the shape (hyphenated Title-Case compounds); it matched the rule perfectly, nineteen tests
+passed, and the real run found nothing at all, because the fixture and the rule were two
+expressions of a single wrong assumption. A calibration fixture has to come from an
+artifact the implementer did not author, or green means only that you were consistent with
+yourself. See ADR-036.
+
 See ``specs/016-brief-canon-threading/contracts/canon-coverage.md``.
 """
 
@@ -21,6 +30,7 @@ from paperclip_blueprints.renderers.canon import (
     canon_coverage,
     canon_warnings,
     extract_canon_terms,
+    extraction_warnings,
 )
 
 _FIXTURE = pathlib.Path(__file__).resolve().parent / "fixtures" / "canon_section11.md"
@@ -30,37 +40,105 @@ def _canon() -> str:
     return _FIXTURE.read_text(encoding="utf-8")
 
 
-# The structural items the rule exists to catch: five named scoring dimensions and three
-# evidence-class labels. Sanitised vocabulary — the shapes are what carry the calibration.
-_EXPECTED = {
-    "Persuadability-Index",
-    "Reach-Confidence",
-    "Timing-Fit",
-    "Margin-Headroom",
-    "Switch-Cost",
-    "Observed-Signal",
-    "Inferred-Signal",
-    "Reported-Signal",
+def _texts() -> set[str]:
+    return {t.text for t in extract_canon_terms(_canon())}
+
+
+# Bold-headed blocks name canon items. Every one is a term; the heading is reduced to the
+# item's name, dropping gloss after a dash or comma.
+_BLOCK_HEADS = {
+    "The engagement",
+    "Coverage domains",
+    "A definitional question the client's brief leaves open",
+    "Source discipline",
+    "The Tier C honesty note",
+    "The berth-scoring rubric",
+    "Evidence tiers and the active-list entry rule",
+    "The commissioning-date rule",
+    "The provenance citation format",
+    "The daily recap does two jobs",
+    "Tier discipline as structure",
+    "Backtest scope",
 }
 
+# Enumerated italic inside a block names a part of that item. Sentence case, not Title Case.
+_ENUMERATED = {
+    "Freshness against class decay",
+    "Structural comparability",
+    "Scale transferability",
+    "Evidential independence",
+    "Outcome verification",
+}
 
-# --- extraction: calibrated against the failing case's shape (C-C10) ---------
+_EXPECTED = _BLOCK_HEADS | _ENUMERATED
 
 
-def test_extraction_recovers_the_dimension_names_and_class_labels() -> None:
-    """C-C10 positive side: the structural items must survive extraction."""
-    found = {t.text for t in extract_canon_terms(_canon())}
-    assert _EXPECTED <= found, f"missed: {sorted(_EXPECTED - found)}"
+# --- extraction: must catch (C-C10 positive) --------------------------------
 
 
-def test_extraction_rejects_ordinary_prose_from_the_same_source() -> None:
-    """C-C10 negative side — the half that makes this a calibration, not a keyword list.
+def test_extraction_recovers_every_bold_headed_block() -> None:
+    assert _BLOCK_HEADS <= _texts(), f"missed block headings: {sorted(_BLOCK_HEADS - _texts())}"
 
-    The negatives are drawn from the SAME fixture as the positives, so the rule is
-    discriminating within one document rather than between two hand-picked ones.
+
+def test_extraction_recovers_enumerated_italic_rubric_parts() -> None:
+    assert _ENUMERATED <= _texts(), f"missed rubric parts: {sorted(_ENUMERATED - _texts())}"
+
+
+def test_extraction_records_which_block_a_rubric_part_belongs_to() -> None:
+    """Block context is what makes a missing part placeable in the operator's brief."""
+    by_text = {t.text: t for t in extract_canon_terms(_canon())}
+    assert by_text["Structural comparability"].block == "The berth-scoring rubric"
+    assert by_text["The berth-scoring rubric"].block is None
+
+
+def test_canon_terms_are_sentence_case_not_title_case() -> None:
+    """A Title-Case heuristic finds none of these — which is why the first rule found none."""
+    for text in _ENUMERATED:
+        rest = text.split()[1:]
+        assert all(w[:1].islower() or not w[:1].isalpha() for w in rest), (
+            f"{text!r} is Title Case; the fixture must mirror the real sentence-case shape"
+        )
+
+
+# --- extraction: must NOT catch (C-C10 negative) ----------------------------
+
+
+def test_extraction_is_exactly_the_expected_set() -> None:
+    """The half that makes this a calibration rather than a keyword list.
+
+    Positives and negatives are drawn from the SAME fixture, so the rule has to
+    discriminate within one document rather than between two hand-picked ones.
     """
-    found = {t.text for t in extract_canon_terms(_canon())}
-    assert found == _EXPECTED, f"unexpected extras: {sorted(found - _EXPECTED)}"
+    assert _texts() == _EXPECTED, f"unexpected extras: {sorted(_texts() - _EXPECTED)}"
+
+
+def test_italic_proper_nouns_are_not_canon() -> None:
+    """Italic alone is not the signal — the enumeration marker is."""
+    for noise in ("Port Authority Register", "Coastal Statistics Office", "National Freight Board"):
+        assert noise not in _texts()
+
+
+def test_bare_italic_emphasis_on_an_ordinary_word_is_not_canon() -> None:
+    assert "scored" not in _texts()
+
+
+def test_quoted_example_output_is_not_canon() -> None:
+    """A quoted illustration of agent output is an example, not a procedure."""
+    for term in _texts():
+        assert "two channel signals" not in term
+        assert "observed handling cost" not in term
+
+
+def test_a_curly_apostrophe_does_not_split_a_term() -> None:
+    """The shape-based rule produced orphaned ``s brief leaves open`` fragments here."""
+    assert "’" in _canon(), "fixture must carry a real curly apostrophe"
+    assert not any(t.text.startswith("s ") for t in extract_canon_terms(_canon()))
+    assert "A definitional question the client's brief leaves open" in _texts()
+
+
+def test_no_markdown_markers_leak_into_a_term() -> None:
+    for term in extract_canon_terms(_canon()):
+        assert "*" not in term.text and "_" not in term.text and "`" not in term.text
 
 
 def test_no_term_is_made_only_of_common_words() -> None:
@@ -69,11 +147,7 @@ def test_no_term_is_made_only_of_common_words() -> None:
         assert not all(w in COMMON_WORDS for w in words), f"{term.text!r} is ordinary English"
 
 
-def test_extraction_is_capped_and_respects_the_minimum_length() -> None:
-    terms = extract_canon_terms(_canon())
-    assert len(terms) <= MAX_TERMS
-    for term in terms:
-        assert len(term.text) >= MIN_TERM_CHARS
+# --- thresholds and empties -------------------------------------------------
 
 
 def test_thresholds_are_named_constants_and_overridable() -> None:
@@ -81,13 +155,45 @@ def test_thresholds_are_named_constants_and_overridable() -> None:
     assert isinstance(MIN_TERM_CHARS, int)
     assert isinstance(MAX_TERMS, int)
     assert isinstance(COMMON_WORDS, frozenset)
-    few = extract_canon_terms(_canon(), max_terms=3)
-    assert len(few) == 3
+    assert len(extract_canon_terms(_canon(), max_terms=3)) == 3
 
 
 def test_extraction_is_empty_for_absent_or_blank_canon() -> None:
     assert extract_canon_terms("") == []
     assert extract_canon_terms("   \n  ") == []
+
+
+# --- extraction-level warnings (the zero-result guard) ----------------------
+
+
+def test_unmarked_prose_canon_warns_rather_than_reporting_nothing() -> None:
+    """Once extraction keys on emphasis, that convention is load-bearing.
+
+    A brief stating canon as unmarked prose yields no terms; a silent zero-term run would
+    read as "all clear" — this feature's own defect wearing a new hat.
+    """
+    prose = "We score every enquiry carefully and we prefer conservative readings.\n"
+    terms = extract_canon_terms(prose)
+    assert terms == []
+    warnings = extraction_warnings(prose, terms)
+    assert warnings and "no canon items were found" in warnings[0]
+    assert "markdown emphasis" in warnings[0]
+
+
+def test_a_marked_up_canon_produces_no_extraction_warning() -> None:
+    assert extraction_warnings(_canon(), extract_canon_terms(_canon())) == []
+
+
+def test_hitting_the_term_cap_is_reported_rather_than_truncating_silently() -> None:
+    """Dropping terms to fit a display limit is the same silent loss the check reports."""
+    terms = extract_canon_terms(_canon(), max_terms=3)
+    warnings = extraction_warnings(_canon(), terms, max_terms=3)
+    assert any("hit its cap" in w for w in warnings)
+
+
+def test_no_extraction_warning_for_an_empty_section_11() -> None:
+    assert extraction_warnings("", []) == []
+    assert extraction_warnings(None, []) == []
 
 
 # --- canon-unique scoping (C-C11) -------------------------------------------
@@ -97,34 +203,39 @@ def test_a_phrase_carried_by_another_brief_field_is_not_a_canon_term() -> None:
     """C-C11: the main precision lever.
 
     A phrase that also appears elsewhere in the brief reaches the generators by an
-    existing path, so its coverage says nothing about THIS defect. Reporting it would be
-    pure noise.
+    existing path, so its coverage says nothing about THIS defect and would be noise.
     """
-    found = {t.text for t in extract_canon_terms(_canon(), exclude_texts=["We track Timing-Fit."])}
-    assert "Timing-Fit" not in found
-    assert "Switch-Cost" in found, "excluding one phrase must not drop the others"
+    found = {
+        t.text
+        for t in extract_canon_terms(_canon(), exclude_texts=["We track Structural comparability."])
+    }
+    assert "Structural comparability" not in found
+    assert "Outcome verification" in found, "excluding one phrase must not drop the others"
 
 
 # --- matching (FR-015) ------------------------------------------------------
 
 
+def _terms_for(*texts: str) -> list:
+    return [t for t in extract_canon_terms(_canon()) if t.text in texts]
+
+
 def test_matching_tolerates_case_and_hyphen_variation() -> None:
-    terms = [t for t in extract_canon_terms(_canon()) if t.text == "Timing-Fit"]
-    cov = canon_coverage(terms, {"a.md": "we score timing fit for every enquiry"})
+    cov = canon_coverage(
+        _terms_for("The commissioning-date rule"),
+        {"a.md": "we apply the COMMISSIONING DATE rule to every entry"},
+    )
     assert cov[0].carriers == ["a.md"]
 
 
 def test_matching_does_not_count_an_accidental_substring() -> None:
-    terms = [t for t in extract_canon_terms(_canon()) if t.text == "Switch-Cost"]
-    cov = canon_coverage(terms, {"a.md": "the switch-costing model is unrelated"})
+    cov = canon_coverage(
+        _terms_for("Outcome verification"), {"a.md": "outcome verifications are unrelated"}
+    )
     assert cov[0].carriers == []
 
 
 # --- coverage + warnings (C-C2 .. C-C7) -------------------------------------
-
-
-def _terms_for(*texts: str) -> list:
-    return [t for t in extract_canon_terms(_canon()) if t.text in texts]
 
 
 def test_missing_canon_is_reported_by_name() -> None:
@@ -134,57 +245,63 @@ def test_missing_canon_is_reported_by_name() -> None:
     dead one. This asserts the check FIRES, and that the warning names the specific term
     rather than delivering an aggregate verdict the operator would learn to skip.
     """
-    terms = _terms_for("Margin-Headroom")
-    warnings = canon_warnings(canon_coverage(terms, {"a.md": "nothing relevant here"}))
+    warnings = canon_warnings(
+        canon_coverage(_terms_for("Outcome verification"), {"a.md": "nothing relevant"})
+    )
     assert warnings, "the coverage check did not fire on absent canon"
-    assert any("Margin-Headroom" in w for w in warnings)
+    assert any("Outcome verification" in w for w in warnings)
     assert not any("coverage incomplete" in w.lower() for w in warnings)
+
+
+def test_a_missing_rubric_part_names_its_block() -> None:
+    warnings = canon_warnings(
+        canon_coverage(_terms_for("Structural comparability"), {"a.md": "nothing"})
+    )
+    assert "The berth-scoring rubric" in warnings[0]
 
 
 def test_fully_covered_canon_is_silent() -> None:
     """C-C4: quiet on a clean bundle, so the signal stays worth reading."""
-    terms = _terms_for("Margin-Headroom")
-    files = {"a.md": "we compute Margin-Headroom", "b.md": "Margin-Headroom again"}
-    assert canon_warnings(canon_coverage(terms, files)) == []
+    files = {"a.md": "Outcome verification here", "b.md": "Outcome verification again"}
+    assert canon_warnings(canon_coverage(_terms_for("Outcome verification"), files)) == []
 
 
 def test_a_single_carrier_is_reported_as_thin_and_names_the_file() -> None:
     """C-C5: the weak-result signal, with the location the operator needs to judge it."""
-    terms = _terms_for("Margin-Headroom")
-    warnings = canon_warnings(canon_coverage(terms, {"OPERATIONS.md": "Margin-Headroom"}))
+    warnings = canon_warnings(
+        canon_coverage(_terms_for("Backtest scope"), {"OPERATIONS.md": "Backtest scope"})
+    )
     assert len(warnings) == 1
-    assert "Margin-Headroom" in warnings[0]
-    assert "OPERATIONS.md" in warnings[0]
+    assert "Backtest scope" in warnings[0] and "OPERATIONS.md" in warnings[0]
 
 
 def test_every_rendered_file_is_scanned_without_privileging_any_artifact() -> None:
-    """C-C6: no artifact kind is excluded or weighted.
+    """C-C6: a term carried only by an import-dropped artifact still counts as covered.
 
-    A term carried only by an artifact that does not survive import still counts as
-    covered — narrowing the scan would bake current platform behaviour into the check.
-    The thin warning is what surfaces it instead.
+    Narrowing the scan would bake current platform behaviour into the check; the thin
+    warning is what surfaces the case instead.
     """
-    terms = _terms_for("Switch-Cost")
-    cov = canon_coverage(terms, {"OPERATIONS.md": "Switch-Cost matters"})
+    cov = canon_coverage(_terms_for("Backtest scope"), {"OPERATIONS.md": "Backtest scope"})
     assert cov[0].carriers == ["OPERATIONS.md"]
 
 
 def test_carriers_are_sorted_and_complete() -> None:
-    terms = _terms_for("Switch-Cost")
-    files = {"z.md": "Switch-Cost", "a.md": "Switch-Cost", "m.md": "irrelevant"}
-    assert canon_coverage(terms, files)[0].carriers == ["a.md", "z.md"]
+    files = {"z.md": "Backtest scope", "a.md": "Backtest scope", "m.md": "irrelevant"}
+    assert canon_coverage(_terms_for("Backtest scope"), files)[0].carriers == ["a.md", "z.md"]
 
 
 def test_warnings_make_no_claim_about_quality() -> None:
     """C-C7 / FR-012: presence, never fidelity."""
     banned = ("correct", "proper", "faithful", "accurate", "good", "well", "quality")
-    terms = _terms_for("Margin-Headroom", "Switch-Cost")
-    warnings = canon_warnings(canon_coverage(terms, {"a.md": "Switch-Cost"}))
+    warnings = canon_warnings(
+        canon_coverage(
+            _terms_for("Outcome verification", "Backtest scope"), {"a.md": "Backtest scope"}
+        )
+    )
     assert warnings
     for w in warnings:
-        lowered = w.lower()
         for word in banned:
-            assert word not in lowered, f"warning implies a quality judgement: {w!r}"
+            assert word not in w.lower(), f"warning implies a quality judgement: {w!r}"
 
 
 # --- determinism (C-C9) -----------------------------------------------------
@@ -204,7 +321,7 @@ def test_output_is_identical_across_differing_hash_seeds() -> None:
         "canon_coverage,canon_warnings;"
         f"c=pathlib.Path({str(_FIXTURE)!r}).read_text(encoding='utf-8');"
         "t=extract_canon_terms(c);"
-        "f={'b.md':'Switch-Cost','a.md':'Switch-Cost and Timing-Fit'};"
+        "f={'b.md':'Backtest scope','a.md':'Backtest scope and Outcome verification'};"
         "print(json.dumps([x.text for x in t]+canon_warnings(canon_coverage(t,f))))"
     )
     outs = []
@@ -228,20 +345,18 @@ _SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "paperclip_bluep
 def test_the_check_never_enters_the_raising_validation_gate() -> None:
     """C-C1: advisory only. validate_bundle raises; this must never be part of it."""
     for path in (_SRC / "validators").rglob("*.py"):
-        text = path.read_text(encoding="utf-8")
-        assert "canon" not in text.lower(), f"{path.name} references the canon check"
+        assert "canon" not in path.read_text(encoding="utf-8").lower()
 
 
 def test_the_check_carries_no_exemption_list() -> None:
     """C-C8: term-oriented, not artifact-oriented.
 
     A referenced platform-provided capability contributes no file to the rendered map and
-    is therefore outside the scan STRUCTURALLY — not by an exception entry that would
-    have to be maintained. That is the difference between a rule and a rule plus
-    exceptions (ADR-019's standing constraint).
+    is therefore outside the scan STRUCTURALLY — not by an exception entry that would have
+    to be maintained (ADR-019's standing constraint).
     """
     text = (_SRC / "renderers" / "canon.py").read_text(encoding="utf-8")
-    assert "BUILTIN" not in text, "the check must not reason over the built-in capability set"
+    assert "BUILTIN" not in text
     assert "builtins" not in text.lower().replace("__builtins__", "")
 
 
@@ -249,7 +364,7 @@ def test_no_builtin_hash_is_used() -> None:
     """ADR-036 variant 1: builtin ``hash()`` is per-process salted.
 
     Checked against the parsed AST, not the source text — a docstring that *names* the
-    hazard is documentation, not a call site, and must not trip the assertion.
+    hazard is documentation, not a call site.
     """
     import ast
 

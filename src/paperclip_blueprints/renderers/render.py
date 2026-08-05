@@ -24,7 +24,12 @@ from ..models.skill import SkillDefinition
 from ..models.task import TaskDefinition
 from .adapter import assign_adapters, parse_model_preferences
 from .budget import allocate_budgets
-from .canon import canon_coverage, canon_warnings, extract_canon_terms
+from .canon import (
+    canon_coverage,
+    canon_warnings,
+    extract_canon_terms,
+    extraction_warnings,
+)
 from .frontmatter import dump_frontmatter
 from .routines import RoutineSpec, derive_routines, wakes_per_active_month
 from .run_policy import (
@@ -548,6 +553,11 @@ def render_files(
             *brief.constraints,
         ]
         terms = extract_canon_terms(brief.free_text, exclude_texts=exclude_texts)
+        # Extraction failures first: canon present but nothing recognised means the
+        # coverage result below is empty for a reason that has nothing to do with the
+        # bundle, and a silent zero-term run would read as "all clear".
+        for message in extraction_warnings(brief.free_text, terms):
+            warn(message)
         for message in canon_warnings(canon_coverage(terms, files)):
             warn(message)
 

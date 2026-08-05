@@ -100,6 +100,29 @@ expiry conditions, and a future reader who flattens them will draw the wrong con
 `renderers/canon.py` derives distinctive terms from the canon and reports, through the
 existing `warn` sink at the end of `render_files`, any term that reaches zero files.
 
+**Extraction keys on markdown structure, not the shape of words.** Canon items are
+**bold-headed blocks** (`**The provenance citation format.**`); named parts are **enumerated
+italic** inside such a block (`(1) *Structural comparability*`). The enumeration marker is
+the discriminator, not the italic: in a real brief italic serves at least three purposes —
+enumerated rubric parts (canon), proper nouns and source names (noise), and ordinary
+mid-sentence emphasis (noise) — so extracting every italic span reproduces a milder form of
+the original defect. Block headings are terms in their own right, reduced to the leading
+phrase so that a heading carrying a trailing gloss still yields a usable probe.
+
+*This replaced a first rule that inferred canon from typography — hyphenated compounds and
+Title-Case runs. Against a real brief it returned twelve false positives and zero true
+positives. The operator had already marked what mattered; the rule was guessing instead of
+reading the marks. Canon terms are sentence case, and there were no tables at all. The
+lesson is recorded as a hazard class in ADR-036: the calibration fixture had been written
+by the same hand as the rule, so nineteen tests and a clean mutation audit confirmed only
+that the guess was internally consistent.*
+
+**A zero-term run announces itself.** Once extraction keys on emphasis, that convention is
+load-bearing: a brief stating canon as unmarked prose yields no terms, and printing nothing
+would read as "all clear" — this ADR's own defect one layer up. Canon present with nothing
+recognised is therefore a warning in its own right, as is hitting the term cap, since
+silently truncating the list loses exactly what the check exists to report.
+
 **Term-oriented, not artifact-oriented.** The question is "does this term appear in any
 rendered file?", never "does this artifact contain canon?". This satisfies ADR-019's
 standing constraint **structurally**: a referenced commodity skill contributes no `SKILL.md`
@@ -136,11 +159,18 @@ usable procedure is human judgement and the check must not appear to make it.
 ### 5. Calibration splits: the repo holds shapes, the operator holds reality
 
 The three extraction thresholds are **named module constants**. The committed fixture is a
-*structurally equivalent* stand-in — a multi-dimension rubric with named dimensions, a table
-with class labels, and ordinary narrative prose alongside, in invented vocabulary — so the
-suite exercises the shapes the rule must catch *and* those it must reject. Same-source
-negatives are what make it a calibration rather than a keyword list, and they survive
-sanitisation because the discrimination lives in the shape, not the vocabulary.
+*structurally equivalent* stand-in, carrying the shapes the rule must catch **and** those it
+must reject — bold-headed blocks, enumerated italic parts, italic proper nouns, bare italic
+emphasis, quoted example output, and a curly apostrophe. Same-source negatives are what make
+it a calibration rather than a keyword list, and they survive sanitisation because the
+discrimination lives in the shape, not the vocabulary.
+
+**The fixture must derive from an artifact this repository's author did not write.** Here it
+derives from a sanitised structural skeleton produced by the operator inspecting their real
+section 11 — its headings, emphasis spans and table count — not from anyone's idea of a
+plausible shape. This is not a stylistic preference: the first fixture *was* authored
+alongside the rule, and the two were a single guess wearing two hats. See ADR-036, "A third
+class: a fixture that agrees with the implementation." 
 
 **The real section-11 text never enters this repository.** It is project canon and this repo
 is public and open-source-bound; the exclusion holds regardless of how benign any individual

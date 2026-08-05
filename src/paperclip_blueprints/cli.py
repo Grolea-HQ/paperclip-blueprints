@@ -16,7 +16,12 @@ from .generators.client import GenerationError, LLMClient
 from .generators.identity import generate_identity
 from .models.input import BriefValidationError, parse_brief, slug_divergence_warning
 from .renderers.bundle import BundleError, build_and_write
-from .renderers.canon import canon_coverage, canon_warnings, extract_canon_terms
+from .renderers.canon import (
+    canon_coverage,
+    canon_warnings,
+    extract_canon_terms,
+    extraction_warnings,
+)
 from .renderers.render import render_company_md
 from .validators import BundleValidationError
 
@@ -223,7 +228,7 @@ def check_canon(
         typer.echo(f"  - {term.text}")
 
     coverage = canon_coverage(terms, files)
-    warnings = canon_warnings(coverage)
+    warnings = extraction_warnings(brief.free_text, terms) + canon_warnings(coverage)
     if warnings:
         typer.echo("")
         for message in warnings:
