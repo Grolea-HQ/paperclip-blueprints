@@ -254,6 +254,12 @@ run cannot expose, because the thing that varies is held constant *by the test e
 itself*. Reasoning about the code will not find them; the code looks correct, and in that process
 it is.
 
+**The countermeasure is environmental, not logical.** Vary the thing the suite holds fixed:
+assert determinism from a `subprocess` in a fresh interpreter (as `tests/test_routines.py` does —
+the subprocess is the point of the test, not incidental setup), across differing hash seeds, and
+from a clean bytecode state. When a fourth variant appears it will not look like these three; it
+will look like "works on my machine," which is the actual name of this class.
+
 ## A third class: a fixture that agrees with the implementation
 
 The two sections above are about checks that never fire, and about state a single-process
@@ -282,11 +288,26 @@ The corollary is a division of labour, not extra ceremony: whoever owns the real
 supplies its shape, and calibration against the real thing happens on their side. The repo
 holds shapes it was given; it does not invent them.
 
-**The countermeasure is environmental, not logical.** Vary the thing the suite holds fixed:
-assert determinism from a `subprocess` in a fresh interpreter (as `tests/test_routines.py` does —
-the subprocess is the point of the test, not incidental setup), across differing hash seeds, and
-from a clean bytecode state. When a fourth variant appears it will not look like these three; it
-will look like "works on my machine," which is the actual name of this class.
+**And a fourth: an incomplete cross-cutting edit.** Renaming vocabulary across the repo, the
+sweep matched `berth-scoring` and missed `berth scoring` — the spaced form, inside a docstring,
+which a hyphen-shaped rename was never going to reach. The suite stayed green throughout, because
+a half-finished rename breaks nothing: every assertion had already been updated, and the survivor
+was prose. The fix then landed in an amended commit whose message does not mention it, so without
+this paragraph it is a change in the repo for a reason nobody can recover.
+
+It presents as a plain incomplete edit rather than a testing problem, which is why it took a
+moment to place. The shape is the same one: green said nothing about whether a cross-cutting
+change was finished, and passing tests supplied confidence they had not earned.
+
+**The countermeasure is a looser sweep than the edit.** Search for what you changed, *after* you
+change it, on a pattern looser than the one you changed with — `berth.scoring` finds what
+`berth-scoring` cannot. A sweep matching only the form you edited with is not a sweep; it re-runs
+the edit and reports that the edit happened.
+
+**A boundary on this list.** Four members is a family and still reads as one. If a fifth turns up,
+consolidate this ADR around the shared principle — *green means the tests agreed with you, not
+that you were right* — rather than extending the enumeration. Six entries is a filing system
+nobody reads.
 
 ## Consequences
 
