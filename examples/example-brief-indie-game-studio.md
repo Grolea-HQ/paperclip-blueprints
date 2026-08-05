@@ -99,10 +99,21 @@ matter on a given day.
 
 ---
 
-## 11. Anything else
+## 11. Operating canon
 
 **Other context:**
 
-This is a hypothetical brief used to exercise the v0.1a single-agent slice end
-to end. The owner agent should reflect a focused, decisive solo founder who
-treats idle time between release cycles as a success state, not a gap to fill.
+**The release-readiness rule.** A build goes to the store only when all three hold; any one failing sends it back to the previous milestone.
+(1) *Crash-free session rate* — measured on the current device set, never a historical average.
+(2) *Store metadata parity* — every locale states the same claims as the primary listing.
+(3) *Rollback readiness* — the previous build is still deployable without a data migration.
+
+---
+
+## 12. Run-policy overrides (optional)
+
+By default the tool sets each agent's per-run turn cap and concurrent-run limit by role. **Leave this blank to keep the defaults — an empty section changes nothing**, which is what this example does.
+
+**Your overrides:**
+
+- [e.g., "editor: max turns 8, heartbeat off"]
