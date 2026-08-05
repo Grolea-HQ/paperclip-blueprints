@@ -16,9 +16,16 @@ def generate_project(
     company: CompanyDefinition,
     client: LLMClient,
     *,
+    canon: str | None = None,
     model: str | None = None,
 ) -> ProjectDefinition:
-    """Generate the PROJECT.md content for one planned project."""
+    """Generate the PROJECT.md content for one planned project.
+
+    Args:
+        canon: The brief's section-11 operating canon (ADR-037), passed through
+            wholesale and unmodified. ``None`` ⇒ the prompt renders exactly as it did
+            before.
+    """
     prompt = render_prompt(
         "project_generator",
         slug=stub.slug,
@@ -27,6 +34,7 @@ def generate_project(
         we_are=company.we_are,
         north_star=company.north_star,
         constraints=company.constraints,
+        operating_canon=canon,
     )
     payload = client.complete_json(
         model=model or STRUCTURAL_MODEL,

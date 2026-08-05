@@ -597,3 +597,218 @@ def test_generator_exhaustion_names_the_leaf() -> None:
     with pytest.raises(GenerationError) as exc:
         generate_soul(stub, _company(), LLMClient(_invoke=lambda **_: '{"broken"'))
     assert "soul" in str(exc.value)
+
+
+# --- feature 016: operating-canon threading (US1) ----------------------------
+#
+# Section-11 canon is the operator's residual channel: material with no other
+# carrier. These tests assert it reaches the four generators that write PROCEDURE,
+# wholesale, and reaches none of the three that do not (contracts/canon-threading.md).
+
+# Invented vocabulary — deliberately shaped like the real failing case (a named-dimension
+# rubric plus a labelled evidence-class table) without borrowing its content.
+_CANON = (
+    "Score every prospect on five dimensions: Persuadability, Reach-Confidence, "
+    "Timing-Fit, Margin-Headroom and Switch-Cost. Evidence classes carry half-lives: "
+    "an Observed-Signal decays in 30 days, an Inferred-Signal in 10 days, and a "
+    "Reported-Signal in 5 days. Never promote a prospect on a Reported-Signal alone."
+)
+
+_TASK_JSON = """\
+```json
+{"objective": "Ship the release candidate.", "completion_criteria": ["Smoke pass green."]}
+```
+"""
+
+_PROJECT_JSON = """\
+```json
+{"summary": "Ship the first title.", "success_condition": "Title live in the store."}
+```
+"""
+
+_CANNED = {
+    "You write Paperclip agent skills. Follow the instructions exactly.": _SKILL_JSON,
+    "You write Paperclip agent mandates. Follow the instructions exactly.": _AGENT_BODY_JSON,
+    "You write Paperclip task definitions. Follow the instructions exactly.": _TASK_JSON,
+    "You write Paperclip project briefs. Follow the instructions exactly.": _PROJECT_JSON,
+}
+
+
+def _brief_with_canon(canon: str = _CANON) -> CompanyBrief:
+    return _brief().model_copy(update={"free_text": canon})
+
+
+def _recorder() -> tuple[list[str], LLMClient]:
+    """A client that records every rendered user prompt and returns canned payloads."""
+    seen: list[str] = []
+
+    def _invoke(**kw: object) -> str:
+        seen.append(str(kw["user"]))
+        return _CANNED.get(str(kw["system"]), "```json\n{}\n```")
+
+    return seen, LLMClient(_invoke=_invoke)
+
+
+def _render_four(brief: CompanyBrief) -> dict[str, str]:
+    """Render all four procedure-carrier prompts; return {kind: prompt}."""
+    from contextlib import suppress
+
+    from paperclip_blueprints.generators.projects import generate_project
+    from paperclip_blueprints.generators.tasks import generate_task
+    from paperclip_blueprints.models.org_plan import ProjectStub, TaskStub
+
+    company = _company()
+    canon = brief.free_text
+    stub = AgentStub(
+        slug="ceo", name="CEO", title="CEO", reports_to=None, skills=["release-checklist"]
+    )
+    soul = generate_soul(stub, company, LLMClient(_invoke=lambda **_: _SOUL_JSON))
+    out: dict[str, str] = {}
+    for kind, call in (
+        ("skill", lambda c: generate_skill("release-checklist", company, ["CEO"], c, canon=canon)),
+        (
+            "agent",
+            lambda c: generate_agent(stub, company, brief, soul, c, single_agent=True, canon=canon),
+        ),
+        (
+            "task",
+            lambda c: generate_task(
+                TaskStub(slug="ship-rc", name="Ship RC", project="first-title", assignee="ceo"),
+                company,
+                c,
+                canon=canon,
+            ),
+        ),
+        (
+            "project",
+            lambda c: generate_project(
+                ProjectStub(slug="first-title", name="First Title", owner="ceo"),
+                company,
+                c,
+                canon=canon,
+            ),
+        ),
+    ):
+        seen, client = _recorder()
+        with suppress(Exception):
+            call(client)
+        out[kind] = seen[0] if seen else ""
+    return out
+
+
+def test_canon_reaches_all_four_procedure_carriers() -> None:
+    """C-T1: the canon appears in every skill/agent/task/project prompt."""
+    prompts = _render_four(_brief_with_canon())
+    for kind, prompt in prompts.items():
+        assert _CANON in prompt, f"operating canon missing from the {kind} prompt"
+
+
+def test_canon_is_threaded_byte_identical() -> None:
+    """C-T2: wholesale — no truncation, summarisation or per-consumer selection."""
+    long_canon = _CANON + "\n\n" + ("Tail sentence that a truncating impl would drop. " * 40)
+    prompts = _render_four(_brief_with_canon(long_canon))
+    for kind, prompt in prompts.items():
+        assert long_canon in prompt, f"{kind} prompt did not carry the canon verbatim"
+
+
+def test_canon_only_content_reaches_a_generated_skill() -> None:
+    """C-T7 / FR-017: the direct regression test for the observed defect.
+
+    A phrase present ONLY in section 11 — in no other brief field — must reach the
+    skill generator. This is the assertion that would have failed on the 13-agent
+    bundle, where a rubric and a threshold table produced zero occurrences.
+    """
+    brief = _brief_with_canon()
+    marker = "Margin-Headroom"
+    others = " ".join(
+        [
+            brief.name,
+            brief.description,
+            brief.north_star,
+            brief.we_are,
+            *brief.goals,
+            *brief.we_are_not,
+            *brief.constraints,
+        ]
+    )
+    assert marker not in others, "fixture error: the marker must be unique to section 11"
+    assert marker in _render_four(brief)["skill"]
+
+
+def test_canon_is_absent_from_the_excluded_generators() -> None:
+    """C-T6: souls, operations and goal_hierarchy are never threaded.
+
+    Two different kinds of exclusion, asserted identically here but recorded
+    distinctly in the spec: souls is excluded on FITNESS (permanent — procedure is the
+    wrong content for a persona artifact whose value depends on brevity); operations and
+    goal_hierarchy are excluded on DELIVERY (platform-dependent per ADR-022, verified at
+    v2026.626.0 — revisit if import behaviour changes).
+    """
+    from contextlib import suppress
+
+    from paperclip_blueprints.generators.goal_hierarchy import generate_goal_hierarchy
+    from paperclip_blueprints.generators.operations import generate_operations
+
+    brief = _brief_with_canon()
+    company = _company()
+    stub = AgentStub(
+        slug="ceo", name="CEO", title="CEO", reports_to=None, skills=["release-checklist"]
+    )
+    stub2 = AgentStub(
+        slug="dev", name="Dev", title="Engineer", reports_to="ceo", skills=["release-checklist"]
+    )
+    soul = generate_soul(stub, company, LLMClient(_invoke=lambda **_: _SOUL_JSON))
+    canned = LLMClient(_invoke=lambda **_: _AGENT_BODY_JSON)
+    # Two agents: the goal hierarchy degrades deterministically (no LLM call) for a
+    # single-agent org (ADR-025), so a one-agent list would render no prompt to inspect.
+    agents = [
+        generate_agent(s, company, brief, soul, canned, single_agent=False, canon=None)
+        for s in (stub, stub2)
+    ]
+
+    for kind, call in (
+        ("soul", lambda c: generate_soul(stub, company, c)),
+        ("operations", lambda c: generate_operations(company, brief, [stub, stub2], c)),
+        ("goal_hierarchy", lambda c: generate_goal_hierarchy(company, brief, agents, c)),
+    ):
+        seen, client = _recorder()
+        with suppress(Exception):
+            call(client)
+        assert seen, f"the {kind} generator rendered no prompt"
+        assert _CANON not in seen[0], f"operating canon leaked into the {kind} prompt"
+
+
+def test_free_text_has_exactly_one_read_site_outside_its_prior_consumers() -> None:
+    """C-T3: the structural guarantee behind wholesale threading.
+
+    With one read site there is exactly one place a per-consumer transformation could
+    be introduced — which makes FR-002 auditable rather than merely asserted.
+    """
+    import pathlib
+    import re
+
+    src = pathlib.Path(__file__).resolve().parent.parent / "src" / "paperclip_blueprints"
+    prior = {"models/input.py", "generators/identity.py", "generators/org.py"}
+    # Attribute ACCESS, not the bare word — prose in a docstring naming the field is
+    # documentation, not a read site, and must not trip this assertion.
+    access = re.compile(r"\.free_text\b")
+    readers = sorted(
+        p.relative_to(src).as_posix()
+        for p in src.rglob("*.py")
+        if access.search(p.read_text(encoding="utf-8"))
+        and p.relative_to(src).as_posix() not in prior
+    )
+    # An explicit whitelist, one entry per job — the distinction is the point:
+    #   renderers/bundle.py — the THREADING read. Exactly one, so there is exactly one
+    #                         place a per-consumer transformation could be introduced.
+    #   renderers/render.py — the COVERAGE read. Scans the rendered bundle for canon.
+    #   cli.py              — the CALIBRATION read (`check-canon`), scanning a bundle
+    #                         already on disk.
+    # Neither of the latter two threads anything to a generator. A *generator* appearing
+    # here means a carrier started reading the brief directly instead of receiving
+    # `canon=`, which is exactly how the wholesale guarantee would decay — so this list is
+    # meant to be edited deliberately, with the new reader's job named, never widened to
+    # make a failure go away.
+    assert readers == ["cli.py", "renderers/bundle.py", "renderers/render.py"], (
+        f"unexpected free_text read site(s): {readers}"
+    )

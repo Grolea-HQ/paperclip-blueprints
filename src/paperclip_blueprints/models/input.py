@@ -80,6 +80,24 @@ class CompanyBrief(BaseModel):
     role-derived caps stand unchanged. Values are validated here; agent matching happens at
     render time."""
     free_text: str | None = None
+    """Section-11 **operating canon** (feature 016 / ADR-037) — the operator's residual
+    channel for rules, rubrics, thresholds and classification schemes that no structured
+    brief field captures. Its defining property is that **nothing else carries it**: unlike
+    a roster directive (which ``org_planner`` materialises into stubs) or a constraint
+    (which reaches every generator via ``CompanyDefinition``), canon stated here has no
+    other path into the bundle. If it is not threaded, it is gone — silently, because
+    nothing downstream knows it existed.
+
+    Consumed by ``identity_generator`` and ``org_planner``, and by the four carriers that
+    write procedure: ``skill_generator``, ``agents_generator``, ``task_generator`` and
+    ``project_generator``. Threaded **wholesale and unmodified** — read once in
+    ``renderers/bundle.py`` and passed through unchanged; never summarised, ranked, or
+    selected from per consumer, since a selector is a second place to lose canon silently.
+
+    NOT threaded to souls (procedure is the wrong content for a persona artifact whose
+    value depends on brevity), nor to operations/goal-hierarchy (their artifacts do not
+    reach a running agent under current import behaviour, ADR-022 — revisit if that
+    changes)."""
 
     @field_validator("name", "description", "north_star", "we_are")
     @classmethod

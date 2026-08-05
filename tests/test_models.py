@@ -682,3 +682,41 @@ def test_company_config_single_rejects_projects() -> None:
                 )
             ],
         )
+
+
+def test_skill_procedure_strips_a_step_s_own_ordinal_prefix() -> None:
+    """The template numbers the list; a step numbering itself yields "1. 1. STEP".
+
+    Normalised on the model so it holds for every consumer and does not depend on the
+    prompt being obeyed.
+    """
+    from paperclip_blueprints.models.skill import SkillDefinition
+
+    skill = SkillDefinition(
+        slug="s",
+        name="s",
+        description="d",
+        when_to_load=["w"],
+        inputs=["i"],
+        procedure=["1. INTAKE AND DOMAIN GATE", "2) Assign the evidence tier", "(3) Publish"],
+        outputs=["o"],
+        anti_patterns=["a"],
+    )
+    assert skill.procedure == ["INTAKE AND DOMAIN GATE", "Assign the evidence tier", "Publish"]
+
+
+def test_skill_procedure_keeps_prose_that_legitimately_opens_with_a_number() -> None:
+    """Stripping requires the ordinal separator, so a real quantity survives."""
+    from paperclip_blueprints.models.skill import SkillDefinition
+
+    skill = SkillDefinition(
+        slug="s",
+        name="s",
+        description="d",
+        when_to_load=["w"],
+        inputs=["i"],
+        procedure=["2 business days must pass before the entry is promoted"],
+        outputs=["o"],
+        anti_patterns=["a"],
+    )
+    assert skill.procedure == ["2 business days must pass before the entry is promoted"]

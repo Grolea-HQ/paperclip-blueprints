@@ -196,6 +196,22 @@ is the same class of reasoning that missed two of the three defects above.
 | budget pool-too-small warning | `test_pool_too_small_warns_via_sink` |
 | unmatched run-policy / adapter reference | `test_render_emits_overrides_and_warns_unmatched` |
 
+Re-run 2026-08-05 when the canon-coverage check landed (ADR-037), mutating each layer
+separately rather than the check as a whole:
+
+| Suppression | Failures | First failing test |
+|---|---|---|
+| `canon_warnings` → `[]` | 5 | `test_missing_canon_is_reported_by_name` |
+| `extract_canon_terms` → `[]` | 13 | `test_extraction_recovers_the_dimension_names_and_class_labels` |
+| `render_files` dispatch disabled | **1** | `test_canon_coverage_fires_through_the_render_warn_sink` |
+
+**The third row is the one worth reading.** Disabling the dispatch — a correct, fully
+unit-tested check wired to nothing — failed exactly *one* test, and that test exists only
+because the dispatch was audited separately from the module. Nineteen unit tests over
+`canon.py` all passed with the check unreachable from the pipeline. Mutating a check "as a
+whole" would have missed this: the module and its wiring are independent failure surfaces,
+and the wiring is the one with almost no natural test coverage.
+
 No inert check found. Worth noting *how* the audit nearly went wrong: an initial grep for each
 check's source message strings found no test for two of the seven, because those tests assert on
 a different fragment of the message than the one in the source. Grepping for coverage produces
@@ -206,6 +222,71 @@ shape.
 Scope note: this covers *advisory* checks. Hard validators (`validators/integrity.py`,
 `validators/schema_shape.py`) fail the build when they fire and so cannot silently go inert in
 the same way, but the same mutation technique applies if one is ever suspected.
+
+## The sibling class: state a single-process suite cannot see
+
+The section above is about checks that *never fire*. This one is about code that *agrees with
+itself* throughout a test run and is still wrong in the field. Same consequence — green suite,
+broken artifact — but a different mechanism, and worth naming as a class because the variants
+keep arriving in unfamiliar disguises. Three seen so far:
+
+1. **Per-process hash salting.** Builtin `hash()` on a string is salted per interpreter, so a
+   value derived from it differs between runs. A single test process shares one salt, so the
+   implementation agrees with itself all suite long. *(Decision 1 above; the reason `slot_for`
+   uses `hashlib.blake2b`.)*
+
+2. **Set iteration order.** The same salt reaches `set` and `frozenset` ordering, so anything
+   *derived by iterating* an unordered collection of strings — a warning list, a report, a
+   rendered sequence — is hash-seed dependent even with no explicit `hash()` call anywhere. This
+   one is easy to miss precisely because the dangerous call is invisible: the code contains no
+   hashing, just a `for` over a set. Sets remain fine as membership structures; the rule is that
+   **nothing ordered may be derived from one.** Sort it, or preserve source order.
+   *(Surfaced designing the canon-coverage check.)*
+
+3. **Stale bytecode masking a source change.** A cached `.pyc` that survives a source mutation
+   means the suite exercises the *old* implementation while the developer reads the new one.
+   Especially treacherous during a mutation audit like the one above, where the whole method is
+   "change the source, observe the suite" — a stale cache silently inverts the result and the
+   check looks alive when it is not.
+
+**The common shape.** Each is nondeterminism or staleness that a single-process, single-machine
+run cannot expose, because the thing that varies is held constant *by the test environment
+itself*. Reasoning about the code will not find them; the code looks correct, and in that process
+it is.
+
+## A third class: a fixture that agrees with the implementation
+
+The two sections above are about checks that never fire, and about state a single-process
+suite holds constant. This one is about a test that runs, fires, and measures nothing.
+
+The canon-coverage check (ADR-037) shipped with nineteen passing tests and a clean mutation
+audit. Run against a real brief it produced **twelve false positives and zero true
+positives**. The rule inferred canon from the shape of words — hyphenated compounds,
+Title-Case runs — and the calibration fixture had been written, by the same hand, to
+contain exactly those shapes. Real briefs mark canon with markdown emphasis instead, so the
+rule found none of it.
+
+**Why no existing safeguard caught it.** The check fired, so a positive-detection test
+passed. It was deterministic, so the hash-seed subprocess passed. Suppressing extraction
+failed thirteen tests — but all thirteen were confirming the same premise back to itself.
+Mutation testing proves a test *depends* on the code; it cannot prove the test describes
+**reality**, because the fixture and the implementation were two expressions of one guess.
+
+**The rule that follows.** *A calibration fixture must derive from an artifact the
+implementer did not author.* A real sample, a sanitised structural skeleton produced by
+inspecting one, an exported document — anything whose shape was fixed before the rule
+existed. When the fixture is authored alongside the rule, green tells you only that you
+were internally consistent.
+
+The corollary is a division of labour, not extra ceremony: whoever owns the real artifact
+supplies its shape, and calibration against the real thing happens on their side. The repo
+holds shapes it was given; it does not invent them.
+
+**The countermeasure is environmental, not logical.** Vary the thing the suite holds fixed:
+assert determinism from a `subprocess` in a fresh interpreter (as `tests/test_routines.py` does —
+the subprocess is the point of the test, not incidental setup), across differing hash seeds, and
+from a clean bytecode state. When a fourth variant appears it will not look like these three; it
+will look like "works on my machine," which is the actual name of this class.
 
 ## Consequences
 

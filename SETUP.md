@@ -96,6 +96,26 @@ uv run blueprints preview --input my-brief.md
 
 Generates only the COMPANY.md content. ~30 seconds, one Opus call. Useful for iterating on identity content before paying for a full bundle generation.
 
+### Checking a bundle's operating-canon coverage
+
+```bash
+uv run blueprints check-canon --input my-brief.md --bundle examples/generated-companies/my-company/
+```
+
+Checks whether the rules stated in the brief's section 11 reached an **already-rendered** bundle on disk. No generation, no API call, no API key required — so it is free to re-run as often as you like.
+
+It prints the canon items it found in the brief, then one line per item that fell short: **missing** (in no generated file), **thin** (in exactly one, which it names), or **coverage unknown** (the item is named by a sentence rather than a phrase, so it cannot be searched for). Items carried by two or more files produce no output.
+
+The same check runs automatically at the end of every `generate`, so these warnings also appear there. They are advisory — they never fail a run — and they report *reach*, not quality: whether a rule landed as usable procedure is yours to judge by reading the bundle.
+
+`--bundle` must point at a rendered bundle directory (one containing `COMPANY.md` or `.paperclip.yaml`). An empty or non-bundle path is rejected rather than silently scanning the wrong tree.
+
+### What else the brief controls
+
+- **Section 11 — operating canon.** Threaded whole into the generators that write procedure, and encoded rather than summarised (ADR-037). How you mark it up determines what the coverage check can verify; `examples/input-template.md` documents the convention.
+- **Section 12 — run-policy overrides.** Per-agent turn caps, concurrent-run limits, and heartbeat on/off, overriding the role-derived defaults (ADR-034). Blank keeps the defaults.
+- **Routine scheduling.** The brief states cadence, not clock time. Each routine's time of day is derived deterministically from its task slug, so the same brief always yields the same schedule; remaining trigger collisions and out-of-order producer/consumer pairs are reported as warnings (ADR-036).
+
 ---
 
 ## Troubleshooting

@@ -200,3 +200,61 @@ def test_org_planner_one_cadence_one_recurring_task() -> None:
     assert "sub-step" in low and ("fold" in low or "handoff" in low)
     # genuinely-distinct cadences still get separate recurring tasks
     assert "distinct cadences" in low
+
+
+# --- feature 016: the encode-don't-paraphrase contract (C-T4) ----------------
+
+_CANON_CARRIERS = ("skill_generator", "agents_generator", "task_generator", "project_generator")
+
+
+def _canon_block(name: str) -> str:
+    """Extract the operating-canon block from a prompt file."""
+    text = load_prompt(name)
+    start = text.find("{% if operating_canon %}")
+    end = text.find("{% endif %}", start)
+    return text[start : end + len("{% endif %}")] if start != -1 else ""
+
+
+def test_all_four_procedure_carriers_state_the_encode_contract() -> None:
+    """Every prompt that receives canon must tell the model to ENCODE, not paraphrase."""
+    for name in _CANON_CARRIERS:
+        block = _canon_block(name)
+        assert block, f"{name}.md carries no operating-canon block"
+        assert "{{ operating_canon }}" in block, f"{name}.md never renders the canon"
+        lowered = block.lower()
+        assert "not background" in lowered, f"{name}.md does not mark the canon as non-background"
+        assert "encode" in lowered, f"{name}.md does not instruct the model to encode"
+
+
+def test_the_contract_block_is_identical_across_all_four() -> None:
+    """The block is deliberately duplicated rather than shared via an include.
+
+    ``render_prompt`` builds a bare ``jinja2.Template`` with no loader, so ``{% include %}``
+    would not resolve; and prompts are versioned artifacts meant to be read whole. This
+    test is what makes that duplication safe against drift.
+    """
+    blocks = {name: _canon_block(name) for name in _CANON_CARRIERS}
+    distinct = set(blocks.values())
+    assert len(distinct) == 1, f"canon contract block has drifted between prompts: {list(blocks)}"
+
+
+def test_excluded_generators_have_no_canon_block() -> None:
+    """C-T6 at the prompt level: souls/operations/goal_hierarchy never render canon."""
+    for name in ("soul_generator", "operations_generator", "goal_hierarchy_generator"):
+        assert "operating_canon" not in load_prompt(name), f"{name}.md references the canon"
+
+
+def test_canon_block_is_guarded_so_absent_canon_renders_nothing() -> None:
+    """FR-004: a brief with no section 11 must render byte-identically to before."""
+    from paperclip_blueprints.generators.client import render_prompt
+
+    out = render_prompt(
+        "skill_generator",
+        slug="s",
+        used_by="a",
+        we_are="w",
+        north_star="n",
+        constraints=[],
+        operating_canon=None,
+    )
+    assert "Operating canon" not in out

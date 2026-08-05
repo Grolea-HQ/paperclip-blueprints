@@ -102,11 +102,21 @@ that matter on a given day.
 
 ---
 
-## 11. Anything else
+## 11. Operating canon
 
 **Other context:**
 
-A hypothetical brief used to exercise the v0.1b full multi-agent bundle end to end.
-The org should stay small and editorial-led, with a clear separation between the
-accuracy-owning editorial chain and the growth/monetization side, and every agent
-treating idle time between issues as a success state rather than a gap to fill.
+**The source-tiering rule.** Every claim inherits the tier of its weakest supporting source, and that tier travels with the claim into the published issue.
+(1) *Source independence* — how far the source sits from the party it describes.
+(2) *Recency against topic decay* — age judged against how fast the topic moves, not against the calendar.
+(3) *Outcome verification* — whether a result was measured after the fact or projected beforehand.
+
+---
+
+## 12. Run-policy overrides (optional)
+
+By default the tool sets each agent's per-run turn cap and concurrent-run limit by role. **Leave this blank to keep the defaults — an empty section changes nothing**, which is what this example does.
+
+**Your overrides:**
+
+- [e.g., "editor: max turns 8, heartbeat off"]

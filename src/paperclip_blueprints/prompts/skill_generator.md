@@ -20,6 +20,25 @@ You write a SKILL.md — a reusable, loadable capability document for a Papercli
 - `when_to_load` lists the specific situations that should trigger loading the skill.
 - `anti_patterns` lists the mistakes this skill exists to prevent, tied to the constraints.
 - `name` should equal the slug.
+- `procedure` steps are already rendered as a numbered list. Write each step as plain text
+  with NO leading number — "Assign the evidence tier", not "2. Assign the evidence tier".
+
+{% if operating_canon %}
+## Operating canon (brief, section 11)
+
+{{ operating_canon }}
+
+**This is operating canon, not background.** It is the operator's stated way of working,
+and section 11 is the only place it appears — nothing else in this brief carries it.
+
+Encode it into what you write: its named dimensions, thresholds, classes, labels and rules
+must show up as concrete steps, criteria or checks in your output, with their actual names
+and values. Do NOT compress it into a summary sentence. Do NOT restate it as context and
+then write something generic. If a slug or title you were given is named after part of this
+canon, the canon is what that artifact must actually contain.
+
+Where the canon conflicts with your own sense of best practice, the canon wins.
+{% endif %}
 
 ## Output format
 

@@ -24,6 +24,12 @@ from ..models.skill import SkillDefinition
 from ..models.task import TaskDefinition
 from .adapter import assign_adapters, parse_model_preferences
 from .budget import allocate_budgets
+from .canon import (
+    canon_coverage,
+    canon_warnings,
+    extract_canon_terms,
+    extraction_warnings,
+)
 from .frontmatter import dump_frontmatter
 from .routines import RoutineSpec, derive_routines, wakes_per_active_month
 from .run_policy import (
@@ -529,5 +535,30 @@ def render_files(
         files[f"tasks/{task.slug}/TASK.md"] = (
             _task_frontmatter(task) + "\n" + _render("task_md.j2", task=task)
         )
+
+    # Canon coverage (ADR-037): the brief's section-11 operating canon has no carrier but
+    # the threading, so a term that reaches no file is lost silently. Report by name, and
+    # report where thinly-carried terms landed. ADVISORY ONLY — this never blocks a write
+    # and is deliberately not part of validate_bundle, which raises. Scoped to
+    # canon-UNIQUE material: a phrase also present in another brief field reaches the
+    # generators by an existing path, so its coverage says nothing about this defect.
+    if warn is not None and config.brief.free_text:
+        brief = config.brief
+        exclude_texts = [
+            brief.description,
+            brief.north_star,
+            brief.we_are,
+            *brief.goals,
+            *brief.we_are_not,
+            *brief.constraints,
+        ]
+        terms = extract_canon_terms(brief.free_text, exclude_texts=exclude_texts)
+        # Extraction failures first: canon present but nothing recognised means the
+        # coverage result below is empty for a reason that has nothing to do with the
+        # bundle, and a silent zero-term run would read as "all clear".
+        for message in extraction_warnings(brief.free_text, terms):
+            warn(message)
+        for message in canon_warnings(canon_coverage(terms, files)):
+            warn(message)
 
     return files

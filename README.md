@@ -12,7 +12,7 @@ A CLI tool that takes a structured Markdown brief and generates a complete, depl
 
 Give the tool a brief describing a company's identity, north star, goals, and constraints. It produces a directory tree matching Paperclip's import format:
 
-- `.paperclip.yaml` (runtime config: sidebar, per-agent adapter/model/budget, the board-approval company setting, and routines for scheduled work)
+- `.paperclip.yaml` (runtime config: sidebar, per-agent adapter/model/budget, per-agent run-policy caps, the board-approval company setting, and routines for scheduled work)
 - `COMPANY.md` (Identity, We are, We are not, Constraints, Goals, North star)
 - `README.md` (auto-generated overview with mermaid org chart)
 - `OPERATIONS.md` (operator-facing operating manual — phase model, idle-state protocol, approval rules, anti-drift; **human docs**, not read by agents)
@@ -26,6 +26,29 @@ Give the tool a brief describing a company's identity, north star, goals, and co
 The result is a Paperclip-importable bundle ready to use.
 
 **How governance reaches agents (ADR-022).** A UI-imported company is database-backed — there is no company-root filesystem for agents to read. So the constitution and rules each agent enforces are folded into its `AGENTS.md` (the carrier the import surfaces to the agent), the board-approval gate ships as a `.paperclip.yaml` company setting, and schedule-driven work becomes routines. `OPERATIONS.md` stays as the operator's readable operating manual, not an agent-facing file.
+
+**Per-agent run-policy caps (ADR-034).** Each agent gets a turn cap and concurrent-run limit derived from its role. Section 12 of the brief overrides them per agent — including turning a heartbeat off so an agent runs only on demand. Leave the section blank to keep the defaults.
+
+**Routine scheduling (ADR-036).** The brief states cadence, not clock time, so each routine's time of day is derived deterministically from its task slug — the same brief always produces the same schedule. Routines that still land on the same trigger, and consumers scheduled at or before the producer they name, are reported as warnings for you to judge; neither blocks generation.
+
+## Operating canon (section 11)
+
+Section 11 of the brief is for the rules your agents should actually follow — procedures, rubrics, thresholds, domain decision rules. It is the one input with no other carrier, so it is threaded **whole and unmodified** into every generator that writes procedure (skills, agent mandates, tasks, projects), with an instruction to **encode it into procedure rather than summarise it** (ADR-037).
+
+Because it is encoded rather than paraphrased, an offhand aside written there comes back as procedure too. Write it as canon or leave it out.
+
+After the bundle is rendered, each canon item is checked for reach and the run prints one line per item that fell short:
+
+| Verdict | Meaning |
+|---|---|
+| carried | the item appears in two or more generated files — no output |
+| thin | it appears in exactly one file, which is named so you can judge it |
+| missing | it appears in no generated file at all |
+| coverage unknown | the item is named by a sentence rather than a phrase, so it cannot be searched for |
+
+These are **advisory** — they never block generation, and they report *reach*, never quality. Whether a rubric landed as usable procedure is a judgement only you can make by reading the bundle.
+
+The check finds canon items by their markdown marking, so how you mark section 11 determines what can be verified. `examples/input-template.md` documents the convention.
 
 ## Why this exists
 
@@ -65,6 +88,9 @@ uv run blueprints generate --input examples/my-company-brief.md --output example
 # Inspect the bundle
 ls examples/generated-companies/my-company/
 cat examples/generated-companies/my-company/COMPANY.md
+
+# Re-check the bundle's operating-canon coverage at any time (no API key, no generation)
+uv run blueprints check-canon --input examples/my-company-brief.md --bundle examples/generated-companies/my-company/
 
 # Import into Paperclip via the UI's import flow
 ```

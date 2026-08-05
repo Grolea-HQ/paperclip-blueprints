@@ -226,16 +226,49 @@ The Paperclip docs recommend [matching the adapter to the role](https://papercli
 
 ---
 
-## 11. Anything else
+## 11. Operating canon
 
-Free text for anything important that doesn't fit above. The tool incorporates this into the prompts as additional context.
+The rules your agents should actually follow — the procedures, rubrics, standards and domain decision rules that no other section captures.
 
-**Examples:**
+**This section is encoded, not summarised.** What you write here is threaded verbatim into the generated skills, agent mandates, tasks and projects, with an instruction to turn it into procedure. A rubric written here should come back as scoring steps; a threshold table should come back with its actual thresholds. That is the point of the section — but it cuts both ways: an offhand aside written here will also come back as procedure. If it isn't something you want an agent following, it doesn't belong in this section.
 
-- "I'm on parental leave; deep focus blocks are rare. Optimize the routine cadence for async."
-- "I'm specifically interested in testing whether opencode + Manifest can do meaningful CEO-level work."
-- "I have an existing Hermes deployment with a custom skill `voice-capture` — assume it exists, don't re-generate the skill."
-- "This company is a sibling to <other-company> running in the same Paperclip instance — don't reuse any agent slugs from there."
+**What belongs here:**
+
+- Procedures and standards — how a piece of work is done, and what "done" means
+- Rubrics and scoring schemes — the dimensions, and how they are weighted
+- Thresholds and classifications — the bands, labels and cut-offs, with their values
+- Domain decision rules — what to do when a specific condition holds
+
+**What belongs elsewhere:**
+
+- Org shape — headcount, roster, who reports to whom → **section 7**
+- Identity, positioning, what you are and are not → **sections 4–6**
+- Hard limits the whole company operates under → **section 6 constraints**
+
+**Mark it up. This is the expected form, not a style preference.**
+
+Write each rule as a **bold-headed block**: a short bold name, then the prose. Where a rule has named parts, **enumerate them and italicise each name**:
+
+```
+**<Short name for the rule.>** <The prose that states it — thresholds, bands,
+ordering, whatever the rule actually says.>
+
+**<Short name for a rule with named parts.>** <Lead-in sentence.>
+(1) *<Name of the first part>* — <what it means>.
+(2) *<Name of the second part>* — <what it means>.
+(3) *<Name of the third part>* — <what it means>.
+```
+
+Those placeholders are a shape, not a recommendation — the rules, parts and values must be yours.
+
+**Why the markup matters.** After generation the tool checks that each rule and each named part actually reached the bundle, and it finds them **by that markup**: bold block heads and enumerated italic names. Prose canon that isn't marked this way still gets threaded to the generators, but it **cannot be checked**, so a rule that silently fails to land will not be reported. If nothing in this section is marked up, the run says so rather than staying quiet — but a mix of marked and unmarked rules will only ever report on the marked ones.
+
+Four details that matter to the check:
+
+- **Name the rule in its heading; don't describe it.** A heading that is a *name* — `**The provenance citation format.**` — can be looked for in the bundle. A heading that is a *sentence* — `**The daily recap does two jobs.**` — cannot: no generated file ever restates a sentence, so that item is reported as **coverage unknown** rather than pretended about. Both are threaded to the generators either way; only the named one can be verified.
+- **Enumerate the parts wherever a rule has them.** A rule with named parts is checked part by part, which is precise. A rule with no enumerated parts is checked only by its heading — a weaker signal, since a rule can be encoded faithfully without any file repeating the phrase that names it.
+- **Sentence case for part names** — `*Structural comparability*`, not `*Structural Comparability*`. Either reads fine; only one is consistent, and consistency is what makes a missing part recognisable.
+- **Italic is only a signal when enumerated.** `*Some Registry*` mid-paragraph is read as a proper noun and ignored, which is what you want — it means you can italicise source names and ordinary emphasis freely without polluting the check.
 
 **Other context:**
 
