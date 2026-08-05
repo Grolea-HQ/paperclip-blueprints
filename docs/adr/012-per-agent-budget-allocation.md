@@ -160,6 +160,26 @@ Two modeling rules govern the weight, both following from what the field *is* �
 An agent driven by several routines is funded for its **busiest**: the cap must cover the
 heaviest month, not an average across them.
 
+### The thresholds are policy, not physics
+
+Stated explicitly so that retuning them is a decision with a rationale to argue against, rather
+than a rediscovery. `wake_weight` maps wakes-per-active-month to weight:
+
+| Wakes per active month | Weight | Cadences that land here | Why the boundary sits there |
+|---|---|---|---|
+| `> 8` | 3 | daily, most weekdays | Well clear of weekly work; the top of a deliberately compressed scale (see rule 2 above). |
+| `> 1` | 2 | weekly, biweekly, a few days a week | Genuinely repeated within the month, but not daily. |
+| `≤ 1` | 1 | monthly, quarterly, yearly | Rule 1: one wake in an active month. This band is the load-bearing one — it is what stops a quarterly agent being funded below a monthly one. |
+| `None` | 3 | no recurring task (on-demand) | Unbounded, unknowable wake count; err loose (see rule 2). |
+
+The `> 8` boundary is the arbitrary one: it groups "daily" with "most weekdays" and puts
+"twice weekly" a tier down. It was chosen to keep the `≤ 1` band cleanly isolated, which is the
+rule that carries the correctness weight; the exact placement of the upper boundary is not
+load-bearing and a company whose cadences cluster near it can move the constant. What must
+**not** change without revisiting this amendment: that monthly-or-rarer cadences share one
+weight, that the scale stays compressed rather than proportional to raw wake counts, and that
+`None` errs high. Those three are the decision; the numbers are its current expression.
+
 `GOVERNANCE_PCT` is **unchanged** and deliberately so. That a `tight` company distributes 50%
 of its stated cap is the specified dial, not conservatism to be corrected; the remainder is the
 documented headroom reserve. The cadence question and the reserve question are independent.
