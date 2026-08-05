@@ -263,8 +263,10 @@ Those placeholders are a shape, not a recommendation — the rules, parts and va
 
 **Why the markup matters.** After generation the tool checks that each rule and each named part actually reached the bundle, and it finds them **by that markup**: bold block heads and enumerated italic names. Prose canon that isn't marked this way still gets threaded to the generators, but it **cannot be checked**, so a rule that silently fails to land will not be reported. If nothing in this section is marked up, the run says so rather than staying quiet — but a mix of marked and unmarked rules will only ever report on the marked ones.
 
-Two details that matter to the check:
+Four details that matter to the check:
 
+- **Name the rule in its heading; don't describe it.** A heading that is a *name* — `**The provenance citation format.**` — can be looked for in the bundle. A heading that is a *sentence* — `**The daily recap does two jobs.**` — cannot: no generated file ever restates a sentence, so that item is reported as **coverage unknown** rather than pretended about. Both are threaded to the generators either way; only the named one can be verified.
+- **Enumerate the parts wherever a rule has them.** A rule with named parts is checked part by part, which is precise. A rule with no enumerated parts is checked only by its heading — a weaker signal, since a rule can be encoded faithfully without any file repeating the phrase that names it.
 - **Sentence case for part names** — `*Structural comparability*`, not `*Structural Comparability*`. Either reads fine; only one is consistent, and consistency is what makes a missing part recognisable.
 - **Italic is only a signal when enumerated.** `*Some Registry*` mid-paragraph is read as a proper noun and ignored, which is what you want — it means you can italicise source names and ordinary emphasis freely without polluting the check.
 
