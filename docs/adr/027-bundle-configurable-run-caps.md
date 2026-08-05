@@ -87,6 +87,34 @@ lives in the private repo.
   template and brief parsing (ADR-003). The role reasoning covers the concrete need now; a brief
   knob can layer on top later (as ADR-017 layered explicit model preferences over role defaults).
 
+## Amendment — 2026-08-05: the poller signal reads the title, never the mandate prose
+
+`derive_run_policy` matched `_POLLER_RE` against `f"{title} {mandate}"`. A mandate is a
+paragraph describing what an agent does, so any reviewer whose work involves watching a queue
+or sweeping a register contained a poller word *incidentally* — and one such word cut its turn
+cap from 30 to 10. Observed on a real bundle: two reviewers with the same manager and the same
+job shape on different axes received 30 and 10, and the tighter cap landed on the role with the
+wider search surface.
+
+The signal now comes from the **title alone**. A title is the role's identity: a "Signal
+Monitor" *is* a poller; an "Evidence Reviewer" that happens to monitor something is not.
+`_POLLER_RE` gained the agent-noun forms (`poller`, `watcher`, `sweeper`) that titles actually
+use — the verb/gerund forms alone sufficed while prose was searched and do not suffice for
+titles. `mandate` stays in the signature for interface stability, documented as deliberately
+unread.
+
+**The rationale is the failure asymmetry, and it generalizes.** A too-tight cap fails
+*silently*: the agent exhausts its turns and returns a thin result rather than an error, so
+nobody learns the cap was wrong. A too-loose cap fails *visibly*: it costs more and shows up in
+the budget. Where a heuristic is uncertain, it must resolve toward the looser cap. (ADR-012's
+2026-08-05 amendment applies the same principle to the budget cap.)
+
+A new `peer_turn_asymmetry` reports, through the render `warn` sink, sibling agents under one
+manager that received different turn caps. It is **advisory only and never normalizes**:
+normalization propagates the majority value, so a group where most peers tripped the heuristic
+would drag a correct 30 down to 10 — the silent-failure direction. An agent whose cap the brief
+stated explicitly (ADR-034) is excluded; that is an authority statement, not a divergence.
+
 ## References
 
 - `src/paperclip_blueprints/renderers/run_policy.py` — the reasoning + `RunPolicy`

@@ -25,7 +25,11 @@ from .adapter import assign_adapters, parse_model_preferences
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
 from .routines import RoutineSpec, derive_routines
-from .run_policy import assign_run_policies, parse_run_policy_preferences
+from .run_policy import (
+    assign_run_policies,
+    parse_run_policy_preferences,
+    peer_turn_asymmetry,
+)
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -298,6 +302,15 @@ def render_files(
         for line in run_unmatched:
             warn(f"run-policy override {line!r} names no agent — no run policy is set for it")
 
+    # Per-agent run-policy caps (ADR-027) + brief overrides (ADR-034). Peers under one manager
+    # that end up with different turn caps are reported for the operator to judge — never
+    # normalized, since normalizing propagates the majority value and the tightening direction
+    # fails silently.
+    run_policies = assign_run_policies(config.agents, run_overrides)
+    if warn is not None:
+        for message in peer_turn_asymmetry(config.agents, run_policies, run_overrides):
+            warn(message)
+
     # Tasks with a `recurrence` cadence → importable Routines (ADR-022, US3, PROVISIONAL cron):
     # a `.paperclip.yaml` routines.<task-slug> block; the recurring task itself is flagged
     # `recurring: true` (no shadow task). Empty when no task is scheduled.
@@ -321,7 +334,7 @@ def render_files(
         "adapters": adapters,
         # Per-agent run-policy caps (ADR-027): role-derived maxTurnsPerRun /
         # maxConcurrentRuns, with brief overrides overlaid per field (feature 014 / ADR-034).
-        "run_policies": assign_run_policies(config.agents, run_overrides),
+        "run_policies": run_policies,
         "routines": routines,
     }
 
