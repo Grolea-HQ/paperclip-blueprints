@@ -117,6 +117,26 @@ lesson is recorded as a hazard class in ADR-036: the calibration fixture had bee
 by the same hand as the rule, so nineteen tests and a clean mutation audit confirmed only
 that the guess was internally consistent.*
 
+**A heading is only a probe if it is a name.** Block headings are used by searching the
+bundle for the phrase. That works for `The provenance citation format` and cannot work for
+`The daily recap does two jobs` — a generated task says "Daily Operations Recap", never the
+sentence, so the probe reports missing however completely the canon landed. Confirmed on a
+real regenerated bundle: the recap's substance (the twenty-four-hour bound, the
+no-re-reading rule, both jobs) was fully present in `TASK.md` while its heading reported
+missing.
+
+Sentence-shaped headings — detected by a tight, calibratable set of finite verbs — are
+therefore **declared as unsearchable rather than reported as missing**. Declared, not
+dropped: a phantom warning that can never clear teaches the operator to ignore the check,
+and a silent omission is the gap this ADR exists to close. The verb set deliberately
+excludes noun/verb ambiguities, so misclassification errs toward "probeable" and stays
+visible in the declared list.
+
+*This is a proxy, and its limits are known.* A heading is a stand-in for its item's
+substance; a well-encoded rule can carry every required element without ever restating the
+phrase that names it. Enumerated parts are the stronger probe, and a block with no parts has
+only the weaker one.
+
 **A zero-term run announces itself.** Once extraction keys on emphasis, that convention is
 load-bearing: a brief stating canon as unmarked prose yields no terms, and printing nothing
 would read as "all clear" — this ADR's own defect one layer up. Canon present with nothing

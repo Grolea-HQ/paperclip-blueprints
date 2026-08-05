@@ -180,8 +180,55 @@ def test_unmarked_prose_canon_warns_rather_than_reporting_nothing() -> None:
     assert "markdown emphasis" in warnings[0]
 
 
-def test_a_marked_up_canon_produces_no_extraction_warning() -> None:
-    assert extraction_warnings(_canon(), extract_canon_terms(_canon())) == []
+def test_a_marked_up_canon_produces_no_zero_term_or_cap_warning() -> None:
+    warnings = extraction_warnings(_canon(), extract_canon_terms(_canon()))
+    assert not any("no canon items were found" in w for w in warnings)
+    assert not any("hit its cap" in w for w in warnings)
+
+
+# --- probeable vs sentence-shaped headings ----------------------------------
+
+
+def test_sentence_shaped_headings_are_not_probed() -> None:
+    """A heading carrying a finite verb cannot be searched for.
+
+    ``The daily recap does two jobs`` names a real canon item, but a generated task says
+    "Daily Operations Recap" — never the sentence. Probing for it manufactures a "missing"
+    warning that no amount of correct generation could ever clear.
+    """
+    by_text = {t.text: t for t in extract_canon_terms(_canon())}
+    assert by_text["The daily recap does two jobs"].probeable is False
+    assert by_text["A definitional question the client's brief leaves open"].probeable is False
+
+
+def test_name_shaped_headings_stay_probeable() -> None:
+    by_text = {t.text: t for t in extract_canon_terms(_canon())}
+    for name in (
+        "The provenance citation format",
+        "The commissioning-date rule",
+        "Source discipline",
+        "Evidence tiers and the active-list entry rule",
+    ):
+        assert by_text[name].probeable is True, f"{name!r} should be probeable"
+
+
+def test_enumerated_parts_are_always_probeable() -> None:
+    """Only a heading can be sentence-shaped; a named part is a name by construction."""
+    for term in extract_canon_terms(_canon()):
+        if term.block is not None:
+            assert term.probeable is True
+
+
+def test_an_unprobeable_heading_is_declared_not_reported_missing() -> None:
+    """Excluding it silently would be the silent gap this module exists to close."""
+    terms = [t for t in extract_canon_terms(_canon()) if not t.probeable]
+    assert terms
+    # No missing/thin line, even though it is carried by nothing.
+    assert canon_warnings(canon_coverage(terms, {"a.md": "unrelated"})) == []
+    # But it IS named, so its coverage being unknown is visible.
+    declared = extraction_warnings(_canon(), extract_canon_terms(_canon()))
+    assert any("cannot be searched for" in w for w in declared)
+    assert any("The daily recap does two jobs" in w for w in declared)
 
 
 def test_hitting_the_term_cap_is_reported_rather_than_truncating_silently() -> None:

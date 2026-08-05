@@ -233,10 +233,15 @@ def check_canon(
         typer.echo("")
         for message in warnings:
             typer.echo(f"warning: {message}", err=True)
-    missing = sum(1 for c in coverage if c.is_missing)
-    thin = sum(1 for c in coverage if c.is_thin)
+    probed = [c for c in coverage if c.term.probeable]
+    missing = sum(1 for c in probed if c.is_missing)
+    thin = sum(1 for c in probed if c.is_thin)
+    unprobeable = len(coverage) - len(probed)
     typer.echo("")
-    typer.echo(f"{len(terms) - missing - thin} carried, {thin} thin, {missing} missing")
+    summary = f"{len(probed) - missing - thin} carried, {thin} thin, {missing} missing"
+    if unprobeable:
+        summary += f", {unprobeable} not searchable"
+    typer.echo(summary)
 
 
 @app.command()

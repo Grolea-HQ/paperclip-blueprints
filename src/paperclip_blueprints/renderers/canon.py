@@ -82,6 +82,27 @@ COMMON_WORDS = frozenset(
 )
 """Ordinary English. A candidate made only of these is prose, not canon."""
 
+SENTENCE_VERBS = frozenset(
+    """
+    does do did is are was were be been being has have had must should shall will would
+    can could may might leaves means applies requires carries happens matters exists
+    remains becomes
+    """.split()
+)
+"""Finite verbs that mark a heading as a sentence rather than a name.
+
+A block heading is used as a *probe* — the check asks whether that phrase appears in the
+bundle. That works for a name (``The provenance citation format``) and cannot work for a
+sentence (``The daily recap does two jobs``): a generated task says "Daily Operations
+Recap", never the sentence form, so the probe reports missing however well the canon
+landed. A phantom warning that can never clear is worse than no warning.
+
+Sentence-shaped headings are therefore excluded from coverage reporting and **declared**
+instead (see :func:`extraction_warnings`) — never silently dropped, which would be the
+silent gap this module exists to close. Deliberately tight, and deliberately excluding
+noun/verb ambiguities (``set``, ``run``, ``count``): a misclassification is visible in the
+declared list, so erring toward "probeable" keeps the failure loud."""
+
 
 # --- shapes -----------------------------------------------------------------
 
@@ -95,6 +116,13 @@ class CanonTerm:
 
     normalised: str
     """Casefolded, punctuation-flattened matching key. Never surfaced to the operator."""
+
+    probeable: bool = True
+    """Whether this term can meaningfully be searched for in the bundle.
+
+    ``False`` for a sentence-shaped block heading, which no generated artifact would ever
+    contain verbatim. Such a term is reported as unprobeable rather than as missing.
+    """
 
     block: str | None = None
     """The bold-headed block this term was enumerated under, if any.
@@ -175,6 +203,15 @@ def _heading_name(head: str) -> str:
     return name.rstrip(" .:;,")
 
 
+def _is_probeable(name: str) -> bool:
+    """True when a heading is a name that could plausibly appear in a generated artifact.
+
+    A heading carrying a finite verb is a sentence; a sentence is not a phrase anything
+    would restate, so probing for it manufactures a warning that can never clear.
+    """
+    return not any(word in SENTENCE_VERBS for word in normalise(name).split())
+
+
 def _is_prose(candidate: str) -> bool:
     words = [w for w in normalise(candidate).split() if w]
     return not words or all(w in COMMON_WORDS for w in words)
@@ -231,7 +268,9 @@ def extract_canon_terms(
         if any(_contains(text, key) for text in excluded):
             continue
         seen.add(key)
-        terms.append(CanonTerm(text=surface, normalised=key, block=block))
+        # Enumerated parts are always probeable; only a heading can be sentence-shaped.
+        probeable = True if block is not None else _is_probeable(surface)
+        terms.append(CanonTerm(text=surface, normalised=key, block=block, probeable=probeable))
         if len(terms) >= max_terms:
             break
     return terms
@@ -262,6 +301,13 @@ def extraction_warnings(
         )
     if len(collected) >= max_terms:
         lines.append(f"canon term list hit its cap of {max_terms}; further terms were not checked")
+    unprobeable = [t.text for t in collected if not t.probeable]
+    if unprobeable:
+        named = ", ".join(repr(name) for name in unprobeable)
+        lines.append(
+            f"{len(unprobeable)} canon item(s) are stated as sentences rather than names and "
+            f"cannot be searched for in the bundle, so their coverage is unknown: {named}"
+        )
     return lines
 
 
@@ -325,6 +371,10 @@ def canon_warnings(coverage: Iterable[CanonCoverage]) -> list[str]:
     """
     lines: list[str] = []
     for item in coverage:
+        if not item.term.probeable:
+            # Declared by extraction_warnings instead; probing a sentence would emit a
+            # warning that no amount of correct generation could ever clear.
+            continue
         if item.is_missing:
             lines.append(
                 f"operating canon term {_describe(item.term)} appears in no generated file "

@@ -20,6 +20,8 @@ You write a SKILL.md — a reusable, loadable capability document for a Papercli
 - `when_to_load` lists the specific situations that should trigger loading the skill.
 - `anti_patterns` lists the mistakes this skill exists to prevent, tied to the constraints.
 - `name` should equal the slug.
+- `procedure` steps are already rendered as a numbered list. Write each step as plain text
+  with NO leading number — "Assign the evidence tier", not "2. Assign the evidence tier".
 
 {% if operating_canon %}
 ## Operating canon (brief, section 11)
