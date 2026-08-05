@@ -18,8 +18,10 @@ from paperclip_blueprints.renderers.run_policy import (
     DEFAULT_MAX_CONCURRENT_RUNS,
     DEFAULT_MAX_TURNS_PER_RUN,
     POLLER_MAX_TURNS_PER_RUN,
+    RunPolicyOverride,
     assign_run_policies,
     derive_run_policy,
+    peer_turn_asymmetry,
 )
 from test_cli import _dispatch_full
 from test_models import _agent_kwargs
@@ -49,12 +51,65 @@ def test_bounded_poller_gets_low_turns() -> None:
     assert p.max_concurrent_runs == DEFAULT_MAX_CONCURRENT_RUNS
 
 
+def test_poller_signal_comes_from_the_title_not_the_mandate_prose() -> None:
+    # A reviewer whose mandate merely *mentions* monitoring is not a bounded poller: the role
+    # identity lives in the title. Matching prose let one word triple a reviewer's cap
+    # downward. The failure directions are asymmetric — a too-tight cap fails silently (the
+    # agent returns a thin verdict, not an error) while a too-loose cap fails visibly (cost),
+    # so an uncertain signal must resolve to the looser cap.
+    p = derive_run_policy(
+        is_root=False,
+        title="Evidence Reviewer",
+        mandate="Monitor incoming evidence and sweep the register for stale claims.",
+    )
+    assert p.max_turns_per_run == DEFAULT_MAX_TURNS_PER_RUN
+
+
 def test_poller_signal_is_word_boundaried() -> None:
     # "watchdog"/"sweepstakes" contain poller substrings but must NOT trip the low-turn cap.
     p = derive_run_policy(
         is_root=False, title="Ops", mandate="Run the watchdog demo and sweepstakes launch."
     )
     assert p.max_turns_per_run == DEFAULT_MAX_TURNS_PER_RUN
+
+
+def test_peers_under_one_manager_with_different_turn_caps_are_warned() -> None:
+    # Two reviewers reporting to the same lead, one classified a poller: the asymmetry is
+    # reported so the operator can judge it. Advisory only — it never rewrites a cap, because
+    # normalizing would propagate the majority value, and a majority of poller-classified
+    # peers would drag a correct 30 down to 10 (the silent-failure direction).
+    lead = AgentDefinition(**_agent_kwargs(slug="lead", title="Lead", reports_to="ceo"))
+    watcher = AgentDefinition(
+        **_agent_kwargs(slug="watcher", title="Queue Monitor", reports_to="lead")
+    )
+    reviewer = AgentDefinition(
+        **_agent_kwargs(slug="reviewer", title="Evidence Reviewer", reports_to="lead")
+    )
+    agents = [lead, watcher, reviewer]
+    warnings = peer_turn_asymmetry(agents, assign_run_policies(agents))
+    assert len(warnings) == 1
+    assert "'lead'" in warnings[0]
+    assert "watcher" in warnings[0] and "reviewer" in warnings[0]
+
+
+def test_peers_with_matching_turn_caps_are_not_warned() -> None:
+    lead = AgentDefinition(**_agent_kwargs(slug="lead", title="Lead", reports_to="ceo"))
+    a = AgentDefinition(**_agent_kwargs(slug="a", title="Evidence Reviewer", reports_to="lead"))
+    b = AgentDefinition(**_agent_kwargs(slug="b", title="Feasibility Reviewer", reports_to="lead"))
+    agents = [lead, a, b]
+    assert peer_turn_asymmetry(agents, assign_run_policies(agents)) == []
+
+
+def test_operator_stated_turn_caps_do_not_trip_the_asymmetry_warning() -> None:
+    # A brief that names an agent's turns is an authority statement, not an accident (ADR-034).
+    lead = AgentDefinition(**_agent_kwargs(slug="lead", title="Lead", reports_to="ceo"))
+    a = AgentDefinition(**_agent_kwargs(slug="a", title="Evidence Reviewer", reports_to="lead"))
+    b = AgentDefinition(**_agent_kwargs(slug="b", title="Feasibility Reviewer", reports_to="lead"))
+    agents = [lead, a, b]
+    overrides = {"b": RunPolicyOverride(max_turns_per_run=8)}
+    policies = assign_run_policies(agents, overrides)
+    assert policies["b"].max_turns_per_run == 8  # the override landed
+    assert peer_turn_asymmetry(agents, policies, overrides) == []
 
 
 def test_assign_run_policies_keys_by_slug() -> None:
@@ -98,7 +153,6 @@ import pytest  # noqa: E402
 
 from paperclip_blueprints.renderers.run_policy import (  # noqa: E402
     RunPolicy,
-    RunPolicyOverride,
     parse_run_policy_line,
     parse_run_policy_preferences,
 )

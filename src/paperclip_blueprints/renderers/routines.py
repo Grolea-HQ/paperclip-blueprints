@@ -71,6 +71,46 @@ def cron_for(cadence: str) -> str:
     return _DEFAULT_CRON
 
 
+# Wakes per ACTIVE month per named cadence — the months in which the routine runs at all, not
+# the calendar average (see budget.wake_weight for why the distinction is load-bearing).
+# Monthly-or-rarer cadences all wake exactly once in an active month.
+_NAMED_WAKES = {
+    "daily": 30,
+    "weekly": 4,
+    "biweekly": 2,
+    "monthly": 1,
+    "quarterly": 1,
+    "yearly": 1,
+    "annual": 1,
+}
+_DEFAULT_WAKES = 4  # matches the weekly cron fallback for an unrecognized cadence
+
+
+def wakes_per_active_month(cadence: str | None) -> int | None:
+    """How many times a cadence wakes its agent in a month where it runs at all.
+
+    Shares the cadence vocabulary with :func:`cron_for` deliberately: two parsers of the same
+    operator-written cadence strings would drift, and a silent divergence between what gets
+    scheduled and what gets budgeted is the failure this is meant to prevent.
+
+    Args:
+        cadence: A task's ``recurrence`` cadence, or ``None`` for a non-recurring task.
+
+    Returns:
+        The wake count, or ``None`` when there is no cadence (an on-demand agent, whose wake
+        count is unbounded and unknowable here).
+    """
+    if cadence is None:
+        return None
+    c = cadence.strip().lower()
+    if c in _NAMED_WAKES:
+        return _NAMED_WAKES[c]
+    days = {_DOW[tok[:3]] for tok in re.split(r"[^a-z]+", c) if tok[:3] in _DOW}
+    if days:
+        return len(days) * 4
+    return _DEFAULT_WAKES
+
+
 def derive_routines(tasks: Sequence[TaskDefinition]) -> list[RoutineSpec]:
     """Build a RoutineSpec for each task that carries a ``recurrence`` cadence.
 

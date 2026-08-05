@@ -129,6 +129,66 @@ from `render_files()` and passed into the `paperclip_yaml.j2` context.
   model; a pure renderer-side function is easier to test and keeps the model
   describing authored content only.
 
+## Amendment — 2026-08-05: cadence weighting (role alone was not enough)
+
+Role bucket alone produced **identical** `budgetMonthlyCents` for every agent that fell in the
+same bucket. On a real 13-agent bundle, nine non-lead agents all classified `generic` and all
+received the same figure — including one driven by a daily routine (~30 wakes a month) and one
+driven by a quarterly routine (one wake, four times a year). Workload differing by an order of
+magnitude produced no difference in the cap.
+
+`allocate_budgets` now takes an optional `wakes_by_slug`, and the per-agent weight becomes
+`ROLE_WEIGHT × wake_weight(...)`. Omitting the argument reproduces the pre-amendment allocation
+exactly, so a bundle whose tasks carry no cadence is unchanged; every invariant in Decision
+(§sum-within-cap, the `FLOOR_CENTS` floor, integer cents, determinism) is untouched.
+
+Two modeling rules govern the weight, both following from what the field *is* — a monthly
+**cap** whose hard stop pauses the agent, not a spend forecast:
+
+1. **Count wakes per ACTIVE month, never the calendar average.** A quarterly agent, in the
+   month it wakes, needs exactly what a monthly agent needs: one wake's worth. Averaging would
+   give it ~1/3 of a monthly agent's cap and ~1/90th of a daily agent's, so it would hit the
+   cap mid-run and pause — silently, in the one month that matters. Monthly, quarterly and
+   yearly therefore all weight identically.
+2. **Compress the top of the scale (3, not 30).** The error directions are asymmetric in the
+   same way as ADR-027's turn cap: too tight pauses the agent mid-run, too loose merely
+   reserves headroom that is never spent. A literal 30× spread would starve low-cadence agents
+   to buy headroom the daily agent may not use. Where the signal is uncertain, err loose — an
+   agent with no recurring task at all is on-demand, its wake count unbounded and unknowable at
+   generation time, so it takes the *highest* weight rather than a punitive default.
+
+An agent driven by several routines is funded for its **busiest**: the cap must cover the
+heaviest month, not an average across them.
+
+### The thresholds are policy, not physics
+
+Stated explicitly so that retuning them is a decision with a rationale to argue against, rather
+than a rediscovery. `wake_weight` maps wakes-per-active-month to weight:
+
+| Wakes per active month | Weight | Cadences that land here | Why the boundary sits there |
+|---|---|---|---|
+| `> 8` | 3 | daily, most weekdays | Well clear of weekly work; the top of a deliberately compressed scale (see rule 2 above). |
+| `> 1` | 2 | weekly, biweekly, a few days a week | Genuinely repeated within the month, but not daily. |
+| `≤ 1` | 1 | monthly, quarterly, yearly | Rule 1: one wake in an active month. This band is the load-bearing one — it is what stops a quarterly agent being funded below a monthly one. |
+| `None` | 3 | no recurring task (on-demand) | Unbounded, unknowable wake count; err loose (see rule 2). |
+
+The `> 8` boundary is the arbitrary one: it groups "daily" with "most weekdays" and puts
+"twice weekly" a tier down. It was chosen to keep the `≤ 1` band cleanly isolated, which is the
+rule that carries the correctness weight; the exact placement of the upper boundary is not
+load-bearing and a company whose cadences cluster near it can move the constant. What must
+**not** change without revisiting this amendment: that monthly-or-rarer cadences share one
+weight, that the scale stays compressed rather than proportional to raw wake counts, and that
+`None` errs high. Those three are the decision; the numbers are its current expression.
+
+`GOVERNANCE_PCT` is **unchanged** and deliberately so. That a `tight` company distributes 50%
+of its stated cap is the specified dial, not conservatism to be corrected; the remainder is the
+documented headroom reserve. The cadence question and the reserve question are independent.
+
+The cadence vocabulary stays in `renderers/routines.py` (`wakes_per_active_month`), shared with
+`cron_for`. Two parsers of the same operator-written cadence strings would drift, and a silent
+divergence between what gets *scheduled* and what gets *budgeted* is precisely the class of
+defect this amendment exists to close.
+
 ## References
 
 - ADR-002 (output bundle format), ADR-003 (optional input fields),

@@ -40,9 +40,26 @@ POLLER_MAX_TURNS_PER_RUN = 10
 
 # Whole-word signals that a role is a bounded poller (→ low turns). Word-boundary matched to
 # avoid tripping on unrelated substrings. Kept tight so an ordinary role keeps the default.
+#
+# Matched against the agent's TITLE ONLY, never the mandate prose. A mandate is a paragraph
+# describing what an agent does, and any reviewer whose work involves watching a queue or
+# sweeping a register will contain one of these words incidentally — which silently tripled
+# a reviewer's turn cap downward. A title is the role's identity: "Signal Monitor" IS a
+# poller; "Evidence Reviewer" that happens to monitor something is not.
+#
+# This is the conservative direction on an asymmetric failure. A too-tight cap fails
+# SILENTLY — the agent exhausts its turns and returns a thin result rather than an error, so
+# nobody learns the cap was wrong. A too-loose cap fails VISIBLY — it costs more and shows up
+# in the budget. Where the signal is uncertain, resolve toward the looser cap.
+# Because the match is now on the title, the AGENT-NOUN forms carry the signal ("Poller",
+# "Watcher", "Sweeper") alongside the verb/gerund forms a title may still use ("Queue
+# Monitoring"). The verb forms alone were enough while mandate prose was searched; they are
+# not enough for titles.
 _POLLER_RE = re.compile(
-    r"\b(poll|polls|polling|monitor|monitors|monitoring|watch|watches|watching|"
-    r"sweep|sweeps|sweeping)\b",
+    r"\b(poll|polls|polling|poller|pollers|"
+    r"monitor|monitors|monitoring|"
+    r"watch|watches|watching|watcher|watchers|"
+    r"sweep|sweeps|sweeping|sweeper|sweepers)\b",
     re.IGNORECASE,
 )
 
@@ -79,16 +96,19 @@ def derive_run_policy(*, is_root: bool, title: str, mandate: str) -> RunPolicy:
 
     Args:
         is_root: The agent is the org root / CEO (``reports_to is None``).
-        title: The agent's title.
-        mandate: The agent's mandate prose.
+        title: The agent's title — the sole source of the poller signal (see ``_POLLER_RE``).
+        mandate: The agent's mandate prose. Accepted for interface stability and
+            deliberately NOT consulted: matching poller words in prose mis-classified
+            ordinary reviewers, and the tightening direction fails silently.
 
     Returns:
-        A ``RunPolicy``: the CEO/root gets tighter concurrency (1 vs 2); a bounded poller
-        gets low turns (``POLLER_MAX_TURNS_PER_RUN``); otherwise the deployer-matching
-        defaults (30 turns) apply.
+        A ``RunPolicy``: the CEO/root gets tighter concurrency (1 vs 2); a role whose *title*
+        names it a bounded poller gets low turns (``POLLER_MAX_TURNS_PER_RUN``); otherwise
+        the deployer-matching defaults (30 turns) apply.
     """
+    _ = mandate  # see Args: intentionally unread
     max_concurrent = CEO_MAX_CONCURRENT_RUNS if is_root else DEFAULT_MAX_CONCURRENT_RUNS
-    is_poller = bool(_POLLER_RE.search(f"{title} {mandate}"))
+    is_poller = bool(_POLLER_RE.search(title))
     max_turns = POLLER_MAX_TURNS_PER_RUN if is_poller else DEFAULT_MAX_TURNS_PER_RUN
     return RunPolicy(max_turns_per_run=max_turns, max_concurrent_runs=max_concurrent)
 
@@ -133,6 +153,57 @@ def assign_run_policies(
                 heartbeat_enabled=ov.heartbeat_enabled,
             )
     return result
+
+
+def peer_turn_asymmetry(
+    agents: Sequence[AgentDefinition],
+    policies: dict[str, RunPolicy],
+    overrides: dict[str, RunPolicyOverride] | None = None,
+) -> list[str]:
+    """Report sibling agents that share a manager but received different turn caps.
+
+    Advisory only — surfaced via the ``warn`` sink, NEVER a validation error and NEVER an
+    override. Normalizing the caps would be the wrong fix: the majority value wins under
+    normalization, so a group where most peers tripped the poller heuristic would drag a
+    correct 30 down to 10 — precisely the silent-failure direction (see ``_POLLER_RE``).
+    The operator judges; asymmetry between peers doing the same job on different axes is
+    usually a misfire, but occasionally deliberate.
+
+    An agent whose turn cap the brief stated explicitly (ADR-034) is excluded: that is an
+    authority statement, not an accidental divergence, and warning on it would be noise.
+
+    Args:
+        agents: the generated agents (only non-root agents can have peers).
+        policies: slug -> :class:`RunPolicy`, as returned by :func:`assign_run_policies`.
+        overrides: the brief's per-slug overrides, to suppress operator-stated caps.
+
+    Returns:
+        One warning per manager whose remaining (non-overridden) reports disagree on
+        ``max_turns_per_run``, in stable agent order.
+    """
+    stated = {slug for slug, ov in (overrides or {}).items() if ov.max_turns_per_run is not None}
+    groups: dict[str, list[str]] = {}
+    for a in agents:
+        if a.reports_to is None or a.slug in stated:
+            continue
+        groups.setdefault(a.reports_to, []).append(a.slug)
+
+    warnings: list[str] = []
+    for manager, slugs in groups.items():
+        by_cap: dict[int, list[str]] = {}
+        for s in slugs:
+            by_cap.setdefault(policies[s].max_turns_per_run, []).append(s)
+        if len(by_cap) < 2:
+            continue
+        detail = "; ".join(
+            f"{cap} turns: {', '.join(members)}" for cap, members in sorted(by_cap.items())
+        )
+        warnings.append(
+            f"agents reporting to {manager!r} received different turn caps ({detail}) — peers at "
+            "one level usually warrant the same cap; check the tighter ones, since exhausting a "
+            "turn cap returns a thin result rather than an error and so fails silently"
+        )
+    return warnings
 
 
 # --- brief-driven override layer (feature 014 / ADR-034) ---------------------
