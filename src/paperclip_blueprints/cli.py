@@ -16,6 +16,7 @@ from .generators.client import GenerationError, LLMClient
 from .generators.identity import generate_identity
 from .models.input import BriefValidationError, parse_brief, slug_divergence_warning
 from .renderers.bundle import BundleError, build_and_write
+from .renderers.canon import canon_coverage, canon_warnings, extract_canon_terms
 from .renderers.render import render_company_md
 from .validators import BundleValidationError
 
@@ -120,6 +121,117 @@ def validate(
     """Validate a brief against the input rules (no API calls)."""
     brief = _load_brief(input)
     typer.echo(f"brief OK: {brief.name} ({brief.slug})")
+
+
+_BUNDLE_TEXT_SUFFIXES = frozenset({".md", ".yaml", ".yml", ".txt"})
+
+_BUNDLE_MARKERS = ("COMPANY.md", ".paperclip.yaml")
+
+
+def _resolve_bundle_dir(raw: str) -> Path:
+    """Resolve a ``--bundle`` argument, refusing anything that is not a bundle.
+
+    Two guards, because the failure they prevent is the one this whole feature exists to
+    close: a check that confidently answers a *different question* than the one asked.
+
+    ``Path("")`` evaluates to ``PosixPath(".")`` and passes ``is_dir()``, so an unset shell
+    variable turns ``--bundle "$MY_BUNDLE"`` into a silent scan of the working directory —
+    reporting real-looking coverage against the wrong tree. An empty path is therefore a
+    hard error, never a fallback.
+
+    A non-empty path pointing somewhere that is not a bundle fails the same way, so the
+    directory must also carry a bundle marker at its root.
+
+    The argument is taken as a raw ``str`` deliberately: converting to ``Path`` first
+    erases the emptiness (``Path("")`` *is* ``PosixPath(".")``), so the guard has to run
+    before the type conversion that hides what it is looking for.
+    """
+    if not raw.strip():
+        typer.echo(
+            "error: --bundle is empty. An empty path resolves to the current directory, "
+            "which would scan the wrong tree and report coverage for it.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    bundle = Path(raw)
+    if not bundle.is_dir():
+        typer.echo(f"error: --bundle {bundle} is not a directory", err=True)
+        raise typer.Exit(1)
+    if not any((bundle / marker).is_file() for marker in _BUNDLE_MARKERS):
+        typer.echo(
+            f"error: --bundle {bundle} does not look like a rendered bundle "
+            f"(expected one of {', '.join(_BUNDLE_MARKERS)} at its root)",
+            err=True,
+        )
+        raise typer.Exit(1)
+    return bundle
+
+
+def _load_rendered_bundle(bundle_dir: Path) -> dict[str, str]:
+    """Read an already-rendered bundle directory into a path → content map."""
+    files: dict[str, str] = {}
+    for path in sorted(bundle_dir.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in _BUNDLE_TEXT_SUFFIXES:
+            continue
+        try:
+            files[path.relative_to(bundle_dir).as_posix()] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+    return files
+
+
+@app.command(name="check-canon")
+def check_canon(
+    input: Path = typer.Option(..., "--input", help="Path to the company brief Markdown."),
+    bundle: str = typer.Option(
+        ..., "--bundle", help="Directory of an already-rendered bundle to scan."
+    ),
+) -> None:
+    """Check an existing bundle for the brief's section-11 operating canon (ADR-037).
+
+    Runs extraction and coverage against a bundle already on disk. No generation, no API
+    call, no API key — so the extraction thresholds can be calibrated against a real brief
+    and a real bundle, and re-run after each adjustment, at zero cost.
+
+    Reports reach only. Whether canon that IS present landed as usable procedure is a
+    judgement this command does not make.
+    """
+    brief = _load_brief(input)
+    if not brief.free_text:
+        typer.echo("brief has no section-11 operating canon — nothing to check.")
+        return
+    bundle_dir = _resolve_bundle_dir(bundle)
+    files = _load_rendered_bundle(bundle_dir)
+    if not files:
+        typer.echo(f"error: no readable text files under {bundle_dir}", err=True)
+        raise typer.Exit(1)
+
+    terms = extract_canon_terms(
+        brief.free_text,
+        exclude_texts=[
+            brief.description,
+            brief.north_star,
+            brief.we_are,
+            *brief.goals,
+            *brief.we_are_not,
+            *brief.constraints,
+        ],
+    )
+    typer.echo(f"scanned {len(files)} files in {bundle_dir}")
+    typer.echo(f"extracted {len(terms)} canon term(s) unique to section 11:")
+    for term in terms:
+        typer.echo(f"  - {term.text}")
+
+    coverage = canon_coverage(terms, files)
+    warnings = canon_warnings(coverage)
+    if warnings:
+        typer.echo("")
+        for message in warnings:
+            typer.echo(f"warning: {message}", err=True)
+    missing = sum(1 for c in coverage if c.is_missing)
+    thin = sum(1 for c in coverage if c.is_thin)
+    typer.echo("")
+    typer.echo(f"{len(terms) - missing - thin} carried, {thin} thin, {missing} missing")
 
 
 @app.command()

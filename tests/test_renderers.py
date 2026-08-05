@@ -201,3 +201,58 @@ def test_full_missing_idle_belief_rejected() -> None:
     files[key] = files[key].replace("Idle", "Busy").replace("idle", "busy")
     with pytest.raises(BundleError, match="idle-state"):
         structural_check(files)
+
+
+# --- feature 016: no-op parity for a brief without section 11 (C-T5) ---------
+
+
+def test_bundle_without_canon_renders_byte_identically_to_the_pre_change_baseline() -> None:
+    """FR-004: a brief with no ``free_text`` must be completely unaffected.
+
+    ``tests/fixtures/baseline_016.json`` was captured from the rendered file map BEFORE
+    any of feature 016's source edits. Capturing it afterwards would have compared the
+    new implementation against itself and passed vacuously — the same shape as the
+    single-process determinism traps recorded in ADR-036.
+    """
+    import json
+    import pathlib
+
+    baseline_path = pathlib.Path(__file__).resolve().parent / "fixtures" / "baseline_016.json"
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+
+    config = _config()
+    assert config.brief.free_text is None, "baseline fixture assumes a brief with no section 11"
+
+    files = render_files(config)
+    assert sorted(files) == sorted(baseline), "the set of rendered files changed"
+    for path, content in sorted(baseline.items()):
+        assert files[path] == content, f"{path} changed for a brief with no operating canon"
+
+
+def test_canon_coverage_fires_through_the_render_warn_sink() -> None:
+    """The dispatch itself must bite, not just the module in isolation.
+
+    A correct check wired to nothing passes every unit test it has. This asserts the
+    path from ``render_files`` through the ``warn`` sink actually carries the finding.
+    """
+    config = _config()
+    canon = (
+        "Score each enquiry on Persuadability-Index and Margin-Headroom. "
+        "Evidence decays: an Observed-Signal stays valid for 30 days."
+    )
+    config.brief.free_text = canon
+
+    seen: list[str] = []
+    render_files(config, warn=seen.append)
+
+    canon_lines = [w for w in seen if "operating canon" in w]
+    assert canon_lines, "the canon check emitted nothing for canon absent from the bundle"
+    assert any("Persuadability-Index" in w for w in canon_lines)
+
+
+def test_canon_coverage_is_silent_when_the_brief_has_no_section_11() -> None:
+    config = _config()
+    assert config.brief.free_text is None
+    seen: list[str] = []
+    render_files(config, warn=seen.append)
+    assert not [w for w in seen if "operating canon" in w]

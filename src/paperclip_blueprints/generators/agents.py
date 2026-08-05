@@ -43,9 +43,18 @@ def generate_agent(
     reports: list[str] | None = None,
     peers: list[str] | None = None,
     single_agent: bool = False,
+    canon: str | None = None,
     model: str | None = None,
 ) -> AgentDefinition:
-    """Generate the agent's mandate and assemble the full AgentDefinition."""
+    """Generate the agent's mandate and assemble the full AgentDefinition.
+
+    Args:
+        canon: The brief's section-11 operating canon (ADR-037), passed through wholesale
+            and unmodified. Taken as an explicit argument rather than read from ``brief``
+            here, so that ``free_text`` has exactly one read site in the orchestrator —
+            that single read is what makes "wholesale, no selector" auditable rather than
+            merely asserted. ``None`` ⇒ the prompt renders exactly as it did before.
+    """
     prompt = render_prompt(
         "agents_generator",
         slug=stub.slug,
@@ -61,6 +70,7 @@ def generate_agent(
         manager=manager,
         reports=reports or [],
         peers=peers or [],
+        operating_canon=canon,
     )
     payload = client.complete_json(
         model=model or STRUCTURAL_MODEL,

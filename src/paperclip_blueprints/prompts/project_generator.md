@@ -21,6 +21,23 @@ You write a PROJECT.md — the brief for one starter project in a Paperclip comp
 - The `success_condition` is a persistent, checkable condition that defines "done
   well" — not a one-off step. It should read like an outcome, not a task.
 
+{% if operating_canon %}
+## Operating canon (brief, section 11)
+
+{{ operating_canon }}
+
+**This is operating canon, not background.** It is the operator's stated way of working,
+and section 11 is the only place it appears — nothing else in this brief carries it.
+
+Encode it into what you write: its named dimensions, thresholds, classes, labels and rules
+must show up as concrete steps, criteria or checks in your output, with their actual names
+and values. Do NOT compress it into a summary sentence. Do NOT restate it as context and
+then write something generic. If a slug or title you were given is named after part of this
+canon, the canon is what that artifact must actually contain.
+
+Where the canon conflicts with your own sense of best practice, the canon wins.
+{% endif %}
+
 ## Output format
 
 Return ONE fenced ```json block and nothing else:

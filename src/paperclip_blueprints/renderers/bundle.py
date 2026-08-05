@@ -60,6 +60,11 @@ def generate_bundle(
 ) -> CompanyConfig:
     """Run the single-agent generation pipeline (sequential)."""
     emit = progress or _noop_progress
+    # The brief's section-11 operating canon (ADR-037). Read ONCE here and passed
+    # unchanged to every generator that writes procedure. One read site is the structural
+    # guarantee behind wholesale threading: there is exactly one place a per-consumer
+    # transformation could be introduced, and it does not transform.
+    canon = brief.free_text
     emit("→ Generating identity...")
     company = generate_identity(brief, client, model=model)
     emit("→ Generating agent...")
@@ -68,9 +73,11 @@ def generate_bundle(
     # (CEO), so it declares the full built-in set; the custom skill stays at skills[0].
     attach_builtin_skills([stub])
     soul = generate_soul(stub, company, client, model=model)
-    agent = generate_agent(stub, company, brief, soul, client, single_agent=True, model=model)
+    agent = generate_agent(
+        stub, company, brief, soul, client, single_agent=True, canon=canon, model=model
+    )
     attach_capabilities([agent])  # derive capabilities from the lone agent's role/mandate (ADR-026)
-    skill = generate_skill(stub.skills[0], company, [agent.name], client, model=model)
+    skill = generate_skill(stub.skills[0], company, [agent.name], client, canon=canon, model=model)
     # The lone agent is the org root/CEO; the hierarchy degrades deterministically (no LLM
     # call) to that agent owning the north star and every goal at company level (ADR-025).
     goal_hierarchy = generate_goal_hierarchy(company, brief, [agent], client, model=model)
@@ -99,6 +106,9 @@ async def _gather_full(
     Any failure propagates out of ``gather`` so no partial bundle is ever written.
     """
     emit = progress or _noop_progress
+    # The brief's section-11 operating canon (ADR-037) — see the note in the single-agent
+    # pipeline. One read, then passed unchanged to all four procedure carriers.
+    canon = brief.free_text
     emit("→ Generating identity...")
     company = await asyncio.to_thread(generate_identity, brief, client, model=model)
     seed = get_seed(brief.use_case_pattern)
@@ -146,6 +156,7 @@ async def _gather_full(
             manager=stub.reports_to,
             reports=reports_by_manager.get(stub.slug, []),
             peers=peers,
+            canon=canon,
             model=model,
         )
 
@@ -161,12 +172,15 @@ async def _gather_full(
         asyncio.gather(*(make_agent(s) for s in plan.agents)),
         asyncio.gather(
             *(
-                run(generate_skill, s, company, _used_by(s), client, model=model)
+                run(generate_skill, s, company, _used_by(s), client, canon=canon, model=model)
                 for s in plan.skill_slugs
             )
         ),
         asyncio.gather(
-            *(run(generate_project, p, company, client, model=model) for p in plan.projects)
+            *(
+                run(generate_project, p, company, client, canon=canon, model=model)
+                for p in plan.projects
+            )
         ),
         asyncio.gather(
             *(
@@ -176,6 +190,7 @@ async def _gather_full(
                     company,
                     client,
                     assignee_skills=skills_by_agent.get(t.assignee, []),
+                    canon=canon,
                     model=model,
                 )
                 for t in plan.tasks

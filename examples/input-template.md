@@ -226,16 +226,45 @@ The Paperclip docs recommend [matching the adapter to the role](https://papercli
 
 ---
 
-## 11. Anything else
+## 11. Operating canon
 
-Free text for anything important that doesn't fit above. The tool incorporates this into the prompts as additional context.
+The rules your agents should actually follow — the procedures, rubrics, standards and domain decision rules that no other section captures.
 
-**Examples:**
+**This section is encoded, not summarised.** What you write here is threaded verbatim into the generated skills, agent mandates, tasks and projects, with an instruction to turn it into procedure. A rubric written here should come back as scoring steps; a threshold table should come back with its actual thresholds. That is the point of the section — but it cuts both ways: an offhand aside written here will also come back as procedure. If it isn't something you want an agent following, it doesn't belong in this section.
 
-- "I'm on parental leave; deep focus blocks are rare. Optimize the routine cadence for async."
-- "I'm specifically interested in testing whether opencode + Manifest can do meaningful CEO-level work."
-- "I have an existing Hermes deployment with a custom skill `voice-capture` — assume it exists, don't re-generate the skill."
-- "This company is a sibling to <other-company> running in the same Paperclip instance — don't reuse any agent slugs from there."
+**What belongs here:**
+
+- Procedures and standards — how a piece of work is done, and what "done" means
+- Rubrics and scoring schemes — the dimensions, and how they are weighted
+- Thresholds and classifications — the bands, labels and cut-offs, with their values
+- Domain decision rules — what to do when a specific condition holds
+
+**What belongs elsewhere:**
+
+- Org shape — headcount, roster, who reports to whom → **section 7**
+- Identity, positioning, what you are and are not → **sections 4–6**
+- Hard limits the whole company operates under → **section 6 constraints**
+
+**Shape it explicitly.** The generators encode structure far more reliably than prose. Name your dimensions and label your classes rather than describing them in a sentence:
+
+```
+Score each <thing> on four dimensions:
+  Dimension A — <what it measures>, scored 1-5
+  Dimension B — <what it measures>, scored 1-5
+  Dimension C — <what it measures>, scored 1-5
+  Dimension D — <what it measures>, scored 1-5
+Promote only at a combined score of <N> or above.
+
+Evidence classes and how long they stay valid:
+  | Class    | Valid for |
+  |----------|-----------|
+  | Class 1  | <N> days  |
+  | Class 2  | <N> days  |
+  | Class 3  | <N> days  |
+Never act on a Class 3 signal alone.
+```
+
+Those placeholders are a shape, not a recommendation — the dimensions, bands and rules must be yours. A generator given a named list produces named steps; a generator given "we score leads carefully" produces a sentence that says nothing.
 
 **Other context:**
 

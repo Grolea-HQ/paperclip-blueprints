@@ -16,9 +16,18 @@ def generate_skill(
     used_by: list[str],
     client: LLMClient,
     *,
+    canon: str | None = None,
     model: str | None = None,
 ) -> SkillDefinition:
-    """Generate the SKILL.md content for one skill slug."""
+    """Generate the SKILL.md content for one skill slug.
+
+    Args:
+        canon: The brief's section-11 operating canon (ADR-037), passed through
+            wholesale and unmodified. The org planner reads section 11 and mints
+            capability slugs from it, so without this the skill named after a rubric is
+            written blind to the rubric — a slug carries a name, not a procedure.
+            ``None`` ⇒ the prompt renders exactly as it did before.
+    """
     prompt = render_prompt(
         "skill_generator",
         slug=slug,
@@ -26,6 +35,7 @@ def generate_skill(
         we_are=company.we_are,
         north_star=company.north_star,
         constraints=company.constraints,
+        operating_canon=canon,
     )
     payload = client.complete_json(
         model=model or STRUCTURAL_MODEL,

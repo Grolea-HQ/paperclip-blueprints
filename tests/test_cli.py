@@ -442,3 +442,100 @@ def test_preview_invalid_brief_aborts_before_api(tmp_path, monkeypatch) -> None:
     result = runner.invoke(app, ["preview", "--input", str(bad)])
     assert result.exit_code == 1
     assert "validation failed" in result.output
+
+
+# --- check-canon (feature 016 / ADR-037) ------------------------------------
+
+
+def _brief_with_canon(tmp_path: Path) -> Path:
+    """A valid brief whose section 11 carries canon unique to it."""
+    canon = (
+        "Score each enquiry on Persuadability-Index and Margin-Headroom.\n"
+        "An Observed-Signal stays valid for 30 days.\n"
+    )
+    text = VALID_BRIEF.replace("**Other context:**\n", "**Other context:**\n\n" + canon)
+    assert "Persuadability-Index" in text, "fixture error: canon was not injected"
+    p = tmp_path / "brief.md"
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def test_check_canon_reports_missing_terms_without_any_api_call(tmp_path, monkeypatch) -> None:
+    """The calibration entry point must work with no key and no generation.
+
+    Without this, calibrating the thresholds would mean regenerating the bundle — the
+    paid run the split exists to avoid.
+    """
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _brief_with_canon(tmp_path)
+    bundle = tmp_path / "bundle"
+    (bundle / "skills" / "s").mkdir(parents=True)
+    (bundle / "skills" / "s" / "SKILL.md").write_text(
+        "Scoring uses Persuadability-Index.", encoding="utf-8"
+    )
+    (bundle / "COMPANY.md").write_text("Company doc.", encoding="utf-8")
+
+    result = runner.invoke(app, ["check-canon", "--input", str(brief), "--bundle", str(bundle)])
+    assert result.exit_code == 0, result.output
+    assert "Persuadability-Index" in result.output
+    # Carried once → thin, naming the file; never carried → missing, naming the term.
+    assert "only one file" in result.output
+    assert "Margin-Headroom" in result.output
+    assert "appears in no generated file" in result.output
+
+
+def test_check_canon_stays_quiet_when_section_11_is_ordinary_prose(tmp_path, monkeypatch) -> None:
+    """FR-016: plain narrative must not produce a wall of warnings.
+
+    The standard fixture's section 11 is an ordinary aside ("Evenings only; optimize for
+    async review."). A check that flagged prose like this on every run would be noise the
+    operator learns to skip — operationally identical to no check at all.
+    """
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "COMPANY.md").write_text("Unrelated content.", encoding="utf-8")
+
+    result = runner.invoke(app, ["check-canon", "--input", str(brief), "--bundle", str(bundle)])
+    assert result.exit_code == 0, result.output
+    assert "extracted 0 canon term(s)" in result.output
+    assert "warning:" not in result.output
+
+
+def test_check_canon_rejects_a_missing_bundle_directory(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _brief_with_canon(tmp_path)
+    result = runner.invoke(
+        app, ["check-canon", "--input", str(brief), "--bundle", str(tmp_path / "nope")]
+    )
+    assert result.exit_code == 1
+
+
+def test_check_canon_refuses_an_empty_bundle_path(tmp_path, monkeypatch) -> None:
+    """An empty --bundle must be fatal, never a silent fallback to the cwd.
+
+    ``Path("")`` evaluates to ``PosixPath(".")`` and passes ``is_dir()``, so an unset shell
+    variable would turn the scan into a confident report about the working directory —
+    a check answering a different question than the one asked, which is the exact defect
+    class this feature exists to close.
+    """
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _brief_with_canon(tmp_path)
+    result = runner.invoke(app, ["check-canon", "--input", str(brief), "--bundle", ""])
+    assert result.exit_code == 1
+    assert "empty" in result.output.lower()
+
+
+def test_check_canon_refuses_a_directory_that_is_not_a_bundle(tmp_path, monkeypatch) -> None:
+    """A non-empty path to the wrong tree fails the same way as an empty one."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _brief_with_canon(tmp_path)
+    not_a_bundle = tmp_path / "src"
+    not_a_bundle.mkdir()
+    (not_a_bundle / "notes.md").write_text("unrelated", encoding="utf-8")
+    result = runner.invoke(
+        app, ["check-canon", "--input", str(brief), "--bundle", str(not_a_bundle)]
+    )
+    assert result.exit_code == 1
+    assert "does not look like a rendered bundle" in result.output
