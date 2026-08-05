@@ -144,6 +144,41 @@ operator judge; this one should too.
 All findings route through the existing `warn` sink. None fails validation or blocks generation
 (constitution Principle II is unaffected — bundle validity is untouched).
 
+## The pattern across this batch: fixes that would have shipped green
+
+Three separate changes in this review batch would each have passed the full suite while being
+wrong. They are worth naming together, because the common shape is not a coding mistake — it is
+a class of test that cannot see the defect.
+
+1. **The noun/verb gap** (ADR-027 amendment). Narrowing the poller signal from mandate prose to
+   the title was correct, but `_POLLER_RE` held only verb forms (`poll`, `polling`) and no agent
+   nouns (`poller`, `watcher`). Titles use nouns. The narrowed heuristic would have matched
+   almost nothing — the check would have been present, passing, and silently never firing.
+   *Caught by reasoning, before the change landed.*
+
+2. **The FR-008 self-cancellation** (this ADR, decision 4). The dependency check keyed on a
+   shared trigger, while the time-of-day spread in the same feature exists to eliminate shared
+   triggers. Shipping both would have made the check dead on arrival, and left the underlying
+   defect worse than before. *Caught by reasoning, during planning.*
+
+3. **The cadence smell going inert** (this ADR, decision 3). `_routine_cadence_smells` grouped on
+   the full cron; once the cron carried a per-task time, two tasks on one cadence stopped
+   grouping and the check stopped firing. *Caught by an existing test* — the only one of the
+   three that any automated check would have found.
+
+Two of three were caught by thinking about it. That is not a repeatable safeguard.
+
+**The implication for how checks are tested here.** A test asserting that a check *passes on
+clean input* is nearly worthless on its own: a check that never fires passes every clean-input
+test ever written. Every advisory check in this codebase should have at least one test asserting
+it **still fires on input that should trip it** — a positive-detection test, kept alongside the
+negative one. `_routine_cadence_smells` survived case 3 precisely because
+`test_same_cadence_same_assignee_routines_warn` asserted a firing, not an absence.
+
+This applies to `_routine_trigger_collisions`, `_routine_dependency_order`,
+`_routine_skill_incoherence`, `peer_turn_asymmetry`, and any check added later. When a check's
+inputs change shape — as they did here — the positive test is what tells you the check followed.
+
 ## Consequences
 
 ### Positive consequences
