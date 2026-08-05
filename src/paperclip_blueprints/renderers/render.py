@@ -24,7 +24,7 @@ from ..models.task import TaskDefinition
 from .adapter import assign_adapters, parse_model_preferences
 from .budget import allocate_budgets
 from .frontmatter import dump_frontmatter
-from .routines import RoutineSpec, derive_routines
+from .routines import RoutineSpec, derive_routines, wakes_per_active_month
 from .run_policy import (
     assign_run_policies,
     parse_run_policy_preferences,
@@ -267,9 +267,24 @@ def render_files(
     # cap, scaled by governance and weighted by the same role buckets TOOLS.md
     # uses. Empty when no cap is stated. ``role_by_slug`` is built in agent order
     # so the allocation is deterministic.
+    # Cadence weighting (ADR-012 amendment): an agent's cap is also weighted by how often its
+    # recurring tasks wake it. An agent driven by several routines is funded for its BUSIEST
+    # one — the cap has to cover the heaviest month, not an average of them. An agent with no
+    # recurring task maps to None (on-demand; see budget.UNSCHEDULED_WAKE_WEIGHT).
+    wakes_by_slug: dict[str, int | None] = {a.slug: None for a in config.agents}
+    for task in config.tasks:
+        wakes = wakes_per_active_month(task.recurrence)
+        if wakes is None or task.assignee not in wakes_by_slug:
+            continue
+        current = wakes_by_slug[task.assignee]
+        wakes_by_slug[task.assignee] = wakes if current is None else max(current, wakes)
+
     role_by_slug = {a.slug: _role_bucket(a, a.slug in manager_slugs) for a in config.agents}
     allocation = allocate_budgets(
-        role_by_slug, config.brief.governance_position, config.brief.capital_monthly_eur
+        role_by_slug,
+        config.brief.governance_position,
+        config.brief.capital_monthly_eur,
+        wakes_by_slug,
     )
     if allocation.warning is not None and warn is not None:
         warn(allocation.warning)

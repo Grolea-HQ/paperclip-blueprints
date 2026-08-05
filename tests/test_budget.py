@@ -1,7 +1,7 @@
 """Unit tests for the per-agent budget allocator (ADR-012, US1/US2/US3).
 
-Covers every postcondition in contracts/budget-allocation.md (C1–C9) and the
-worked examples.
+Covers every postcondition in contracts/budget-allocation.md (C1–C11) and the
+worked examples. C10/C11 are the cadence weighting added by the ADR-012 amendment.
 """
 
 from paperclip_blueprints.renderers.budget import (
@@ -9,6 +9,34 @@ from paperclip_blueprints.renderers.budget import (
     GOVERNANCE_PCT,
     allocate_budgets,
 )
+
+
+def test_a_daily_driven_agent_outweighs_a_quarterly_driven_peer() -> None:
+    # ADR-012 amendment: same role bucket, different wake frequency → different cap.
+    roles = {"scanner": "generic", "assembler": "generic"}
+    alloc = allocate_budgets(roles, "balanced", 100, wakes_by_slug={"scanner": 30, "assembler": 1})
+    assert alloc.cents["scanner"] > alloc.cents["assembler"]
+
+
+def test_quarterly_and_monthly_agents_receive_the_same_cap() -> None:
+    # The modeling rule: budgetMonthlyCents is a monthly CAP with a hard stop that pauses the
+    # agent, not a spend forecast. An agent waking once a quarter needs, in the month it wakes,
+    # exactly what a monthly agent needs — one wake's worth. Weighting by AVERAGE wakes per
+    # month would give it ~1/3 of the monthly agent (and ~1/90th of a daily agent), so it would
+    # hit its cap mid-run and pause in the one month that matters. Per ACTIVE month, both are 1.
+    roles = {"monthly": "generic", "quarterly": "generic"}
+    alloc = allocate_budgets(roles, "balanced", 100, wakes_by_slug={"monthly": 1, "quarterly": 1})
+    assert alloc.cents["monthly"] == alloc.cents["quarterly"]
+
+
+def test_omitting_wakes_leaves_the_allocation_unchanged() -> None:
+    # Back-compat: the ADR-012 contract holds byte-identically when no cadence is known.
+    roles = {"ceo": "owner", "ed": "manager", "wr": "generic"}
+    assert allocate_budgets(roles, "balanced", 100).cents == {
+        "ceo": 3451,
+        "ed": 2612,
+        "wr": 937,
+    }
 
 
 def test_no_cap_returns_empty_map() -> None:

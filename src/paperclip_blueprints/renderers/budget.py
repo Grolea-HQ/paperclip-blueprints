@@ -28,6 +28,43 @@ ROLE_WEIGHT = {"owner": 4, "manager": 3, "engineering": 2, "generic": 1}
 # Smallest useful per-agent budget (€1), honored when the pool is large enough.
 FLOOR_CENTS = 100
 
+# Cadence weighting (ADR-012 amendment). Keyed on an agent's wakes per ACTIVE month — the
+# months in which it runs at all — never on its average wakes per calendar month.
+#
+# ``budgetMonthlyCents`` is a monthly CAP with a hard stop that pauses the agent, not a spend
+# forecast. Averaging would give a quarterly agent ~1/3 of a monthly agent's cap and ~1/90th
+# of a daily agent's, so in the one month it actually wakes it would hit the cap mid-run and
+# pause — silently, in the month that matters. Per active month a quarterly agent needs
+# exactly what a monthly agent needs: one wake's worth. So every cadence of monthly-or-rarer
+# lands on the same weight, and the scale below never drops beneath a single wake's share.
+#
+# The top of the scale is deliberately compressed (3, not 30). A cap is a ceiling, so the
+# error directions are asymmetric in the same way the run-policy turn cap is: too tight
+# pauses the agent mid-run, too loose merely reserves headroom that is never spent. A literal
+# 30x spread would starve the low-cadence agents to buy headroom the daily agent may not use.
+WAKE_WEIGHT_HIGH = 3  # more than twice weekly (daily, most weekdays)
+WAKE_WEIGHT_MEDIUM = 2  # roughly weekly to twice weekly
+WAKE_WEIGHT_SINGLE = 1  # one wake in an active month (monthly, quarterly, yearly)
+
+# An agent with no recurring task is handoff-/on-demand-driven: its wake count is unbounded
+# and unknowable at generation time. Erring loose, it is weighted as if frequently woken —
+# under-capping it would pause a live handoff mid-review, the silent failure again.
+UNSCHEDULED_WAKE_WEIGHT = WAKE_WEIGHT_HIGH
+
+
+def wake_weight(wakes_per_active_month: int | None) -> int:
+    """Map an agent's wakes per active month to its cadence weight.
+
+    ``None`` (no recurring task ⇒ on-demand) yields ``UNSCHEDULED_WAKE_WEIGHT``.
+    """
+    if wakes_per_active_month is None:
+        return UNSCHEDULED_WAKE_WEIGHT
+    if wakes_per_active_month > 8:
+        return WAKE_WEIGHT_HIGH
+    if wakes_per_active_month > 1:
+        return WAKE_WEIGHT_MEDIUM
+    return WAKE_WEIGHT_SINGLE
+
 
 @dataclass(frozen=True)
 class BudgetAllocation:
@@ -48,6 +85,7 @@ def allocate_budgets(
     role_by_slug: dict[str, str],
     governance_position: str,
     capital_monthly_eur: int | None,
+    wakes_by_slug: dict[str, int | None] | None = None,
 ) -> BudgetAllocation:
     """Derive a per-agent monthly budget (integer cents) from the company cap.
 
@@ -56,6 +94,9 @@ def allocate_budgets(
             "engineering" | "generic"), in a stable iteration order.
         governance_position: "tight" | "balanced" | "loose".
         capital_monthly_eur: The company monthly cap in euros, or ``None``.
+        wakes_by_slug: Agent slug -> wakes per ACTIVE month (see :func:`wake_weight`), or
+            ``None`` to weight by role alone. Omitting it reproduces the pre-amendment
+            allocation exactly, so a bundle whose tasks carry no cadence is unchanged.
 
     Returns:
         A :class:`BudgetAllocation`. ``cents`` is empty when ``capital_monthly_eur``
@@ -72,7 +113,12 @@ def allocate_budgets(
         return BudgetAllocation(cents={}, warning=None)
 
     scaled_pool = capital_monthly_eur * GOVERNANCE_PCT[governance_position]
-    weights = {s: ROLE_WEIGHT[role_by_slug[s]] for s in slugs}
+    if wakes_by_slug is None:
+        weights = {s: ROLE_WEIGHT[role_by_slug[s]] for s in slugs}
+    else:
+        weights = {
+            s: ROLE_WEIGHT[role_by_slug[s]] * wake_weight(wakes_by_slug.get(s)) for s in slugs
+        }
     total_weight = sum(weights.values())
     # Highest-weight agent receives any rounding remainder; ``max`` keeps the
     # first slug on ties, so the tie-break is "earliest in the supplied order".

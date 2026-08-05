@@ -8,12 +8,19 @@ All offline. Isolated so a live correction is a contained, single-file change.
 
 from __future__ import annotations
 
+from ruamel.yaml import YAML
+
+from paperclip_blueprints.models.input import CompanyBrief
 from paperclip_blueprints.models.output import CompanyConfig
 from paperclip_blueprints.models.task import TaskDefinition
 from paperclip_blueprints.renderers.render import render_files
-from paperclip_blueprints.renderers.routines import cron_for, derive_routines
+from paperclip_blueprints.renderers.routines import (
+    cron_for,
+    derive_routines,
+    wakes_per_active_month,
+)
 from paperclip_blueprints.validators.schema_shape import check_schema_shape
-from test_models import _full_config_kwargs
+from test_models import _brief_kwargs, _full_config_kwargs
 from test_templates import _config
 
 
@@ -29,6 +36,28 @@ def _task(
         completion_criteria=["done"],
         recurrence=recurrence,
     )
+
+
+# --- cadence → wakes per active month (ADR-012 amendment) --------------------
+
+
+def test_wakes_counts_the_active_month_not_the_average_month() -> None:
+    # Monthly, quarterly and yearly all wake ONCE in a month they run at all. Counting the
+    # average calendar month instead would rank quarterly below monthly and starve the cap in
+    # the single month the agent runs.
+    assert wakes_per_active_month("monthly") == 1
+    assert wakes_per_active_month("quarterly") == 1
+    assert wakes_per_active_month("yearly") == 1
+
+
+def test_wakes_for_frequent_cadences() -> None:
+    assert wakes_per_active_month("daily") == 30
+    assert wakes_per_active_month("weekly") == 4
+    assert wakes_per_active_month("mon,wed,fri") == 12
+
+
+def test_wakes_is_none_for_an_unscheduled_agent() -> None:
+    assert wakes_per_active_month(None) is None
 
 
 # --- cadence → cron translator ----------------------------------------------
@@ -132,6 +161,38 @@ def test_s15_flags_an_orphan_routine_block() -> None:
     files = render_files(config)
     files[".paperclip.yaml"] += "\nroutines:\n  ghost:\n    triggers: []\n"
     assert any(x.startswith("S15") and "ghost" in x for x in check_schema_shape(config, files))
+
+
+# --- cadence-weighted budgets through the pipeline (ADR-012 amendment) -------
+
+
+def _budget_for(agent: str, *tasks: TaskDefinition) -> int:
+    config = CompanyConfig(
+        **_full_config_kwargs(
+            tasks=list(tasks),
+            brief=CompanyBrief(**_brief_kwargs(capital_monthly_eur=400)),
+        )
+    )
+    data = YAML(typ="safe").load(render_files(config)[".paperclip.yaml"])
+    return data["agents"][agent]["budgetMonthlyCents"]
+
+
+def test_a_daily_driven_agent_gets_a_larger_cap_than_a_quarterly_driven_one() -> None:
+    # Same agent, same role bucket, cadence alone varied.
+    daily = _budget_for("cto", _task("scan", "Scan", recurrence="daily", assignee="cto"))
+    quarterly = _budget_for("cto", _task("scan", "Scan", recurrence="quarterly", assignee="cto"))
+    assert daily > quarterly
+
+
+def test_an_agents_busiest_cadence_sets_its_cap() -> None:
+    # An agent driven by both a daily and a quarterly routine must be funded for the daily one.
+    both = _budget_for(
+        "cto",
+        _task("scan", "Scan", recurrence="daily", assignee="cto"),
+        _task("review", "Review", recurrence="quarterly", assignee="cto"),
+    )
+    daily_only = _budget_for("cto", _task("scan", "Scan", recurrence="daily", assignee="cto"))
+    assert both == daily_only
 
 
 # --- soft warning: a split scheduled activity (same cadence + assignee) ------
