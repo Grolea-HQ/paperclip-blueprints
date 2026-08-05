@@ -259,3 +259,69 @@ def test_canon_coverage_is_silent_when_the_brief_has_no_section_11() -> None:
     seen: list[str] = []
     render_files(config, warn=seen.append)
     assert not [w for w in seen if "operating canon" in w]
+
+
+# --- provenance stamp on the generated README -------------------------------
+
+
+def test_generated_readme_carries_a_version_stamped_provenance_footer() -> None:
+    """Diagnostic first, attribution second.
+
+    A bundle in the wild with no version is one you cannot reason about: every defect
+    chased during this batch would have been faster to place with the generating version
+    stamped in the artifact.
+    """
+    from paperclip_blueprints import __version__
+
+    readme = render_files(_config())["README.md"]
+    last = [line for line in readme.strip().splitlines() if line.strip()][-1]
+    assert "Paperclip Blueprints" in last, "the stamp must be the footer, not a header"
+    assert __version__ in last, "the stamp must carry the resolved package version"
+    assert "github.com/Grolea-HQ/paperclip-blueprints" in last
+
+
+def test_the_provenance_stamp_appears_in_no_other_bundle_file() -> None:
+    """One discreet line, in one file. Never inside the operator's identity content."""
+    files = render_files(_config())
+    stamped = sorted(p for p, content in files.items() if "Paperclip Blueprints" in content)
+    assert stamped == ["README.md"]
+
+
+def test_company_md_is_byte_identical_after_the_provenance_change() -> None:
+    """COMPANY.md is the operator's identity content and must not be annotated at all."""
+    import json
+    import pathlib
+
+    baseline = json.loads(
+        (pathlib.Path(__file__).resolve().parent / "fixtures" / "baseline_016.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert render_files(_config())["COMPANY.md"] == baseline["COMPANY.md"]
+
+
+# --- LICENSE.txt follows the platform convention ----------------------------
+
+
+def test_license_names_the_company_and_leaves_publisher_and_licence_to_the_operator() -> None:
+    """The tool knows the company; it cannot know a community handle and must not pick a
+    licence on the operator's behalf."""
+    text = render_files(_config())["LICENSE.txt"]
+    assert text.startswith("Company: Indie Game Studio\n")
+    for field in ("Publisher:", "Licence:", "Licence URL:"):
+        line = next(line for line in text.splitlines() if line.startswith(field))
+        assert "TODO" in line, f"{field} must be marked as needing completion"
+
+
+def test_license_references_the_canonical_terms_rather_than_embedding_them() -> None:
+    """Shipping third-party licence text is what ADR-011 removed from this repo."""
+    text = render_files(_config())["LICENSE.txt"]
+    assert "https://paperclip.community/companies-terms" in text
+    assert "No warranty" not in text
+    assert "royalty-free" not in text
+
+
+def test_license_lineage_is_company_derivation_not_tool_provenance() -> None:
+    text = render_files(_config())["LICENSE.txt"]
+    assert "Lineage:\n(none — original work)" in text
+    assert "Blueprints" not in text, "tool attribution belongs in the README, not the licence"

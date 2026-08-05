@@ -229,9 +229,16 @@ def test_skill_md_frontmatter_and_sections() -> None:
     assert "1. Verify the build number." in out
 
 
-def test_license_default_proprietary() -> None:
+def test_license_does_not_choose_a_licence_for_the_operator() -> None:
+    """The tool must not assert a licence over content it did not write.
+
+    This previously emitted an all-rights-reserved Proprietary licence on every bundle,
+    including ones the operator intended to publish.
+    """
     out = render_files(_config())["LICENSE.txt"]
-    assert "Proprietary" in out
+    assert "Proprietary" not in out
+    assert "All rights reserved" not in out
+    assert "Licence: TODO" in out
 
 
 # --- full-bundle templates (T013) -------------------------------------------

@@ -416,7 +416,6 @@ def test_company_config_single_agent() -> None:
         agents=[AgentDefinition(**_agent_kwargs())],
         skills=[skill],
     )
-    assert config.license_kind == "Proprietary"
     assert config.agents[0].slug == "ceo"
 
 

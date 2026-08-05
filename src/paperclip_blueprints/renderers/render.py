@@ -15,6 +15,7 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from .. import __version__
 from ..models.agent import AgentDefinition
 from ..models.company import CompanyDefinition
 from ..models.goal import GoalHierarchy
@@ -468,13 +469,16 @@ def render_files(
         "projects": config.projects,
         "tasks": config.tasks,
         "skills": config.skills,
-        "license_kind": config.license_kind,
         "budgets": allocation.cents,
         "adapters": adapters,
         # Per-agent run-policy caps (ADR-027): role-derived maxTurnsPerRun /
         # maxConcurrentRuns, with brief overrides overlaid per field (feature 014 / ADR-034).
         "run_policies": run_policies,
         "routines": routines,
+        # Provenance for the generated README footer: which version produced this
+        # bundle. Diagnostic first, attribution second — a bundle in the wild with no
+        # version is one you cannot reason about when a defect turns up in it.
+        "blueprints_version": __version__,
     }
 
     files: dict[str, str] = {

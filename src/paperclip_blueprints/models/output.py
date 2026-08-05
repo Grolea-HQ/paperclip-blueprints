@@ -40,7 +40,6 @@ class CompanyConfig(BaseModel):
     """The reasoned north-star → sub-goals tree (ADR-025). Additive and optional: a bundle
     may carry only the flat ``company.goals`` list (backward-compat), but when present every
     goal's ``owner`` must resolve to a real agent in the org."""
-    license_kind: str = "Proprietary"
 
     @model_validator(mode="after")
     def _check_mode(self) -> CompanyConfig:
