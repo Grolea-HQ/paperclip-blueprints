@@ -179,6 +179,34 @@ This applies to `_routine_trigger_collisions`, `_routine_dependency_order`,
 `_routine_skill_incoherence`, `peer_turn_asymmetry`, and any check added later. When a check's
 inputs change shape — as they did here — the positive test is what tells you the check followed.
 
+### Audit result, 2026-08-05: all advisory paths bite
+
+Every advisory path reaching `render_files`' `warn` sink was audited by **mutation**, not by
+reading tests: each check was replaced with a function returning nothing, and the suite was run
+to see whether anything failed. Reading a test and judging it "looks like it asserts a firing"
+is the same class of reasoning that missed two of the three defects above.
+
+| Check | Suppressed → first failing test |
+|---|---|
+| `_routine_trigger_collisions` | `test_collision_findings_are_stably_ordered_and_never_block_validation` |
+| `_routine_dependency_order` | `test_consumer_scheduled_before_its_named_producer_warns` |
+| `_routine_skill_incoherence` | `test_warning_is_surfaced_through_render_files_warn_sink` |
+| `_routine_cadence_smells` | `test_both_checks_fire_on_a_pair_matching_both_conditions` |
+| `peer_turn_asymmetry` | `test_peers_under_one_manager_with_different_turn_caps_are_warned` |
+| budget pool-too-small warning | `test_pool_too_small_warns_via_sink` |
+| unmatched run-policy / adapter reference | `test_render_emits_overrides_and_warns_unmatched` |
+
+No inert check found. Worth noting *how* the audit nearly went wrong: an initial grep for each
+check's source message strings found no test for two of the seven, because those tests assert on
+a different fragment of the message than the one in the source. Grepping for coverage produces
+false alarms and, more dangerously, false comfort. **Mutation is the method — suppress the check
+and see if the suite objects.** It is cheap enough to repeat whenever a check's inputs change
+shape.
+
+Scope note: this covers *advisory* checks. Hard validators (`validators/integrity.py`,
+`validators/schema_shape.py`) fail the build when they fire and so cannot silently go inert in
+the same way, but the same mutation technique applies if one is ever suspected.
+
 ## Consequences
 
 ### Positive consequences
