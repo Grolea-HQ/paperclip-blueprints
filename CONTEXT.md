@@ -1,36 +1,9 @@
-# CONTEXT — Paperclip Blueprints glossary and working conventions
+# CONTEXT — Paperclip Blueprints glossary
 
-The shared language of this project, plus the working conventions that must
-survive a clone. Definitions carry no implementation details and no decisions
-(those live in `docs/adr/`). When a term here conflicts with how code or prose
-uses a word, the glossary wins; fix the drift.
-
-The conventions section holds process rules that are neither definitions nor
-architectural decisions — the things a contributor has to do on every feature. It
-lives here because the alternatives do not survive a clone: `CLAUDE.md` is agent
-operating context and `/.specify/` is gitignored, so a rule placed in either is
-invisible to anyone who clones the repo, including a future session on another
-machine.
-
----
-
-## Working conventions
-
-### A brief-schema change carries its template update in the same story
-
-Any change adding, removing or altering a field in `CompanyBrief` MUST update
-`examples/input-template.md` **within the same user story** — never in a polish
-or cleanup phase, and never as a follow-up.
-
-**Why**: a brief field an operator cannot discover does not exist. The field and
-its documentation are one change; shipping the field alone produces a capability
-nobody can reach and a template that silently lies by omission.
-
-**How to check**: if a feature's tasks touch `models/input.py`, exactly one task
-in the same phase must touch `examples/input-template.md`.
-
-Caught by inspection twice — feature 016 (T019) and feature 017 (T023) — which is
-why it is written down rather than re-derived.
+The shared language of this project. Definitions only — no implementation
+details, no decisions (those live in `docs/adr/`), no process rules (those live
+in `CONTRIBUTING.md`). When a term here conflicts with how code or prose uses a
+word, the glossary wins; fix the drift.
 
 ---
 
