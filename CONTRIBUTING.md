@@ -81,26 +81,14 @@ are expected on all public functions, and pyright should be clean.
 
 ## Working conventions
 
-Process rules that apply to every change. They live here rather than in
-`CLAUDE.md` or `.specify/` because neither survives a clone — `CLAUDE.md` is
-agent operating context and `/.specify/` is gitignored, so a rule placed in
-either is invisible to a contributor, and to a future session on another machine.
-
-### A brief-schema change carries its template update in the same change
+### A brief-schema change carries its template update
 
 Any change that adds, removes or alters a field in `CompanyBrief` MUST update
-`examples/input-template.md` **in the same change** — never in a follow-up, and
-never deferred to a cleanup pass.
+`examples/input-template.md` in the same change — a brief field an operator
+cannot discover does not exist.
 
-**Why**: a brief field an operator cannot discover does not exist. The field and
-its documentation are one change; shipping the field alone produces a capability
-nobody can reach and a template that lies by omission.
-
-**How to check**: if a change touches `src/paperclip_blueprints/models/input.py`,
-it must also touch `examples/input-template.md`.
-
-Caught by inspection twice — features 016 and 017 — which is why it is written
-down rather than re-derived each time.
+If a change touches `src/paperclip_blueprints/models/input.py`, it must also
+touch `examples/input-template.md`.
 
 ## Filing bugs and feature requests
 

@@ -1,9 +1,8 @@
 # CONTEXT — Paperclip Blueprints glossary
 
 The shared language of this project. Definitions only — no implementation
-details, no decisions (those live in `docs/adr/`), no process rules (those live
-in `CONTRIBUTING.md`). When a term here conflicts with how code or prose uses a
-word, the glossary wins; fix the drift.
+details, no decisions (those live in `docs/adr/`). When a term here conflicts
+with how code or prose uses a word, the glossary wins; fix the drift.
 
 ---
 
