@@ -146,6 +146,7 @@ def test_write_bundle_force_does_not_union_prior_contents(tmp_path) -> None:
 # --- full-mode structural check (T015) --------------------------------------
 
 from paperclip_blueprints.models.output import CompanyConfig  # noqa: E402
+from paperclip_blueprints.models.task import TaskDefinition  # noqa: E402
 from test_models import _full_config_kwargs  # noqa: E402
 
 
@@ -227,6 +228,64 @@ def test_bundle_without_canon_renders_byte_identically_to_the_pre_change_baselin
     assert sorted(files) == sorted(baseline), "the set of rendered files changed"
     for path, content in sorted(baseline.items()):
         assert files[path] == content, f"{path} changed for a brief with no operating canon"
+
+
+# --- feature 017: no-op parity for a brief without a stated timezone (C4.1) --
+
+
+def test_routine_bearing_bundle_without_timezone_matches_the_pre_change_baseline() -> None:
+    """FR-004 / SC-003: every brief written before feature 017 renders byte-identically.
+
+    ``tests/fixtures/baseline_017.json`` was captured by rendering a **routine-bearing**
+    bundle from a git worktree at the pre-feature commit — not from the current tree.
+    Re-capturing it from the edited source would have compared the implementation against
+    itself and passed vacuously, which is ADR-036's third class exactly.
+
+    The feature-016 baseline above cannot serve this purpose: its config is the
+    single-agent one, which has no tasks and therefore no routines, so it never exercises
+    the emitted timezone at all.
+    """
+    import json
+    import pathlib
+
+    baseline_path = pathlib.Path(__file__).resolve().parent / "fixtures" / "baseline_017.json"
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+
+    tasks = [
+        TaskDefinition(
+            slug="signal-scan",
+            name="Signal scan",
+            project="launch-v1",
+            assignee="cto",
+            objective="o",
+            completion_criteria=["done"],
+            recurrence="mon,wed,fri",
+        ),
+        TaskDefinition(
+            slug="board-package",
+            name="Monthly board package",
+            project="launch-v1",
+            assignee="cto",
+            objective="o",
+            completion_criteria=["done"],
+            recurrence="monthly",
+        ),
+        TaskDefinition(
+            slug="ship",
+            name="Ship",
+            project="launch-v1",
+            assignee="cto",
+            objective="o",
+            completion_criteria=["done"],
+        ),
+    ]
+    config = CompanyConfig(**_full_config_kwargs(tasks=tasks))
+    assert config.brief.routine_timezone is None, "baseline assumes a brief with no stated zone"
+
+    files = render_files(config)
+    assert sorted(files) == sorted(baseline), "the set of rendered files changed"
+    for path, content in sorted(baseline.items()):
+        assert files[path] == content, f"{path} changed for a brief with no stated timezone"
 
 
 def test_canon_coverage_fires_through_the_render_warn_sink() -> None:

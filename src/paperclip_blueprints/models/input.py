@@ -72,6 +72,18 @@ class CompanyBrief(BaseModel):
     hours_per_week: int | None = None
     capital_monthly_eur: int | None = None
     capital_setup_eur: int | None = None
+    routine_timezone: str | None = None
+    """Section-9 optional IANA timezone (feature 017 / ADR-038) — the zone every generated
+    routine's schedule trigger is expressed in. ``None`` ⇒ the emitted default (UTC), so a
+    brief that states nothing renders byte-identically to before the field existed.
+
+    Stored **canonicalised**: validated here against the platform's zone database, so the value
+    downstream is always a real zone in the database's own spelling and nothing re-validates it.
+    An unrecognised value raises rather than falling back — a silent default would schedule the
+    whole company hours from where the operator asked, with no signal in the bundle.
+
+    Company-level by construction: ``derive_routines`` takes one zone for all routines, so a
+    per-routine divergence is not representable."""
     adapter_preferences: list[str] | None = None
     run_policy_preferences: list[str] | None = None
     """Section-12 optional per-agent run-policy override lines (feature 014 / ADR-034), e.g.
@@ -173,6 +185,23 @@ class CompanyBrief(BaseModel):
                 f"unknown use-case pattern {v!r}; available: {', '.join(KNOWN_PATTERNS)}"
             )
         return v
+
+    @field_validator("routine_timezone")
+    @classmethod
+    def _valid_routine_timezone(cls, v: str | None) -> str | None:
+        """Canonicalise the stated zone, or reject the brief (feature 017, FR-006/FR-009).
+
+        Rejecting here rather than at render time is what makes FR-007 true for free: both
+        ``generate`` and ``validate`` construct the brief before any Anthropic call or file
+        write, so a mistyped zone costs nothing. Local import mirrors the run-policy validator
+        below — models depend on renderers only for a pure shared parser, and ``routines``
+        imports models only for ``TaskDefinition``, so there is no runtime cycle.
+        """
+        if v is None:
+            return None
+        from ..renderers.routines import resolve_timezone
+
+        return resolve_timezone(v)
 
     @field_validator("run_policy_preferences")
     @classmethod
@@ -364,6 +393,7 @@ def parse_brief(markdown: str) -> CompanyBrief:
     data["hours_per_week"] = _to_int(_inline_value(s9, "Hours per week"))
     data["capital_monthly_eur"] = _to_int(_inline_value(s9, "EUR/month"))
     data["capital_setup_eur"] = _to_int(_inline_value(s9, "one-time"))
+    data["routine_timezone"] = _inline_value(s9, "Timezone")
 
     if overrides := _list_items(_anchored_block(sec.get(10, ""), "overrides")):
         data["adapter_preferences"] = overrides

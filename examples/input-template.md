@@ -198,6 +198,11 @@ How much time you put in and how much money you can spend. Used to size the agen
 - **Capital cap (EUR, one-time setup):** [e.g., 500]
 - **Single-week cap (optional):** [e.g., 8 — weeks requiring >8h of review are structurally incompatible with the bet]
 - **Working pattern (optional):** [e.g., "evenings only, weekends preferred"]
+- **Timezone (optional):** [e.g., Europe/Helsinki — an IANA zone name]
+
+**About the timezone.** Every generated routine is scheduled in this zone. Leave it blank and routines are scheduled in UTC, which is the previous behaviour. The tool spreads scheduled work across the working day, so without your zone that window lands wherever UTC puts it — for an operator three hours ahead, a routine placed at "08:00" fires at 11:00 and the top of the window reaches 20:00 local. Casing does not matter (`europe/helsinki` is accepted and written back canonically), but a name the zone database does not know stops the run before anything is generated, so a typo costs nothing.
+
+Note this binds the *zone*, not the times: the tool still derives each routine's time of day itself from the cadence you state in section 7. Stating explicit clock times in a brief does not yet bind them.
 
 The tool uses these to set:
 

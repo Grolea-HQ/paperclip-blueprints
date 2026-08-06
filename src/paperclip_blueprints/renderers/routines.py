@@ -12,9 +12,19 @@ Paperclip Routine — two coordinated pieces:
    (``cronExpression`` + ``timezone``) and concurrency/catch-up policies (defaults
    ``coalesce_if_active`` / ``skip_missed``).
 
-The cadence→cron translation honors the brief's stated cadence (``mon,wed,fri`` → ``0 9 * * 1,3,5``,
-``monthly`` → ``0 9 1 * *``). The cron string and the ``routines.<slug>`` shape stay **PROVISIONAL**
-— confirmed only at live import. Kept in this one module so a live correction is contained.
+The cadence→cron translation honors the brief's stated cadence (``mon,wed,fri`` → ``* * 1,3,5``,
+``monthly`` → ``1 * *``); the time of day is derived per task by :func:`slot_for`. The **timezone**
+is brief-bound (feature 017 / ADR-038): one company-level zone applied to every routine, defaulting
+to UTC when the brief states none. Binding the zone changed nothing about *when* in the day a
+routine lands — cadence day-patterns and time-of-day derivation are untouched by that feature.
+
+What the brief still does NOT bind: stated clock times, stated days-of-month, and stated ordering
+between routines. ``TaskDefinition.recurrence`` cannot hold any of them, so no amount of threading
+prose to this module would change the emitted cron; that is the deferred schedule-grammar work
+recorded in ADR-038.
+
+The cron string and the ``routines.<slug>`` shape stay **PROVISIONAL** — confirmed only at live
+import. Kept in this one module so a live correction is contained.
 """
 
 from __future__ import annotations
@@ -23,8 +33,69 @@ import hashlib
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
+from zoneinfo import available_timezones
 
 from ..models.task import TaskDefinition
+
+# --- timezone (feature 017 / ADR-038) ----------------------------------------
+
+DEFAULT_TIMEZONE = "UTC"
+"""Emitted when the brief states no timezone. Named so the dataclass default, the
+``derive_routines`` signature and the render call site cannot drift apart."""
+
+
+@lru_cache(maxsize=1)
+def _canonical_by_casefold() -> dict[str, str]:
+    """``{casefolded zone name: canonical zone name}`` from the platform's zone database.
+
+    Built once per process (598 zones on a system-tzdata macOS). Cached because it is consulted
+    once per run in practice but is cheap to hold and awkward to thread.
+    """
+    return {name.casefold(): name for name in available_timezones()}
+
+
+def resolve_timezone(value: str) -> str:
+    """Canonicalise an IANA zone name, or reject it.
+
+    Resolution matches against the **enumerated zone set**, never a ``ZoneInfo()`` lookup, and the
+    returned spelling is the set's own member rather than any transformation of the input. Both
+    choices are load-bearing:
+
+    - ``ZoneInfo`` resolves by filesystem, so it inherits the *host's* case sensitivity.
+      ``ZoneInfo("europe/helsinki")`` succeeds on macOS and fails on case-sensitive Linux, and it
+      preserves whatever casing it was handed. The same brief would emit ``europe/helsinki`` on one
+      machine and ``Europe/Helsinki`` on another — a silent cross-machine divergence of exactly the
+      kind ``slot_for`` refuses builtin ``hash()`` to avoid.
+    - Canonicalising by string manipulation (title-casing each segment) looks right on
+      ``Region/City`` names and mangles the real entries that are not shaped that way —
+      ``Etc/GMT-3``, ``US/Eastern``, ``EET``.
+
+    This does **not** make resolution fully deterministic across machines: the installed zone
+    database still varies by vintage and source, so a zone present on one machine can be absent on
+    another. What it converts is the *failure mode* — divergence surfaces as a rejection naming the
+    value, not as a bundle differing in a spelling nobody reads.
+
+    Args:
+        value: An IANA zone name in any letter casing, with optional surrounding whitespace.
+
+    Returns:
+        The canonical spelling as the zone database holds it.
+
+    Raises:
+        ValueError: If the value is not a zone the database recognises. There is no fallback —
+            silently defaulting would schedule a whole company hours from where the operator asked,
+            with no signal anywhere in the bundle.
+    """
+    stripped = value.strip()
+    canonical = _canonical_by_casefold().get(stripped.casefold())
+    if canonical is None:
+        raise ValueError(
+            f"{stripped!r} is not a known IANA timezone "
+            "(expected a zone name such as 'Europe/Helsinki')"
+        )
+    return canonical
+
 
 # Named cadence -> day-pattern cron fields (day-of-month, month, day-of-week). The minute and
 # hour are NOT part of the cadence: the brief states days and frequencies, never clock times, so
@@ -48,9 +119,11 @@ _DEFAULT_DAY_PATTERN = "* * 1"  # weekly fallback for an unrecognized cadence
 #
 # The window is a policy default, not a correctness property: work an operator is expected to
 # supervise should land during a working day, and an agent that wakes overnight into an approval
-# gate stalls until morning anyway, so the small hours buy nothing. NOTE the window is applied in
-# the routine's timezone, which is UTC, while the rationale is *human* working hours — those
-# coincide only for a UTC-ish operator. See ADR-036.
+# gate stalls until morning anyway, so the small hours buy nothing. The window is applied in the
+# routine's timezone, which the brief now binds (feature 017 / ADR-038) — so for a company that
+# states its zone, these hours ARE the operator's hours, which is what the rationale always
+# claimed. A brief that states no zone still emits UTC, and there the old caveat stands: the
+# window means human working hours only for a UTC-ish operator. See ADR-036, ADR-038.
 START_HOUR = 6
 END_HOUR = 17
 MINUTE_STEP = 5
@@ -103,7 +176,7 @@ class RoutineSpec:
     assignee: str
     project: str
     cron: str
-    timezone: str = "UTC"
+    timezone: str = DEFAULT_TIMEZONE
     concurrency_policy: str = "coalesce_if_active"
     catch_up_policy: str = "skip_missed"
 
@@ -175,13 +248,21 @@ def wakes_per_active_month(cadence: str | None) -> int | None:
     return _DEFAULT_WAKES
 
 
-def derive_routines(tasks: Sequence[TaskDefinition]) -> list[RoutineSpec]:
+def derive_routines(
+    tasks: Sequence[TaskDefinition], timezone: str = DEFAULT_TIMEZONE
+) -> list[RoutineSpec]:
     """Build a RoutineSpec for each task that carries a ``recurrence`` cadence.
 
     Routines are keyed off the real task slug (short, stable) and inherit the task's own
     ``assignee`` + ``project`` (so each routine resolves to a real agent and project on import).
     Non-recurring tasks contribute nothing — this is what keeps emission to the genuinely
     scheduled work.
+
+    Args:
+        tasks: The bundle's full task set; non-recurring tasks are skipped.
+        timezone: The company's zone (feature 017), applied to every routine. One value for the
+            whole bundle, which is what makes a per-routine divergence unrepresentable (FR-002).
+            Already canonicalised by ``CompanyBrief``; not re-validated here.
     """
     return [
         RoutineSpec(
@@ -190,6 +271,7 @@ def derive_routines(tasks: Sequence[TaskDefinition]) -> list[RoutineSpec]:
             assignee=t.assignee,
             project=t.project,
             cron=cron_for(t.recurrence, t.slug),
+            timezone=timezone,
         )
         for t in tasks
         if t.recurrence
