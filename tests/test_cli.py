@@ -272,6 +272,53 @@ def test_generate_invalid_brief_exits_nonzero(tmp_path, monkeypatch) -> None:
     assert "validation failed" in result.output
 
 
+# --- feature 017: an unknown timezone stops the run before it costs anything -
+
+
+_BAD_TZ_BRIEF = VALID_BRIEF.replace(
+    "- **Capital cap (EUR, one-time setup):** 400",
+    "- **Capital cap (EUR, one-time setup):** 400\n- **Timezone (optional):** Europe/Helsinky",
+)
+
+
+def test_validate_rejects_an_unknown_timezone(tmp_path) -> None:
+    # C2.2 / FR-008 — `validate` must refuse on the same terms as `generate`, so the error
+    # surfaces at the cheapest point available to the operator.
+    bad = tmp_path / "bad.md"
+    bad.write_text(_BAD_TZ_BRIEF, encoding="utf-8")
+    result = runner.invoke(app, ["validate", "--input", str(bad)])
+    assert result.exit_code == 1
+    assert "Europe/Helsinky" in result.output
+
+
+def test_generate_with_unknown_timezone_makes_zero_api_calls(tmp_path, monkeypatch) -> None:
+    """C2.1 / FR-007 / SC-005 — rejection is free, not merely early.
+
+    Without this, FR-007 is satisfied by an ordering that nothing enforces: a correct
+    implementation and one that happens to validate first look identical from the outside.
+    Counting transport invocations is the mechanism check, not the instruction.
+    """
+    calls: list[str] = []
+
+    def counting(**kwargs: object) -> str:
+        calls.append(str(kwargs.get("system", "")))
+        return _dispatch(**kwargs)
+
+    _patch_client(monkeypatch, counting)
+    bad = tmp_path / "bad.md"
+    bad.write_text(_BAD_TZ_BRIEF, encoding="utf-8")
+    out = tmp_path / "out"
+
+    result = runner.invoke(
+        app, ["generate", "--input", str(bad), "--output", str(out), "--single-agent"]
+    )
+
+    assert result.exit_code == 1
+    assert "Europe/Helsinky" in result.output
+    assert calls == [], "a brief rejected for a bad timezone must cost zero generation calls"
+    assert not out.exists(), "a rejected brief must write no bundle"
+
+
 def test_generate_malformed_response_leaves_no_partial_bundle(tmp_path, monkeypatch) -> None:
     def broken(**kwargs: object) -> str:
         system = str(kwargs["system"]).lower()

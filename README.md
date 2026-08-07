@@ -31,6 +31,8 @@ The result is a Paperclip-importable bundle ready to use.
 
 **Routine scheduling (ADR-036).** The brief states cadence, not clock time, so each routine's time of day is derived deterministically from its task slug — the same brief always produces the same schedule. Routines that still land on the same trigger, and consumers scheduled at or before the producer they name, are reported as warnings for you to judge; neither blocks generation.
 
+**Routine timezone (ADR-038).** Section 9 of the brief takes an optional IANA timezone (e.g. `Europe/Helsinki`); every routine is scheduled in it. Leave it blank for UTC. Because routine times are spread across the working day, binding your zone is what makes that window your hours rather than UTC's. A zone name the database does not recognise stops the run before any generation happens, so a typo costs nothing.
+
 ## Operating canon (section 11)
 
 Section 11 of the brief is for the rules your agents should actually follow — procedures, rubrics, thresholds, domain decision rules. It is the one input with no other carrier, so it is threaded **whole and unmodified** into every generator that writes procedure (skills, agent mandates, tasks, projects), with an instruction to **encode it into procedure rather than summarise it** (ADR-037).

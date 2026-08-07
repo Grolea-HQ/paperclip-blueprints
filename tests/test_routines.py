@@ -8,9 +8,12 @@ All offline. Isolated so a live correction is a contained, single-file change.
 
 from __future__ import annotations
 
+import pathlib
 import subprocess
 import sys
+from zoneinfo import available_timezones
 
+import pytest
 from ruamel.yaml import YAML
 
 from paperclip_blueprints.models.input import CompanyBrief
@@ -18,11 +21,13 @@ from paperclip_blueprints.models.output import CompanyConfig
 from paperclip_blueprints.models.task import TaskDefinition
 from paperclip_blueprints.renderers.render import render_files
 from paperclip_blueprints.renderers.routines import (
+    DEFAULT_TIMEZONE,
     END_HOUR,
     MINUTE_STEP,
     START_HOUR,
     cron_for,
     derive_routines,
+    resolve_timezone,
     slot_for,
     wakes_per_active_month,
 )
@@ -176,6 +181,205 @@ def test_derive_routines_inherits_task_assignee_and_project() -> None:
 
 def test_derive_routines_empty_when_no_task_is_scheduled() -> None:
     assert derive_routines([_task("ship", "Ship"), _task("review", "Review")]) == []
+
+
+# --- timezone resolution (feature 017 / ADR-038) -----------------------------
+#
+# Resolution goes through the ENUMERATED zone set, never through a ZoneInfo() lookup. ZoneInfo
+# resolves by filesystem, so it inherits the host's case sensitivity: "europe/helsinki" resolves on
+# a case-insensitive filesystem and not on a case-sensitive one, and it keeps whatever casing it was
+# handed rather than canonicalising. The same brief would then emit two different bundles on two
+# machines — the salted-hash() failure of feature 015 in different clothes.
+
+
+def test_resolve_timezone_accepts_a_canonical_zone() -> None:
+    # C1.1
+    assert resolve_timezone("Europe/Helsinki") == "Europe/Helsinki"
+    assert resolve_timezone("UTC") == "UTC"
+
+
+def test_resolve_timezone_canonicalises_casing_and_ignores_surrounding_space() -> None:
+    # C1.2 / C1.3 — recoverable intent is accepted, not rejected.
+    assert resolve_timezone("europe/helsinki") == "Europe/Helsinki"
+    assert resolve_timezone("EUROPE/HELSINKI") == "Europe/Helsinki"
+    assert resolve_timezone("  Europe/Helsinki  ") == "Europe/Helsinki"
+
+
+def test_resolve_timezone_preserves_non_title_case_database_entries() -> None:
+    # C1.8. The canonical spelling is the SET'S OWN MEMBER, never a string transformation. A
+    # "capitalise each segment" implementation passes every test written against Region/City names
+    # and silently mangles these — which are real database entries.
+    assert resolve_timezone("Etc/GMT-3") == "Etc/GMT-3"
+    assert resolve_timezone("etc/gmt-3") == "Etc/GMT-3"
+    assert resolve_timezone("US/Eastern") == "US/Eastern"
+    assert resolve_timezone("us/eastern") == "US/Eastern"
+
+
+def test_resolve_timezone_matches_the_enumerated_set_not_the_filesystem() -> None:
+    # C1.4 / FR-013 — host-independence asserted as a property, not trusted to the implementation.
+    # Every accepted value must be a member of available_timezones() exactly as returned; a
+    # filesystem-backed lookup would accept names this set does not contain.
+    zones = available_timezones()
+    for candidate in ("Europe/Helsinki", "europe/helsinki", "us/eastern", "etc/gmt-3"):
+        assert resolve_timezone(candidate) in zones
+
+
+def test_resolve_timezone_rejects_an_unknown_zone_naming_the_value() -> None:
+    # C1.5 — unrecoverable intent. The message must carry the offending value.
+    for bad in ("Europe/Helsinky", "+03:00", "Mars/Olympus", ""):
+        with pytest.raises(ValueError) as excinfo:
+            resolve_timezone(bad)
+        assert bad.strip() in str(excinfo.value) or not bad.strip()
+
+
+def test_resolve_timezone_accepts_database_entries_that_are_not_region_city() -> None:
+    # C1.6 — the recognition set is the database, not a curated subset of it. "EET" is a real
+    # entry; an implementation that required a "/" would reject it.
+    assert resolve_timezone("EET") == "EET"
+
+
+# --- timezone: the default, pinned (feature 017) -----------------------------
+#
+# Before feature 017 nothing in the suite asserted the emitted timezone at ANY level — a grep for
+# "timezone" across tests/ and validators/ returned nothing. The regression guarantee for a brief
+# that states no zone (FR-004 / SC-003) therefore rested on an unasserted constant. These two land
+# first, before the brief field exists, so that guarantee has something under it.
+
+
+def test_derive_routines_default_timezone_is_utc() -> None:
+    # C4.1 anchor, dataclass level.
+    routines = derive_routines(
+        [
+            _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
+            _task("board-package", "Monthly board package", recurrence="monthly"),
+        ]
+    )
+    assert [r.timezone for r in routines] == [DEFAULT_TIMEZONE, DEFAULT_TIMEZONE]
+    assert DEFAULT_TIMEZONE == "UTC"
+
+
+def test_rendered_routine_block_declares_utc_by_default() -> None:
+    # C4.1 anchor, emitted-artifact level. The dataclass default and the rendered YAML are two
+    # different things to get wrong; pin both.
+    config = CompanyConfig(
+        **_full_config_kwargs(
+            tasks=[
+                _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
+                _task("board-package", "Monthly board package", recurrence="monthly"),
+            ]
+        )
+    )
+    data = YAML(typ="safe").load(render_files(config)[".paperclip.yaml"])
+    zones = [t["timezone"] for r in data["routines"].values() for t in r["triggers"]]
+    assert zones == ["UTC", "UTC"]
+
+
+# --- timezone: a stated zone binds (feature 017, US1) ------------------------
+
+
+def _scheduled_tasks() -> list[TaskDefinition]:
+    return [
+        _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
+        _task("board-package", "Monthly board package", recurrence="monthly"),
+    ]
+
+
+def _zones_in(yaml_text: str) -> list[str]:
+    data = YAML(typ="safe").load(yaml_text)
+    return [t["timezone"] for r in data["routines"].values() for t in r["triggers"]]
+
+
+def _rendered_with_timezone(zone: str | None) -> str:
+    brief = CompanyBrief(**_brief_kwargs(routine_timezone=zone))
+    config = CompanyConfig(**_full_config_kwargs(tasks=_scheduled_tasks(), brief=brief))
+    return render_files(config)[".paperclip.yaml"]
+
+
+def test_stated_timezone_reaches_every_routine() -> None:
+    # C3.1 / C3.2 / SC-001 — all routines, one zone, none left on the default.
+    zones = _zones_in(_rendered_with_timezone("Europe/Helsinki"))
+    assert zones == ["Europe/Helsinki", "Europe/Helsinki"]
+    assert DEFAULT_TIMEZONE not in zones
+
+
+def test_absent_timezone_still_emits_the_default() -> None:
+    # C3.3 / FR-004.
+    assert _zones_in(_rendered_with_timezone(None)) == ["UTC", "UTC"]
+
+
+def test_timezone_does_not_move_any_cron_field() -> None:
+    # C3.4 / FR-010 / FR-011. This is the guard that keeps feature 017 inside its scope: the
+    # zone changes, the schedule does not. A change to the spread or the day pattern breaks it.
+    def _crons(zone: str | None) -> list[str]:
+        data = YAML(typ="safe").load(_rendered_with_timezone(zone))
+        return [t["cronExpression"] for r in data["routines"].values() for t in r["triggers"]]
+
+    assert _crons("Europe/Helsinki") == _crons(None)
+
+
+def test_timezone_does_not_change_the_advisory_findings() -> None:
+    # C4.4 — the three routine checks are keyed on cron and objectives, never on the zone.
+    def _warnings(zone: str | None) -> list[str]:
+        brief = CompanyBrief(**_brief_kwargs(routine_timezone=zone))
+        config = CompanyConfig(**_full_config_kwargs(tasks=_scheduled_tasks(), brief=brief))
+        captured: list[str] = []
+        render_files(config, warn=captured.append)
+        return captured
+
+    assert _warnings("Europe/Helsinki") == _warnings(None)
+
+
+def test_bundle_with_no_recurring_task_emits_no_timezone() -> None:
+    # C3.5 — a stated zone with nothing to schedule changes nothing.
+    brief = CompanyBrief(**_brief_kwargs(routine_timezone="Europe/Helsinki"))
+    files = render_files(CompanyConfig(**_full_config_kwargs(brief=brief)))
+    assert "routines:" not in files[".paperclip.yaml"]
+    assert "Europe/Helsinki" not in files[".paperclip.yaml"]
+
+
+def test_stated_timezone_renders_identically_across_processes() -> None:
+    """C4.5 / SC-006 — cross-process determinism of the RENDERED schedule, not just the resolver.
+
+    A separate interpreter is the point. ``available_timezones()`` returns a set, and set
+    iteration order over strings depends on the per-process hash salt; a canonicalisation that
+    picked a member by iteration rather than by exact casefold key would agree with itself all
+    through this suite — one process, one salt — and still emit differently on a real run. That
+    is the same trap ``slot_for``'s subprocess guard exists for.
+
+    Asserting only ``resolve_timezone`` here would be narrower than the contract, which is about
+    the emitted schedule.
+    """
+    script = (
+        "import pathlib, sys;"
+        "root = pathlib.Path.cwd();"
+        "sys.path.insert(0, str(root / 'tests'));"
+        "from paperclip_blueprints.models.input import CompanyBrief;"
+        "from paperclip_blueprints.models.output import CompanyConfig;"
+        "from paperclip_blueprints.models.task import TaskDefinition;"
+        "from paperclip_blueprints.renderers.render import render_files;"
+        "from test_models import _brief_kwargs, _full_config_kwargs;"
+        "t = lambda s, c: TaskDefinition(slug=s, name=s, project='launch-v1', assignee='cto',"
+        " objective='o', completion_criteria=['done'], recurrence=c);"
+        "brief = CompanyBrief(**_brief_kwargs(routine_timezone='europe/helsinki'));"
+        "cfg = CompanyConfig(**_full_config_kwargs("
+        " tasks=[t('signal-scan', 'mon,wed,fri'), t('board-package', 'monthly')], brief=brief));"
+        "y = render_files(cfg)['.paperclip.yaml'];"
+        "print([l.strip() for l in y.splitlines()"
+        " if 'cronExpression' in l or 'timezone' in l])"
+    )
+    runs = {
+        subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=pathlib.Path(__file__).resolve().parent.parent,
+        ).stdout
+        for _ in range(3)
+    }
+    assert len(runs) == 1, "the rendered schedule differed between interpreter processes"
+    (only,) = runs
+    assert "Europe/Helsinki" in only and "cronExpression" in only
 
 
 # --- render: one task set, recurring flagged, routines keyed off real slug ---

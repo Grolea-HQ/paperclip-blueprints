@@ -32,7 +32,12 @@ from .canon import (
     extraction_warnings,
 )
 from .frontmatter import dump_frontmatter
-from .routines import RoutineSpec, derive_routines, wakes_per_active_month
+from .routines import (
+    DEFAULT_TIMEZONE,
+    RoutineSpec,
+    derive_routines,
+    wakes_per_active_month,
+)
 from .run_policy import (
     assign_run_policies,
     parse_run_policy_preferences,
@@ -446,7 +451,11 @@ def render_files(
     # Tasks with a `recurrence` cadence → importable Routines (ADR-022, US3, PROVISIONAL cron):
     # a `.paperclip.yaml` routines.<task-slug> block; the recurring task itself is flagged
     # `recurring: true` (no shadow task). Empty when no task is scheduled.
-    routines = derive_routines(config.tasks)
+    #
+    # The zone (feature 017 / ADR-038) is the brief's, or the default when it states none — the
+    # fallback lives at this single call site and uses the same constant as the parameter default,
+    # so the two cannot drift apart. The brief already canonicalised it; nothing re-validates.
+    routines = derive_routines(config.tasks, config.brief.routine_timezone or DEFAULT_TIMEZONE)
     if warn is not None:
         for message in _routine_cadence_smells(routines):
             warn(message)

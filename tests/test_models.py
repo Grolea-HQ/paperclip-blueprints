@@ -254,6 +254,64 @@ def test_parse_aggregates_all_errors() -> None:
 
 # --- run-policy override channel (feature 014) ------------------------------
 
+# --- section-9 timezone (feature 017 / ADR-038) ------------------------------
+
+
+def _brief_with_timezone(value: str) -> str:
+    """VALID_BRIEF with a section-9 timezone line carrying ``value``."""
+    return VALID_BRIEF.replace(
+        "- **Capital cap (EUR, one-time setup):** 400",
+        f"- **Capital cap (EUR, one-time setup):** 400\n- **Timezone (optional):** {value}",
+    )
+
+
+def test_parse_brief_reads_section_9_timezone() -> None:
+    # C1.1 through parse_brief, not just the validator.
+    assert (
+        parse_brief(_brief_with_timezone("Europe/Helsinki")).routine_timezone == "Europe/Helsinki"
+    )
+
+
+def test_parse_brief_canonicalises_timezone_casing() -> None:
+    # C1.2 — recoverable intent accepted; the canonical spelling is stored.
+    assert (
+        parse_brief(_brief_with_timezone("europe/helsinki")).routine_timezone == "Europe/Helsinki"
+    )
+
+
+def test_parse_brief_timezone_none_when_line_absent() -> None:
+    # C4.3 — every brief written before feature 017 has no such line and must still parse.
+    assert parse_brief(VALID_BRIEF).routine_timezone is None
+
+
+def test_parse_brief_timezone_none_for_placeholder_or_blank() -> None:
+    # C1.7 / FR-005 — an unfilled template line is indistinguishable from an absent one.
+    assert parse_brief(_brief_with_timezone("[e.g., Europe/Helsinki]")).routine_timezone is None
+    assert parse_brief(_brief_with_timezone("")).routine_timezone is None
+
+
+def test_parse_brief_rejects_an_unknown_timezone_naming_the_value() -> None:
+    # C1.5 / SC-004 — no silent fallback: a typo must stop the run, not move the company 3 hours.
+    for bad in ("Europe/Helsinky", "+03:00"):
+        with pytest.raises(BriefValidationError) as excinfo:
+            parse_brief(_brief_with_timezone(bad))
+        assert bad in str(excinfo.value)
+
+
+def test_parse_brief_accepts_a_non_region_city_database_zone() -> None:
+    # C1.6 — the recognition set is the zone database, not a curated Region/City subset.
+    assert parse_brief(_brief_with_timezone("EET")).routine_timezone == "EET"
+
+
+def test_timezone_line_does_not_disturb_other_section_9_values() -> None:
+    # C4.2 / FR-012 — _inline_value matches on substring across the section's lines, so a new
+    # line in section 9 is exactly the place an existing binding could be silently stolen.
+    brief = parse_brief(_brief_with_timezone("Europe/Helsinki"))
+    assert brief.hours_per_week == 6
+    assert brief.capital_monthly_eur == 150
+    assert brief.capital_setup_eur == 400
+
+
 _RUN_POLICY_SECTION = """
 
 ## 12. Run-policy overrides (optional)

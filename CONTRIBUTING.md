@@ -79,6 +79,17 @@ are expected on all public functions, and pyright should be clean.
   Decision Record under `docs/adr/` using `docs/adr/000-template.md`. Adding a
   dependency to `pyproject.toml` requires an ADR.
 
+## Working conventions
+
+### A brief-schema change carries its template update
+
+Any change that adds, removes or alters a field in `CompanyBrief` MUST update
+`examples/input-template.md` in the same change — a brief field an operator
+cannot discover does not exist.
+
+If a change touches `src/paperclip_blueprints/models/input.py`, it must also
+touch `examples/input-template.md`.
+
 ## Filing bugs and feature requests
 
 Issues are tracked in [GitHub Issues](https://github.com/Grolea-HQ/paperclip-blueprints/issues).
