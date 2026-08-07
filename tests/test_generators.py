@@ -4,6 +4,8 @@ T006: the Anthropic client seam (prompt loading, fenced-block extraction,
 injectable transport, malformed-response handling). No live API calls.
 """
 
+import json
+
 import pytest
 
 from paperclip_blueprints.generators.agents import generate_agent
@@ -14,7 +16,7 @@ from paperclip_blueprints.generators.client import (
     load_prompt,
 )
 from paperclip_blueprints.generators.identity import generate_identity
-from paperclip_blueprints.generators.org import AgentStub, generate_org
+from paperclip_blueprints.generators.org import AgentStub, generate_org, generate_org_plan
 from paperclip_blueprints.generators.skills import generate_skill
 from paperclip_blueprints.generators.souls import generate_soul
 from paperclip_blueprints.models.agent import AgentDefinition, AgentSoul
@@ -200,6 +202,51 @@ def test_org_planner_returns_single_owner() -> None:
     assert isinstance(stub, AgentStub)
     assert stub.reports_to is None
     assert stub.skills == ["release-checklist"]
+
+
+def test_unrepresentable_cadence_is_rejected_at_the_plan_step(monkeypatch) -> None:
+    """An unrepresentable cadence must fail at org planning, not during render.
+
+    Feature 018 replaced the silent weekly-Monday fallback with a raise (FR-007). *Where* that
+    raise lands decides what it costs: at the plan step it costs identity + org — two model
+    calls — while at render time it would cost the full per-agent fan-out on a brief that looked
+    valid. This pins it to the cheap point, because "generation fails late" is discovered by
+    whoever runs it, not by the suite.
+    """
+    bad_plan = json.dumps(
+        {
+            "agents": [
+                {
+                    "slug": "ceo",
+                    "name": "CEO",
+                    "title": "CEO",
+                    "reports_to": None,
+                    "skills": ["release-checklist"],
+                }
+            ],
+            "projects": [{"slug": "launch", "name": "Launch", "owner": "ceo"}],
+            "tasks": [
+                {
+                    "slug": "board-package",
+                    "name": "Board package",
+                    "project": "launch",
+                    "assignee": "ceo",
+                    "recurrence": "monthly on the 5th",
+                }
+            ],
+        }
+    )
+    calls: list[str] = []
+
+    def counting(**kwargs: object) -> str:
+        calls.append(str(kwargs.get("what", "")))
+        return bad_plan
+
+    with pytest.raises(GenerationError, match="org plan failed validation"):
+        generate_org_plan(_brief(), _company(), LLMClient(_invoke=counting))
+
+    # One org call, and nothing after it — no per-agent fan-out was attempted.
+    assert len(calls) == 1
 
 
 def test_soul_generator_builds_soul_with_idle_belief() -> None:
