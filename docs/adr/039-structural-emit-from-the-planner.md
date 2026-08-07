@@ -52,8 +52,10 @@ dependency primitive (ADR-022), so emitting the field would invent something the
 ### Negative
 
 - `org_planner` must populate the widened fields. No test can prove a model follows an
-  instruction; `scripts/probe_cadence_fidelity.py` measures it in two calls, and its result is the
-  decision artifact for spec 019.
+  instruction; `scripts/probe_cadence_fidelity.py` measures it in two calls. **Result, five runs:
+  20/20** — every stated weekday, day-of-month, month list and dependency carried, every run. The
+  field was the constraint. Measured on one small fixture that states its cadences plainly; it does
+  not establish behaviour on loosely-phrased or buried schedule prose.
 - Cadence strings that previously produced a routine now raise.
 
 ### Neutral

@@ -3,6 +3,8 @@
 > Record the current fact, not the narrative that produced it. Amendments state
 > the struck text, the corrected fact, and a pointer to where the design now
 > lives — not why the mistake was tempting.
+>
+> If an ADR doesn't fit on one screen, it's probably two decisions.
 
 ## Status
 
@@ -14,33 +16,22 @@ YYYY-MM-DD
 
 ## Context
 
-What is the issue we're seeing that motivates this decision or change? Describe the forces at play, including technological, political, social, and project local. Be specific and factual.
+What made this decision necessary. One paragraph.
 
 ## Decision
 
-What is the change we're proposing or doing? State the decision in active voice.
+The decision, in active voice.
 
 ## Consequences
 
-What becomes easier or more difficult to do as a result of this change?
+What becomes easier or harder, and what this constrains. Bullets, not prose.
 
-### Positive consequences
-- [What this enables]
-- [What this simplifies]
-
-### Negative consequences
-- [What this constrains]
-- [What new problems this creates]
-
-### Neutral consequences
-- [What this changes that's neither good nor bad]
+- [What this enables or simplifies]
+- [What this constrains, or what new problem it creates]
 
 ## Alternatives considered
 
-What other options did we look at? Why did we reject them?
-
-- **Alternative A:** [description]. Rejected because [reason].
-- **Alternative B:** [description]. Rejected because [reason].
+- **[Alternative]:** rejected because [reason]. One line each.
 
 ## References
 
