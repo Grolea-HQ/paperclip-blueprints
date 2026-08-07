@@ -1,5 +1,9 @@
 # ADR-NNN: [Decision title in present tense]
 
+> Record the current fact, not the narrative that produced it. Amendments state
+> the struck text, the corrected fact, and a pointer to where the design now
+> lives — not why the mistake was tempting.
+
 ## Status
 
 [Proposed | Accepted | Deprecated | Superseded by ADR-XXX]

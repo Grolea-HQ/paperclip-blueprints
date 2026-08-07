@@ -75,10 +75,31 @@ Design a complete org for THIS company:
   the brief states that work runs on a STANDING SCHEDULE (e.g. "every Monday", "Mon/Wed/Fri",
   "monthly board package"). Otherwise set `recurrence` to `null`. Most tasks are
   handoff- or heartbeat-driven and MUST be `null` — do NOT flag a task recurring just because
-  it repeats "each cycle"; only genuinely clock-driven standing work gets a cadence. Normalize
-  the cadence to one of `daily`, `weekly`, `monthly`, `quarterly`, or a comma-separated
-  lowercase weekday list (e.g. `mon,wed,fri`). Each recurring task still needs a real
-  `assignee` and `project` — the routine runs as that agent, in that project.
+  it repeats "each cycle"; only genuinely clock-driven standing work gets a cadence. Each
+  recurring task still needs a real `assignee` and `project` — the routine runs as that agent,
+  in that project.
+- **Record every schedule detail the brief states. Do NOT normalize it away.** `recurrence` is an
+  object, not a word:
+  `{"frequency": "daily|weekly|monthly|quarterly|yearly", "days_of_week": [...], "day_of_month": N, "months": [...]}`.
+  Only `frequency` is required; state each other part **whenever the brief states it**, and omit
+  it otherwise.
+  - The brief says *"weekly, on Tuesdays"* → `{"frequency": "weekly", "days_of_week": ["tue"]}`.
+    **A single named day still goes in `days_of_week`.** Writing `{"frequency": "weekly"}` here
+    discards the Tuesday and the routine will run on Monday.
+  - *"Mon/Wed/Fri"* → `{"frequency": "weekly", "days_of_week": ["mon","wed","fri"]}`.
+  - *"monthly, on the 5th"* → `{"frequency": "monthly", "day_of_month": 5}`.
+  - *"quarterly, on the 8th of January, April, July and October"* →
+    `{"frequency": "quarterly", "day_of_month": 8, "months": ["jan","apr","jul","oct"]}`.
+  - No stated day → state the frequency alone.
+
+  There is no later opportunity to recover a day you leave out — nothing downstream reads the
+  brief. `days_of_week` applies only to weekly cadences; `day_of_month` and `months` only to
+  monthly/quarterly/yearly ones.
+- **Record which tasks consume which.** When you create a recurring task that works from another
+  task's output, list that task's slug in `depends_on` (e.g. an assembly task that consumes a
+  refresh task's register). Leave it `[]` otherwise. You are the only step that knows this
+  relationship; if you do not record it, nothing downstream can tell that one routine must run
+  after another.
 - **One cadence → one recurring task.** A single stated scheduled cadence maps to EXACTLY ONE
   recurring task. Do NOT split one scheduled activity into multiple recurring tasks: if that
   activity has sub-steps (e.g. "scan then log"), fold them into that one recurring task's
@@ -110,7 +131,7 @@ Return ONE fenced ```json block and nothing else, matching this shape exactly:
     {"slug": "project-slug", "name": "Readable Project Name", "owner": "an-agent-slug"}
   ],
   "tasks": [
-    {"slug": "task-slug", "name": "Readable Task Name", "project": "project-slug", "assignee": "an-agent-slug", "recurrence": null}
+    {"slug": "task-slug", "name": "Readable Task Name", "project": "project-slug", "assignee": "an-agent-slug", "recurrence": null, "depends_on": []}
   ]
 }
 ```

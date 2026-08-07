@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from paperclip_blueprints.models.agent import AgentDefinition, AgentSoul
+from paperclip_blueprints.models.cadence import Cadence
 from paperclip_blueprints.models.company import CompanyDefinition
 from paperclip_blueprints.models.input import (
     BriefValidationError,
@@ -253,6 +254,99 @@ def test_parse_aggregates_all_errors() -> None:
 
 
 # --- run-policy override channel (feature 014) ------------------------------
+
+# --- structured cadence (feature 018) ----------------------------------------
+
+
+def test_cadence_accepts_a_named_weekday() -> None:
+    # C1.1
+    c = Cadence.of("weekly", days_of_week=["tue"])
+    assert c.frequency == "weekly"
+    assert c.days_of_week == [2]
+
+
+def test_cadence_accepts_a_day_of_month() -> None:
+    # C1.2 — the case no cadence string could ever express.
+    c = Cadence.of("monthly", day_of_month=5)
+    assert c.day_of_month == 5
+
+
+def test_cadence_accepts_a_day_and_months() -> None:
+    # C1.3
+    c = Cadence.of("quarterly", day_of_month=8, months=["jan", "apr", "jul", "oct"])
+    assert c.day_of_month == 8
+    assert c.months == [1, 4, 7, 10]
+
+
+def test_cadence_rejects_inconsistent_parts() -> None:
+    # C1.4 — a part that cannot apply to the stated frequency is a planning error, not a value
+    # to silently ignore.
+    with pytest.raises(ValidationError, match="days_of_week"):
+        Cadence.of("monthly", days_of_week=["tue"])
+    with pytest.raises(ValidationError, match="day_of_month"):
+        Cadence.of("weekly", day_of_month=5)
+    with pytest.raises(ValidationError, match="months"):
+        Cadence.of("weekly", months=["jan"])
+    with pytest.raises(ValidationError):
+        Cadence.of("daily", day_of_month=5)
+
+
+def test_cadence_rejects_empty_stated_lists() -> None:
+    # C1.5 — state a value or omit the field; an empty list is neither.
+    with pytest.raises(ValidationError):
+        Cadence.of("weekly", days_of_week=[])
+    with pytest.raises(ValidationError):
+        Cadence.of("quarterly", months=[])
+
+
+def test_cadence_rejects_out_of_range_day_of_month() -> None:
+    with pytest.raises(ValidationError):
+        Cadence.of("monthly", day_of_month=0)
+    with pytest.raises(ValidationError):
+        Cadence.of("monthly", day_of_month=32)
+
+
+def test_cadence_day_above_28_is_accepted_and_reported() -> None:
+    # C1.6 — valid, but it will not fire in February.
+    c = Cadence.of("monthly", day_of_month=31)
+    assert c.day_of_month == 31
+    assert c.warnings(), "a day above 28 must be reported"
+    assert not Cadence.of("monthly", day_of_month=28).warnings()
+
+
+def test_cadence_coerces_legacy_strings() -> None:
+    # C1.7 — an older plan, or a model that ignores the structured shape, still works.
+    assert Cadence.coerce("weekly") == Cadence.of("weekly")
+    assert Cadence.coerce("tue") == Cadence.of("weekly", days_of_week=["tue"])
+    assert Cadence.coerce("tuesday") == Cadence.of("weekly", days_of_week=["tue"])
+    assert Cadence.coerce("mon,wed,fri") == Cadence.of("weekly", days_of_week=["mon", "wed", "fri"])
+    assert Cadence.coerce("monthly") == Cadence.of("monthly")
+    assert Cadence.coerce("quarterly") == Cadence.of("quarterly")
+
+
+def test_cadence_coercion_raises_rather_than_defaulting() -> None:
+    # C1.8 / FR-007. Today an unrecognised cadence falls through to the default day pattern —
+    # `* * 1`, weekly Monday — so "monthly on the 5th" silently becomes a WEEKLY routine. The
+    # contract rewarded discarding the day. That path must not survive.
+    for bad in ("monthly on the 5th", "whenever", "every other tuesday", ""):
+        with pytest.raises(ValueError):
+            Cadence.coerce(bad)
+
+
+def test_task_definition_accepts_a_structured_cadence_and_coerces_a_string() -> None:
+    # The field is one type downstream; legacy input is coerced at the boundary, not branched on.
+    t = TaskDefinition(
+        slug="s",
+        name="n",
+        project="p",
+        assignee="a",
+        objective="o",
+        completion_criteria=["d"],
+        recurrence=Cadence.coerce("tue"),
+    )
+    assert isinstance(t.recurrence, Cadence)
+    assert t.recurrence.days_of_week == [2]
+
 
 # --- section-9 timezone (feature 017 / ADR-038) ------------------------------
 

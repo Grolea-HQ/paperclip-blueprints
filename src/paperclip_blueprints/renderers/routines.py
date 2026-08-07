@@ -30,12 +30,12 @@ import. Kept in this one module so a live correction is contained.
 from __future__ import annotations
 
 import hashlib
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from zoneinfo import available_timezones
 
+from ..models.cadence import Cadence
 from ..models.task import TaskDefinition
 
 # --- timezone (feature 017 / ADR-038) ----------------------------------------
@@ -97,20 +97,6 @@ def resolve_timezone(value: str) -> str:
     return canonical
 
 
-# Named cadence -> day-pattern cron fields (day-of-month, month, day-of-week). The minute and
-# hour are NOT part of the cadence: the brief states days and frequencies, never clock times, so
-# time-of-day is derived per task by `slot_for` (feature 015). PROVISIONAL, as before.
-_NAMED_DAY_PATTERN = {
-    "daily": "* * *",
-    "weekly": "* * 1",
-    "biweekly": "* * 1",
-    "monthly": "1 * *",
-    "quarterly": "1 1,4,7,10 *",
-    "yearly": "1 1 *",
-    "annual": "1 1 *",
-}
-_DEFAULT_DAY_PATTERN = "* * 1"  # weekly fallback for an unrecognized cadence
-
 # --- time-of-day distribution (feature 015) ----------------------------------
 #
 # Every routine used to be pinned to 09:00, so a brief stating eight cadences produced eight
@@ -124,6 +110,13 @@ _DEFAULT_DAY_PATTERN = "* * 1"  # weekly fallback for an unrecognized cadence
 # states its zone, these hours ARE the operator's hours, which is what the rationale always
 # claimed. A brief that states no zone still emits UTC, and there the old caveat stands: the
 # window means human working hours only for a UTC-ish operator. See ADR-036, ADR-038.
+# Defaults for parts a cadence does not state — chosen to reproduce the pre-018 day patterns
+# exactly, so a cadence stating only a frequency emits what it always did.
+DEFAULT_DAY_OF_WEEK = 1  # Monday
+DEFAULT_DAY_OF_MONTH = 1
+DEFAULT_QUARTER_MONTHS = (1, 4, 7, 10)
+DEFAULT_YEAR_MONTHS = (1,)
+
 START_HOUR = 6
 END_HOUR = 17
 MINUTE_STEP = 5
@@ -181,57 +174,100 @@ class RoutineSpec:
     catch_up_policy: str = "skip_missed"
 
 
-def day_pattern_for(cadence: str) -> str:
+def day_pattern_for(cadence: Cadence | str) -> str:
     """The cron day fields (day-of-month, month, day-of-week) a cadence binds to.
 
-    This is the part the brief actually states, and it is unchanged by feature 015. Split out
-    so the collision checks can compare two routines' day patterns without re-parsing cron.
+    Every part the cadence states is honoured; every part it omits falls back to what the coarse
+    token produced before feature 018, so a cadence stating only a frequency emits an unchanged
+    pattern. A bare string is coerced (and raises if unrecognisable) — there is no silent default.
     """
-    c = cadence.strip().lower()
-    if c in _NAMED_DAY_PATTERN:
-        return _NAMED_DAY_PATTERN[c]
-    days = sorted({_DOW[tok[:3]] for tok in re.split(r"[^a-z]+", c) if tok[:3] in _DOW})
-    if days:
+    c = Cadence.coerce(cadence)
+    if c.frequency == "daily":
+        return "* * *"
+    if c.frequency in ("weekly", "biweekly"):
+        days = c.days_of_week or [DEFAULT_DAY_OF_WEEK]
         return f"* * {','.join(str(d) for d in days)}"
-    return _DEFAULT_DAY_PATTERN
+    dom = c.day_of_month or DEFAULT_DAY_OF_MONTH
+    if c.frequency == "monthly":
+        return f"{dom} * *"
+    months = c.months or (
+        DEFAULT_QUARTER_MONTHS if c.frequency == "quarterly" else DEFAULT_YEAR_MONTHS
+    )
+    return f"{dom} {','.join(str(m) for m in months)} *"
 
 
-def cron_for(cadence: str, slug: str) -> str:
-    """Translate a cadence hint + task slug to a cron expression (PROVISIONAL).
+def _field_values(field: str) -> set[int] | None:
+    """A cron day-field as a value set, or ``None`` when unrestricted (``*``)."""
+    if field == "*":
+        return None
+    return {int(part) for part in field.split(",")}
 
-    The **day pattern** comes from the cadence, exactly as before (``mon,wed,fri`` → ``* * 1,3,5``,
-    ``monthly`` → ``1 * *``). The **time of day** comes from :func:`slot_for`, because the brief
-    states days and frequencies but never clock times — so pinning every routine to one hour was
-    a default, not a binding. Unrecognized cadence → weekly day pattern.
+
+def schedules_can_intersect(day_pattern_a: str, day_pattern_b: str) -> bool:
+    """Whether two day patterns can ever fire on the same day.
+
+    Feature 015 compared two routines' ordering only when their day patterns were *identical*,
+    reasoning that "before" is otherwise undefined. That is true across genuinely disjoint
+    schedules and false across overlapping ones: a daily consumer of a weekly producer does meet
+    it, every week, on the producer's day. Equality under-catches the cross-cadence dependency.
+
+    Disjointness is only claimed where it is provable — an unrestricted field constrains nothing,
+    and a restricted day-of-month against a restricted day-of-week is treated as intersecting,
+    since cron ORs the two and any day-of-month lands on any weekday across enough months.
+
+    Args:
+        day_pattern_a: The cron day fields (day-of-month, month, day-of-week) of one schedule.
+        day_pattern_b: The same for the other.
+
+    Returns:
+        ``False`` only when the two provably share no firing day.
+    """
+    dom_a, month_a, dow_a = (_field_values(f) for f in day_pattern_a.split())
+    dom_b, month_b, dow_b = (_field_values(f) for f in day_pattern_b.split())
+
+    if month_a is not None and month_b is not None and not (month_a & month_b):
+        return False
+    if dom_a is not None and dom_b is not None and not (dom_a & dom_b):
+        return False
+    if dow_a is not None and dow_b is not None and not (dow_a & dow_b):
+        return False
+    return True
+
+
+def cron_for(cadence: Cadence | str, slug: str) -> str:
+    """Translate a cadence + task slug to a cron expression (PROVISIONAL).
+
+    The **day pattern** comes from the cadence, including any day it states (feature 018). The
+    **time of day** comes from :func:`slot_for` — no cadence part influences it.
     """
     hour, minute = slot_for(slug)
     return f"{minute} {hour} {day_pattern_for(cadence)}"
 
 
-# Wakes per ACTIVE month per named cadence — the months in which the routine runs at all, not
-# the calendar average (see budget.wake_weight for why the distinction is load-bearing).
-# Monthly-or-rarer cadences all wake exactly once in an active month.
-_NAMED_WAKES = {
+# Wakes per ACTIVE month per frequency — the months in which the routine runs at all, not the
+# calendar average (see budget.wake_weight for why the distinction is load-bearing).
+_WAKES_PER_FREQUENCY = {
     "daily": 30,
     "weekly": 4,
     "biweekly": 2,
     "monthly": 1,
     "quarterly": 1,
     "yearly": 1,
-    "annual": 1,
 }
-_DEFAULT_WAKES = 4  # matches the weekly cron fallback for an unrecognized cadence
 
 
-def wakes_per_active_month(cadence: str | None) -> int | None:
+def wakes_per_active_month(cadence: Cadence | str | None) -> int | None:
     """How many times a cadence wakes its agent in a month where it runs at all.
 
-    Shares the cadence vocabulary with :func:`cron_for` deliberately: two parsers of the same
-    operator-written cadence strings would drift, and a silent divergence between what gets
-    scheduled and what gets budgeted is the failure this is meant to prevent.
+    Reads the **same** :class:`Cadence` the schedule reads. That is the point: two parsers of one
+    cadence are two answers to "how often does this run", and a silent divergence between what
+    gets scheduled and what gets budgeted is the failure this shared reading prevents.
+
+    A cadence's stated days change *which* days it fires on, and for a weekly cadence how many
+    times per week; they never change its frequency class.
 
     Args:
-        cadence: A task's ``recurrence`` cadence, or ``None`` for a non-recurring task.
+        cadence: A task's cadence, or ``None`` for a non-recurring task.
 
     Returns:
         The wake count, or ``None`` when there is no cadence (an on-demand agent, whose wake
@@ -239,13 +275,10 @@ def wakes_per_active_month(cadence: str | None) -> int | None:
     """
     if cadence is None:
         return None
-    c = cadence.strip().lower()
-    if c in _NAMED_WAKES:
-        return _NAMED_WAKES[c]
-    days = {_DOW[tok[:3]] for tok in re.split(r"[^a-z]+", c) if tok[:3] in _DOW}
-    if days:
-        return len(days) * 4
-    return _DEFAULT_WAKES
+    c = Cadence.coerce(cadence)
+    if c.frequency in ("weekly", "biweekly") and c.days_of_week:
+        return _WAKES_PER_FREQUENCY[c.frequency] * len(c.days_of_week)
+    return _WAKES_PER_FREQUENCY[c.frequency]
 
 
 def derive_routines(

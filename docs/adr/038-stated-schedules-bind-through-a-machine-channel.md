@@ -158,8 +158,9 @@ Settled conclusions, carried here as insurance against slippage:
 - Its own section, appended after the current last section to preserve the numbering property above.
   Not folded into section 7, which is documented as free prose about org shape; a strict grammar
   inside a free-prose section invites the parse ambiguity the grammar exists to remove.
-- The cadence representation must change on every path. `TaskDefinition.recurrence` cannot hold a
-  trigger regardless of how it is populated, so this is not a design question.
+- ~~The cadence representation must change on every path. `TaskDefinition.recurrence` cannot hold a
+  trigger regardless of how it is populated, so this is not a design question.~~
+  **Superseded 2026-08-06 — see the amendment below.**
 - Scope is the full trigger — day-of-month, day-of-week, time-of-day — not only clock times.
 - A stated schedule bypasses `org_planner` for the trigger. Association is keyed on the **agent** the
   schedule line names, since org_planner must materialise that agent anyway, with a warning when a
@@ -200,6 +201,26 @@ against `CompanyBrief`'s fields, which is where it is true, and never against se
 where the operator wrote the times. This is not a test agreeing with an implementation but an audit
 agreeing with a model, and it is the most compact statement of how all of this happened: *green
 means the artefact you checked agreed with you, not that you checked the right artefact.*
+
+## Amendment, 2026-08-06
+
+Struck: "The cadence representation must change on every path. `TaskDefinition.recurrence`
+cannot hold a trigger regardless of how it is populated, so this is not a design question."
+
+A field too narrow to hold a value does not imply the value must arrive by a new channel —
+the field can be widened where it stands. Spec 018 does that: org_planner emits structured
+cadence and `depends_on` directly. The sentence also closed the question, which is why the
+alternative went unexamined.
+
+Measured against the reference bundle: `recurrence` already accepts `tue` (→ day-of-week 2),
+so the stated-Tuesday loss is prompt steering, not field width; no cadence string produces a
+day-of-month other than 1, and unrecognised input degrades to weekly-Monday; the ordering
+check returns zero findings there, silenced by `_references_task`, not by the day-pattern
+gate.
+
+The schedule grammar is held as spec 019 and must be re-argued against the baseline 018
+establishes. Whether it earns its cost turns on whether the planner faithfully emits a stated
+day once a field exists to hold it; 018 ships a plan-only probe to answer that.
 
 ## Consequences
 

@@ -114,7 +114,7 @@ The same check runs automatically at the end of every `generate`, so these warni
 
 - **Section 11 — operating canon.** Threaded whole into the generators that write procedure, and encoded rather than summarised (ADR-037). How you mark it up determines what the coverage check can verify; `examples/input-template.md` documents the convention.
 - **Section 12 — run-policy overrides.** Per-agent turn caps, concurrent-run limits, and heartbeat on/off, overriding the role-derived defaults (ADR-034). Blank keeps the defaults.
-- **Routine scheduling.** The brief states cadence, not clock time. Each routine's time of day is derived deterministically from its task slug, so the same brief always yields the same schedule; remaining trigger collisions and out-of-order producer/consumer pairs are reported as warnings (ADR-036).
+- **Routine scheduling.** A cadence carries the schedule days the brief states — a named weekday, a day of the month, a set of months (ADR-039). Clock times are not collected, so each routine's time of day is derived deterministically from its task slug and the same brief always yields the same schedule. Trigger collisions and out-of-order producer/consumer pairs are reported as warnings (ADR-036). A cadence the tool cannot represent stops the run at the planning step, before any per-agent generation.
 - **Section 9 — routine timezone.** An optional IANA zone name (e.g. `Europe/Helsinki`) that every routine is scheduled in; blank means UTC (ADR-038). Since routine times are spread across a working-day window, this is what makes that window *your* working day. An unrecognised zone name is rejected before generation starts.
 
 ---

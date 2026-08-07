@@ -16,6 +16,7 @@ from zoneinfo import available_timezones
 import pytest
 from ruamel.yaml import YAML
 
+from paperclip_blueprints.models.cadence import Cadence
 from paperclip_blueprints.models.input import CompanyBrief
 from paperclip_blueprints.models.output import CompanyConfig
 from paperclip_blueprints.models.task import TaskDefinition
@@ -26,8 +27,10 @@ from paperclip_blueprints.renderers.routines import (
     MINUTE_STEP,
     START_HOUR,
     cron_for,
+    day_pattern_for,
     derive_routines,
     resolve_timezone,
+    schedules_can_intersect,
     slot_for,
     wakes_per_active_month,
 )
@@ -37,7 +40,7 @@ from test_templates import _config
 
 
 def _task(
-    slug: str, name: str, recurrence: str | None = None, assignee: str = "cto"
+    slug: str, name: str, recurrence: str | Cadence | None = None, assignee: str = "cto"
 ) -> TaskDefinition:
     return TaskDefinition(
         slug=slug,
@@ -46,7 +49,7 @@ def _task(
         assignee=assignee,  # "cto"/"ceo" are real agents in the full fixture
         objective="o",
         completion_criteria=["done"],
-        recurrence=recurrence,
+        recurrence=Cadence.coerce(recurrence) if recurrence is not None else None,
     )
 
 
@@ -142,8 +145,15 @@ def test_cron_for_weekday_list_honors_the_brief_cadence() -> None:
     assert _day_pattern(cron_for("tue/thu", "a")) == "* * 2,4"
 
 
-def test_cron_for_unknown_falls_back_to_weekly() -> None:
-    assert _day_pattern(cron_for("whenever", "a")) == "* * 1"  # T8
+def test_cron_for_unknown_cadence_raises_rather_than_falling_back() -> None:
+    # C1.8 / FR-007 — replaces the former "unknown falls back to weekly" behaviour, deliberately.
+    # That fallback meant `monthly on the 5th` emitted a WEEKLY MONDAY routine: a planner that
+    # tried to keep the stated day got a worse result than one that discarded it. Silent degrade
+    # is the defect, not the safety net.
+    with pytest.raises(ValueError, match="not a recognisable cadence"):
+        cron_for("whenever", "a")
+    with pytest.raises(ValueError):
+        cron_for("monthly on the 5th", "a")
 
 
 def test_cron_time_of_day_comes_from_the_slug_slot() -> None:
@@ -160,8 +170,8 @@ def test_cron_time_of_day_comes_from_the_slug_slot() -> None:
 def test_derive_routines_emits_only_recurring_tasks() -> None:
     tasks = [
         _task("scan-infra-landscape", "Scan the infra landscape"),  # not recurring
-        _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
-        _task("board-package", "Monthly board package", recurrence="monthly"),
+        _task("signal-scan", "Signal scan", recurrence=Cadence.coerce("mon,wed,fri")),
+        _task("board-package", "Monthly board package", recurrence=Cadence.coerce("monthly")),
     ]
     routines = derive_routines(tasks)
     assert [r.slug for r in routines] == ["signal-scan", "board-package"]  # short, real slugs
@@ -174,13 +184,148 @@ def test_derive_routines_emits_only_recurring_tasks() -> None:
 
 def test_derive_routines_inherits_task_assignee_and_project() -> None:
     # Part-2 acceptance: each routine resolves a real assignee + project from its task.
-    (routine,) = derive_routines([_task("signal-scan", "Signal scan", recurrence="mon,wed,fri")])
+    (routine,) = derive_routines(
+        [_task("signal-scan", "Signal scan", recurrence=Cadence.coerce("mon,wed,fri"))]
+    )
     assert routine.assignee == "cto"
     assert routine.project == "launch-v1"
 
 
 def test_derive_routines_empty_when_no_task_is_scheduled() -> None:
     assert derive_routines([_task("ship", "Ship"), _task("review", "Review")]) == []
+
+
+# --- schedule intersection (feature 018, C4) ---------------------------------
+#
+# Feature 015 compared ordering only within an IDENTICAL day pattern, because "before" is not
+# well defined across differing patterns. That was too blunt: a daily consumer of a weekly
+# producer genuinely does fire on the producer's day, so their ordering is comparable there.
+# Equality under-catches exactly the cross-cadence dependency this is meant to see.
+
+
+def _dp(cadence: Cadence) -> str:
+    return day_pattern_for(cadence)
+
+
+def test_daily_and_weekly_schedules_intersect() -> None:
+    # C4.1 — the case day-pattern equality misses.
+    assert schedules_can_intersect(_dp(Cadence.of("daily")), _dp(Cadence.of("weekly")))
+    assert schedules_can_intersect(
+        _dp(Cadence.of("daily")), _dp(Cadence.of("weekly", days_of_week=["tue"]))
+    )
+
+
+def test_disjoint_weekdays_do_not_intersect() -> None:
+    # C4.2
+    tue = _dp(Cadence.of("weekly", days_of_week=["tue"]))
+    thu = _dp(Cadence.of("weekly", days_of_week=["thu"]))
+    assert not schedules_can_intersect(tue, thu)
+
+
+def test_disjoint_months_do_not_intersect() -> None:
+    # C4.3
+    q1 = _dp(Cadence.of("quarterly", day_of_month=5, months=["jan", "apr"]))
+    q2 = _dp(Cadence.of("quarterly", day_of_month=5, months=["feb", "may"]))
+    assert not schedules_can_intersect(q1, q2)
+
+
+def test_quarterly_and_monthly_intersect_on_shared_months() -> None:
+    # C4.3 — a monthly schedule runs in every month, so it meets the quarterly one.
+    monthly = _dp(Cadence.of("monthly", day_of_month=5))
+    quarterly = _dp(Cadence.of("quarterly", day_of_month=5, months=["jan", "apr", "jul", "oct"]))
+    assert schedules_can_intersect(monthly, quarterly)
+
+
+def test_different_days_of_month_do_not_intersect() -> None:
+    assert not schedules_can_intersect(
+        _dp(Cadence.of("monthly", day_of_month=5)), _dp(Cadence.of("monthly", day_of_month=8))
+    )
+
+
+def test_day_of_month_and_weekday_schedules_can_intersect() -> None:
+    # The 5th falls on a Tuesday sometimes. Cron ORs a restricted day-of-month with a restricted
+    # day-of-week, and across months every day-of-month meets every weekday — so this pair is
+    # comparable rather than provably disjoint.
+    assert schedules_can_intersect(
+        _dp(Cadence.of("monthly", day_of_month=5)),
+        _dp(Cadence.of("weekly", days_of_week=["tue"])),
+    )
+
+
+# --- structured cadence → day pattern (feature 018) --------------------------
+
+
+def test_structured_weekday_reaches_the_day_pattern() -> None:
+    # C2.1 / SC-001 — the stated Tuesday that previously landed on Monday.
+    assert day_pattern_for(Cadence.of("weekly", days_of_week=["tue"])) == "* * 2"
+    assert day_pattern_for(Cadence.of("weekly", days_of_week=["mon", "wed", "fri"])) == "* * 1,3,5"
+
+
+def test_structured_day_of_month_reaches_the_day_pattern() -> None:
+    # C2.2 / SC-002 — no cadence string could ever produce this.
+    assert day_pattern_for(Cadence.of("monthly", day_of_month=5)) == "5 * *"
+
+
+def test_structured_day_and_months_reach_the_day_pattern() -> None:
+    # C2.3
+    c = Cadence.of("quarterly", day_of_month=8, months=["jan", "apr", "jul", "oct"])
+    assert day_pattern_for(c) == "8 1,4,7,10 *"
+
+
+def test_cadence_stating_no_day_emits_todays_pattern() -> None:
+    # C2.4 — the no-op guarantee at the day-pattern level.
+    assert day_pattern_for(Cadence.of("weekly")) == "* * 1"
+    assert day_pattern_for(Cadence.of("monthly")) == "1 * *"
+    assert day_pattern_for(Cadence.of("quarterly")) == "1 1,4,7,10 *"
+    assert day_pattern_for(Cadence.of("daily")) == "* * *"
+
+
+def test_structured_cadence_does_not_move_the_time_of_day() -> None:
+    # C2.5 — a cadence part must never influence the slot.
+    stated = cron_for(Cadence.of("monthly", day_of_month=5), "board-package")
+    plain = cron_for(Cadence.of("monthly"), "board-package")
+    assert _time_of_day(stated) == _time_of_day(plain) == slot_for("board-package")
+
+
+def test_wakes_reads_the_same_cadence_object_as_the_schedule() -> None:
+    # C5.1 / FR-016 — ONE source of frequency, not two implementations that agree today.
+    # A cadence's day parts must not change how often it is budgeted for.
+    for c in (
+        Cadence.of("weekly", days_of_week=["tue"]),
+        Cadence.of("monthly", day_of_month=5),
+        Cadence.of("quarterly", day_of_month=8, months=["jan", "apr", "jul", "oct"]),
+    ):
+        assert wakes_per_active_month(c) == wakes_per_active_month(Cadence(frequency=c.frequency))
+    assert wakes_per_active_month(Cadence.of("weekly", days_of_week=["mon", "wed", "fri"])) == 12
+
+
+# --- pre-018 behaviour, pinned (feature 018) ---------------------------------
+#
+# Captured before `Cadence` exists. These two assert what the string cadence produces today, so the
+# structured form can be shown to preserve it for cadences that state no day (C5.3) and so a change
+# to budget weighting cannot pass unnoticed (C5.1).
+
+
+def test_string_cadence_day_patterns_are_unchanged() -> None:
+    # C5.3 anchor. Note `tue` already resolves to day-of-week 2 — the weekday case was always
+    # representable; what was missing is the planner emitting it.
+    assert day_pattern_for("weekly") == "* * 1"
+    assert day_pattern_for("tue") == "* * 2"
+    assert day_pattern_for("tuesday") == "* * 2"
+    assert day_pattern_for("mon,wed,fri") == "* * 1,3,5"
+    assert day_pattern_for("monthly") == "1 * *"
+    assert day_pattern_for("quarterly") == "1 1,4,7,10 *"
+
+
+def test_wake_counts_are_unchanged() -> None:
+    # C5.1 anchor: budget weighting must not drift when the cadence type changes.
+    assert wakes_per_active_month(None) is None
+    assert wakes_per_active_month("daily") == 30
+    assert wakes_per_active_month("weekly") == 4
+    assert wakes_per_active_month("biweekly") == 2
+    assert wakes_per_active_month("monthly") == 1
+    assert wakes_per_active_month("quarterly") == 1
+    assert wakes_per_active_month("mon,wed,fri") == 12
 
 
 # --- timezone resolution (feature 017 / ADR-038) -----------------------------
@@ -250,8 +395,8 @@ def test_derive_routines_default_timezone_is_utc() -> None:
     # C4.1 anchor, dataclass level.
     routines = derive_routines(
         [
-            _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
-            _task("board-package", "Monthly board package", recurrence="monthly"),
+            _task("signal-scan", "Signal scan", recurrence=Cadence.coerce("mon,wed,fri")),
+            _task("board-package", "Monthly board package", recurrence=Cadence.coerce("monthly")),
         ]
     )
     assert [r.timezone for r in routines] == [DEFAULT_TIMEZONE, DEFAULT_TIMEZONE]
@@ -264,8 +409,10 @@ def test_rendered_routine_block_declares_utc_by_default() -> None:
     config = CompanyConfig(
         **_full_config_kwargs(
             tasks=[
-                _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
-                _task("board-package", "Monthly board package", recurrence="monthly"),
+                _task("signal-scan", "Signal scan", recurrence=Cadence.coerce("mon,wed,fri")),
+                _task(
+                    "board-package", "Monthly board package", recurrence=Cadence.coerce("monthly")
+                ),
             ]
         )
     )
@@ -279,8 +426,8 @@ def test_rendered_routine_block_declares_utc_by_default() -> None:
 
 def _scheduled_tasks() -> list[TaskDefinition]:
     return [
-        _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
-        _task("board-package", "Monthly board package", recurrence="monthly"),
+        _task("signal-scan", "Signal scan", recurrence=Cadence.coerce("mon,wed,fri")),
+        _task("board-package", "Monthly board package", recurrence=Cadence.coerce("monthly")),
     ]
 
 
@@ -390,7 +537,7 @@ def test_recurring_task_renders_routine_block_and_recurring_flag() -> None:
         **_full_config_kwargs(
             tasks=[
                 _task("ship", "Ship"),
-                _task("signal-scan", "Signal scan", recurrence="mon,wed,fri"),
+                _task("signal-scan", "Signal scan", recurrence=Cadence.coerce("mon,wed,fri")),
             ]
         )
     )
@@ -421,13 +568,13 @@ def test_single_agent_bundle_has_no_routines() -> None:
 
 
 def test_two_renders_of_one_config_produce_identical_triggers() -> None:
-    # SC-002: an unchanged brief must regenerate byte-identically.
+    # SC-002 / C2.6: an unchanged brief must regenerate byte-identically.
     def _yaml() -> str:
         config = CompanyConfig(
             **_full_config_kwargs(
                 tasks=[
-                    _task("signal-scan", "Scan", recurrence="daily"),
-                    _task("board-package", "Board", recurrence="monthly"),
+                    _task("signal-scan", "Scan", recurrence=Cadence.coerce("daily")),
+                    _task("board-package", "Board", recurrence=Cadence.coerce("monthly")),
                 ]
             )
         )
@@ -442,7 +589,10 @@ def test_two_renders_of_one_config_produce_identical_triggers() -> None:
 def test_s15_clean_when_routines_match_recurring_tasks() -> None:
     config = CompanyConfig(
         **_full_config_kwargs(
-            tasks=[_task("ship", "Ship"), _task("signal-scan", "Signal scan", recurrence="weekly")]
+            tasks=[
+                _task("ship", "Ship"),
+                _task("signal-scan", "Signal scan", recurrence=Cadence.coerce("weekly")),
+            ]
         )
     )
     files = render_files(config)
@@ -469,59 +619,169 @@ def _ordering(*tasks: TaskDefinition) -> list[str]:
 
 
 def _consumer_producer(
-    consumer_slug: str, producer_slug: str, cadence: str
+    consumer_slug: str,
+    producer_slug: str,
+    cadence: str | Cadence,
+    *,
+    declare: bool = True,
+    name_in_prose: bool = False,
 ) -> tuple[TaskDefinition, TaskDefinition]:
+    """A consumer/producer pair, with the dependency declared, described in prose, or both."""
     producer = _task(producer_slug, producer_slug.replace("-", " ").title(), recurrence=cadence)
     consumer = TaskDefinition(
         slug=consumer_slug,
         name=consumer_slug.replace("-", " ").title(),
         project="launch-v1",
         assignee="cto",
-        objective=f"Summarise the output of the {producer_slug} task from today.",
+        objective=(
+            f"Summarise the output of the {producer_slug} task from today."
+            if name_in_prose
+            # How a planner actually writes it: the dependency is described, never named. This
+            # is what produced ZERO findings on a real bundle containing the inversion.
+            else "Assemble the current portfolio from the latest verified register entries."
+        ),
         completion_criteria=["done"],
-        recurrence=cadence,
+        recurrence=Cadence.coerce(cadence),
+        depends_on=[producer_slug] if declare else [],
     )
     return consumer, producer
 
 
-def test_consumer_scheduled_before_its_named_producer_warns() -> None:
-    # T15/FR-008a. The slugs are chosen so the consumer's slot precedes the producer's.
-    consumer, producer = _consumer_producer("alpha-recap", "signal-scan", "daily")
-    if slot_for("alpha-recap") > slot_for("signal-scan"):
-        consumer, producer = _consumer_producer("signal-scan", "alpha-recap", "daily")
+def _earlier_first(a: str, b: str) -> tuple[str, str]:
+    """Order two slugs so the first has the earlier derived slot."""
+    return (a, b) if slot_for(a) <= slot_for(b) else (b, a)
+
+
+def test_declared_dependency_scheduled_before_its_producer_warns() -> None:
+    # C3.1 — the ordering finding, now keyed on the declaration.
+    early, late = _earlier_first("alpha-recap", "signal-scan")
+    consumer, producer = _consumer_producer(early, late, "daily")
     warnings = _ordering(consumer, producer)
     assert warnings, "a consumer scheduled at or before its producer must be reported"
     assert consumer.slug in warnings[0] and producer.slug in warnings[0]
 
 
-def test_consumer_scheduled_after_its_producer_is_not_warned() -> None:
-    # T16 — the healthy case.
-    consumer, producer = _consumer_producer("alpha-recap", "signal-scan", "daily")
-    if slot_for(consumer.slug) <= slot_for(producer.slug):
-        consumer, producer = _consumer_producer(producer.slug, consumer.slug, "daily")
+def test_dependency_finding_fires_without_the_producer_named_in_prose() -> None:
+    # C3.2 — THE point of feature 018. The objective never mentions the producer, exactly as a
+    # real generated objective does not; the declaration carries the relationship instead.
+    early, late = _earlier_first("alpha-recap", "signal-scan")
+    consumer, producer = _consumer_producer(early, late, "daily", name_in_prose=False)
+    assert producer.slug not in consumer.objective
+    assert _ordering(consumer, producer), "the declaration must be the signal, not the prose"
+
+
+def test_prose_reference_without_a_declaration_produces_nothing() -> None:
+    # C3.3 — proves the textual path is DELETED, not dormant. A leftover prose fallback would
+    # satisfy every other test in this file while quietly restoring two signals for one fact.
+    early, late = _earlier_first("alpha-recap", "signal-scan")
+    consumer, producer = _consumer_producer(early, late, "daily", declare=False, name_in_prose=True)
+    assert producer.slug in consumer.objective
     assert _ordering(consumer, producer) == []
 
 
-def test_ordering_is_not_checked_across_different_day_patterns() -> None:
-    # T17/FR-008b — no single well-defined "before" across differing patterns.
-    consumer, producer = _consumer_producer("alpha-recap", "signal-scan", "daily")
-    weekly_producer = _task("signal-scan", "Signal Scan", recurrence="weekly")
-    assert _ordering(consumer, weekly_producer) == []
+def test_consumer_scheduled_after_its_producer_is_not_warned() -> None:
+    # C3.4 — the healthy case.
+    early, late = _earlier_first("alpha-recap", "signal-scan")
+    consumer, producer = _consumer_producer(late, early, "daily")
+    assert _ordering(consumer, producer) == []
 
 
-def test_ordering_reference_matching_is_word_boundaried() -> None:
-    # T18/FR-009 — "scan" inside "scandal" is not a reference to the scan task.
-    producer = _task("scan", "Scan", recurrence="daily")
+def test_ordering_is_checked_across_intersecting_day_patterns() -> None:
+    # C4.1 — a daily consumer of a weekly producer DOES meet it, on the producer's day. Feature
+    # 015 skipped this pair because the patterns differ; that is the cross-cadence dependency
+    # the equality gate could not see.
+    daily_slug, weekly_slug = "alpha-recap", "signal-scan"
+    if slot_for(daily_slug) > slot_for(weekly_slug):
+        daily_slug, weekly_slug = weekly_slug, daily_slug
+    producer = _task(weekly_slug, "Producer", recurrence=Cadence.of("weekly"))
     consumer = TaskDefinition(
-        slug="alpha-report",
-        name="Alpha Report",
+        slug=daily_slug,
+        name="Consumer",
         project="launch-v1",
         assignee="cto",
-        objective="Review any scandal coverage and file a summary.",
+        objective="o",
         completion_criteria=["done"],
-        recurrence="daily",
+        recurrence=Cadence.of("daily"),
+        depends_on=[weekly_slug],
+    )
+    assert _ordering(consumer, producer)
+
+
+def test_ordering_is_not_checked_across_disjoint_schedules() -> None:
+    # C4.2 / FR-015 — no shared firing day, so no well-defined "before".
+    producer = _task(
+        "signal-scan", "Producer", recurrence=Cadence.of("weekly", days_of_week=["thu"])
+    )
+    consumer = TaskDefinition(
+        slug="alpha-recap",
+        name="Consumer",
+        project="launch-v1",
+        assignee="cto",
+        objective="o",
+        completion_criteria=["done"],
+        recurrence=Cadence.of("weekly", days_of_week=["tue"]),
+        depends_on=["signal-scan"],
     )
     assert _ordering(consumer, producer) == []
+
+
+def test_dependency_on_an_unknown_task_is_reported() -> None:
+    # C3.5
+    consumer = TaskDefinition(
+        slug="alpha-recap",
+        name="Consumer",
+        project="launch-v1",
+        assignee="cto",
+        objective="o",
+        completion_criteria=["done"],
+        recurrence=Cadence.of("daily"),
+        depends_on=["ghost-task"],
+    )
+    findings = [w for w in _warnings_for(consumer) if "ghost-task" in w]
+    assert findings, "a dependency on a task that does not exist must be reported"
+
+
+def test_dependency_on_a_non_recurring_task_produces_no_ordering_finding() -> None:
+    # C3.7 — a non-recurring producer has no trigger to be "before".
+    producer = _task("ship", "Ship")  # not recurring
+    consumer = TaskDefinition(
+        slug="alpha-recap",
+        name="Consumer",
+        project="launch-v1",
+        assignee="cto",
+        objective="o",
+        completion_criteria=["done"],
+        recurrence=Cadence.of("daily"),
+        depends_on=["ship"],
+    )
+    assert _ordering(consumer, producer) == []
+
+
+def test_dependency_cycle_terminates_and_reports_once() -> None:
+    # C3.6 / FR-013 — mutual dependency must not loop.
+    a = TaskDefinition(
+        slug="alpha-recap",
+        name="A",
+        project="launch-v1",
+        assignee="cto",
+        objective="o",
+        completion_criteria=["done"],
+        recurrence=Cadence.of("daily"),
+        depends_on=["signal-scan"],
+    )
+    b = TaskDefinition(
+        slug="signal-scan",
+        name="B",
+        project="launch-v1",
+        assignee="cto",
+        objective="o",
+        completion_criteria=["done"],
+        recurrence=Cadence.of("daily"),
+        depends_on=["alpha-recap"],
+    )
+    findings = _ordering(a, b)
+    # Exactly one direction can be "at or before" the other; the pair must not loop ordouble-report.
+    assert len(findings) == 1
 
 
 # --- cadence-weighted budgets through the pipeline (ADR-012 amendment) -------
@@ -540,8 +800,12 @@ def _budget_for(agent: str, *tasks: TaskDefinition) -> int:
 
 def test_a_daily_driven_agent_gets_a_larger_cap_than_a_quarterly_driven_one() -> None:
     # Same agent, same role bucket, cadence alone varied.
-    daily = _budget_for("cto", _task("scan", "Scan", recurrence="daily", assignee="cto"))
-    quarterly = _budget_for("cto", _task("scan", "Scan", recurrence="quarterly", assignee="cto"))
+    daily = _budget_for(
+        "cto", _task("scan", "Scan", recurrence=Cadence.coerce("daily"), assignee="cto")
+    )
+    quarterly = _budget_for(
+        "cto", _task("scan", "Scan", recurrence=Cadence.coerce("quarterly"), assignee="cto")
+    )
     assert daily > quarterly
 
 
@@ -549,10 +813,12 @@ def test_an_agents_busiest_cadence_sets_its_cap() -> None:
     # An agent driven by both a daily and a quarterly routine must be funded for the daily one.
     both = _budget_for(
         "cto",
-        _task("scan", "Scan", recurrence="daily", assignee="cto"),
-        _task("review", "Review", recurrence="quarterly", assignee="cto"),
+        _task("scan", "Scan", recurrence=Cadence.coerce("daily"), assignee="cto"),
+        _task("review", "Review", recurrence=Cadence.coerce("quarterly"), assignee="cto"),
     )
-    daily_only = _budget_for("cto", _task("scan", "Scan", recurrence="daily", assignee="cto"))
+    daily_only = _budget_for(
+        "cto", _task("scan", "Scan", recurrence=Cadence.coerce("daily"), assignee="cto")
+    )
     assert both == daily_only
 
 
@@ -568,8 +834,10 @@ def _warnings_for(*tasks: TaskDefinition) -> list[str]:
 
 def test_same_cadence_same_assignee_routines_warn() -> None:
     warnings = _warnings_for(
-        _task("scan-landscape", "Scan", recurrence="mon,wed,fri", assignee="cto"),
-        _task("log-signal-patterns", "Log", recurrence="mon,wed,fri", assignee="cto"),
+        _task("scan-landscape", "Scan", recurrence=Cadence.coerce("mon,wed,fri"), assignee="cto"),
+        _task(
+            "log-signal-patterns", "Log", recurrence=Cadence.coerce("mon,wed,fri"), assignee="cto"
+        ),
     )
     smell = [w for w in warnings if "split into multiple recurring" in w]
     assert smell, warnings
@@ -635,6 +903,7 @@ def test_both_checks_fire_on_a_pair_matching_both_conditions() -> None:
 
 
 def test_collision_findings_are_stably_ordered_and_never_block_validation() -> None:
+    # C5.5 — every finding is advisory; none converts a passing bundle into a failing one.
     # T12/T13
     from paperclip_blueprints.renderers.render import _routine_trigger_collisions
     from paperclip_blueprints.renderers.routines import RoutineSpec
@@ -652,8 +921,8 @@ def test_collision_findings_are_stably_ordered_and_never_block_validation() -> N
     config = CompanyConfig(
         **_full_config_kwargs(
             tasks=[
-                _task("signal-scan", "Scan", recurrence="daily", assignee="cto"),
-                _task("board-package", "Board", recurrence="daily", assignee="ceo"),
+                _task("signal-scan", "Scan", recurrence=Cadence.coerce("daily"), assignee="cto"),
+                _task("board-package", "Board", recurrence=Cadence.coerce("daily"), assignee="ceo"),
             ]
         )
     )
@@ -663,7 +932,30 @@ def test_collision_findings_are_stably_ordered_and_never_block_validation() -> N
 
 def test_same_cadence_different_assignee_routines_do_not_warn() -> None:
     warnings = _warnings_for(
-        _task("scan-landscape", "Scan", recurrence="mon,wed,fri", assignee="cto"),
-        _task("board-package", "Board", recurrence="mon,wed,fri", assignee="ceo"),
+        _task("scan-landscape", "Scan", recurrence=Cadence.coerce("mon,wed,fri"), assignee="cto"),
+        _task("board-package", "Board", recurrence=Cadence.coerce("mon,wed,fri"), assignee="ceo"),
     )
     assert not any("split into multiple recurring" in w for w in warnings)
+
+
+def test_depends_on_is_not_emitted_into_any_bundle_artifact() -> None:
+    """C5.4 — the dependency is generation-internal.
+
+    The target platform has no dependency primitive to import (ADR-022), so emitting one would
+    invent a field the importer ignores. It exists to drive the ordering check and stops there.
+    """
+    consumer = TaskDefinition(
+        slug="alpha-recap",
+        name="Alpha Recap",
+        project="launch-v1",
+        assignee="cto",
+        objective="o",
+        completion_criteria=["done"],
+        recurrence=Cadence.of("daily"),
+        depends_on=["signal-scan"],
+    )
+    producer = _task("signal-scan", "Signal scan", recurrence=Cadence.of("daily"))
+    files = render_files(CompanyConfig(**_full_config_kwargs(tasks=[consumer, producer])))
+    for path, content in files.items():
+        assert "depends_on" not in content, f"{path} leaked the internal dependency field"
+        assert "dependsOn" not in content, f"{path} leaked the internal dependency field"

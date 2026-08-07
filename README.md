@@ -29,7 +29,7 @@ The result is a Paperclip-importable bundle ready to use.
 
 **Per-agent run-policy caps (ADR-034).** Each agent gets a turn cap and concurrent-run limit derived from its role. Section 12 of the brief overrides them per agent — including turning a heartbeat off so an agent runs only on demand. Leave the section blank to keep the defaults.
 
-**Routine scheduling (ADR-036).** The brief states cadence, not clock time, so each routine's time of day is derived deterministically from its task slug — the same brief always produces the same schedule. Routines that still land on the same trigger, and consumers scheduled at or before the producer they name, are reported as warnings for you to judge; neither blocks generation.
+**Routine scheduling (ADR-036, ADR-039).** A cadence carries every schedule day the brief states — a named weekday, a day of the month, a set of months — and those reach the emitted schedule. Clock times are not stated in the brief, so each routine's time of day is derived deterministically from its task slug; the same brief always produces the same schedule. Routines landing on the same trigger, and consumers scheduled at or before a task they depend on, are reported as warnings for you to judge; neither blocks generation.
 
 **Routine timezone (ADR-038).** Section 9 of the brief takes an optional IANA timezone (e.g. `Europe/Helsinki`); every routine is scheduled in it. Leave it blank for UTC. Because routine times are spread across the working day, binding your zone is what makes that window your hours rather than UTC's. A zone name the database does not recognise stops the run before any generation happens, so a typo costs nothing.
 

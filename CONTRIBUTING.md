@@ -90,6 +90,17 @@ cannot discover does not exist.
 If a change touches `src/paperclip_blueprints/models/input.py`, it must also
 touch `examples/input-template.md`.
 
+### State what is true, not how we got it wrong
+
+Committed artifacts — ADRs, specs, contracts — record the current fact. An
+amendment names what is struck, what is true instead, and where the design now
+lives.
+
+Reasoning earns its place only when it changes what a future reader does.
+Commentary on why a mistake was tempting, or how it felt to find, does not:
+these files are read by people and sessions with no memory of the conversation
+that produced them.
+
 ## Filing bugs and feature requests
 
 Issues are tracked in [GitHub Issues](https://github.com/Grolea-HQ/paperclip-blueprints/issues).

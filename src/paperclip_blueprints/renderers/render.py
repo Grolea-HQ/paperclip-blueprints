@@ -8,7 +8,6 @@ in ``bundle.py``).
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -36,6 +35,7 @@ from .routines import (
     DEFAULT_TIMEZONE,
     RoutineSpec,
     derive_routines,
+    schedules_can_intersect,
     wakes_per_active_month,
 )
 from .run_policy import (
@@ -248,59 +248,61 @@ def _routine_dependency_order(
 ) -> list[str]:
     """Soft ordering check (feature 015, US3, FR-008): a consumer that does not follow its producer.
 
-    Fires when task A's objective references task B by slug or name, A and B recur on the same
-    day pattern, and A is scheduled **at or before** B — so A reports on work B has not done yet.
+    Fires when task A **declares** a dependency on task B, their schedules can share a firing
+    day, and A is scheduled **at or before** B — so A reports on work B has not done yet.
 
-    **Why "at or before" and not "same trigger".** The narrower rule (warn only on an identical
-    trigger) was the original design, and it would have been dead on arrival: the whole point of
-    the time-of-day spread is to stop routines sharing a trigger, so the pair would separate and
-    this check would fall silent — while the defect got *worse*, the recap landing hours before
-    the scan instead of alongside it. Equality is just the special case where the gap is zero.
+    **Why "at or before" and not "same trigger".** The narrower rule would be dead on arrival:
+    the whole point of the time-of-day spread is to stop routines sharing a trigger, so the pair
+    would separate and this check would fall silent — while the defect got *worse*, the recap
+    landing hours before the scan instead of alongside it. Equality is the special case where
+    the gap is zero.
 
-    **Why day patterns must match.** Across differing patterns (a daily consumer of a weekly
-    producer) there is no single well-defined "before" without expanding both schedules. Recall
-    is deliberately sacrificed to keep the finding trustworthy when it does fire.
+    **Why the signal is a declared dependency, not prose (feature 018).** This check previously
+    inferred the relationship by looking for the producer's slug or name inside the consumer's
+    objective. Run against a real 13-agent bundle containing exactly the inversion it was
+    written for, it produced **zero** findings: the objective described the dependency without
+    naming the producer. `org_planner` knows the relationship — it created both tasks — so it
+    now records it, and this reads what it recorded. The textual match is *replaced*, not kept
+    alongside: two signals for one fact would disagree with no principled winner.
+
+    **Why intersection, not identical day patterns.** A daily consumer of a weekly producer does
+    meet it, on the producer's day. Equality would skip that pair. Disjointness is claimed only
+    where provable.
 
     Advisory only — via the ``warn`` sink, NEVER a validation error.
     """
     by_slug = {r.slug: r for r in routines}
+    by_task = {t.slug: t for t in tasks}
     recurring = [t for t in tasks if t.slug in by_slug]
     warnings: list[str] = []
     for consumer in recurring:
         c_routine = by_slug[consumer.slug]
-        for producer in recurring:
-            if producer.slug == consumer.slug:
+        for producer_slug in consumer.depends_on:
+            if producer_slug == consumer.slug:
                 continue
-            p_routine = by_slug[producer.slug]
-            if _day_pattern(c_routine.cron) != _day_pattern(p_routine.cron):
+            if producer_slug not in by_task:
+                warnings.append(
+                    f"recurring task {consumer.slug!r} declares a dependency on "
+                    f"{producer_slug!r}, which is not a task in this bundle — the ordering of "
+                    "that dependency cannot be checked"
+                )
                 continue
-            if not _references_task(consumer.objective, producer):
-                continue
+            p_routine = by_slug.get(producer_slug)
+            if p_routine is None:
+                continue  # a non-recurring producer has no trigger to be "before"
+            if not schedules_can_intersect(
+                _day_pattern(c_routine.cron), _day_pattern(p_routine.cron)
+            ):
+                continue  # provably never share a firing day — no well-defined "before"
             if _time_of_day(c_routine.cron) > _time_of_day(p_routine.cron):
                 continue  # the consumer correctly follows its producer
             warnings.append(
-                f"recurring task {consumer.slug!r} references {producer.slug!r} but is scheduled "
+                f"recurring task {consumer.slug!r} depends on {producer_slug!r} but is scheduled "
                 f"at or before the task it depends on ({c_routine.cron!r} vs {p_routine.cron!r}) "
                 "— it will report on work that has not run yet, every time it fires, without "
                 "erroring; schedule it later in the day or fold the two together"
             )
     return warnings
-
-
-def _references_task(objective: str, producer: TaskDefinition) -> bool:
-    """Whether ``objective`` names ``producer`` by slug or name, word-boundary matched.
-
-    Word boundaries matter: a task slugged ``scan`` must not be considered referenced by prose
-    about a "scandal". Precision over recall — the finding is only worth having if it is right
-    when it fires.
-    """
-    haystack = objective.lower()
-    for token in (producer.slug, producer.name):
-        if not token:
-            continue
-        if re.search(rf"\b{re.escape(token.lower())}\b", haystack):
-            return True
-    return False
 
 
 def _time_of_day(cron: str) -> tuple[int, int]:

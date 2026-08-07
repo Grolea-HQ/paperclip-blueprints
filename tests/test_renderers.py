@@ -145,6 +145,7 @@ def test_write_bundle_force_does_not_union_prior_contents(tmp_path) -> None:
 
 # --- full-mode structural check (T015) --------------------------------------
 
+from paperclip_blueprints.models.cadence import Cadence  # noqa: E402
 from paperclip_blueprints.models.output import CompanyConfig  # noqa: E402
 from paperclip_blueprints.models.task import TaskDefinition  # noqa: E402
 from test_models import _full_config_kwargs  # noqa: E402
@@ -259,7 +260,7 @@ def test_routine_bearing_bundle_without_timezone_matches_the_pre_change_baseline
             assignee="cto",
             objective="o",
             completion_criteria=["done"],
-            recurrence="mon,wed,fri",
+            recurrence=Cadence.coerce("mon,wed,fri"),
         ),
         TaskDefinition(
             slug="board-package",
@@ -268,7 +269,7 @@ def test_routine_bearing_bundle_without_timezone_matches_the_pre_change_baseline
             assignee="cto",
             objective="o",
             completion_criteria=["done"],
-            recurrence="monthly",
+            recurrence=Cadence.coerce("monthly"),
         ),
         TaskDefinition(
             slug="ship",
@@ -286,6 +287,49 @@ def test_routine_bearing_bundle_without_timezone_matches_the_pre_change_baseline
     assert sorted(files) == sorted(baseline), "the set of rendered files changed"
     for path, content in sorted(baseline.items()):
         assert files[path] == content, f"{path} changed for a brief with no stated timezone"
+
+
+# --- feature 018: no-op parity for cadences stating no day (C5.2 / C5.3) -----
+
+
+def test_legacy_string_cadences_render_identically_to_the_pre_018_baseline() -> None:
+    """FR-018 / SC-005: a plan whose cadences state no day renders byte-identically.
+
+    ``tests/fixtures/baseline_018.json`` was captured from the tree before any feature-018
+    source edit, with tasks carrying legacy string cadences and no dependencies. It is the
+    anchor for the claim that structured cadence changes nothing for plans that state no day.
+    """
+    import json
+    import pathlib
+
+    baseline_path = pathlib.Path(__file__).resolve().parent / "fixtures" / "baseline_018.json"
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+
+    def task(slug: str, name: str, rec: str | None = None) -> TaskDefinition:
+        return TaskDefinition(
+            slug=slug,
+            name=name,
+            project="launch-v1",
+            assignee="cto",
+            objective="o",
+            completion_criteria=["done"],
+            recurrence=Cadence.coerce(rec) if rec else None,
+        )
+
+    config = CompanyConfig(
+        **_full_config_kwargs(
+            tasks=[
+                task("signal-scan", "Signal scan", "mon,wed,fri"),
+                task("board-package", "Monthly board package", "monthly"),
+                task("audit-review", "Quarterly audit review", "quarterly"),
+                task("ship", "Ship"),
+            ]
+        )
+    )
+    files = render_files(config)
+    assert sorted(files) == sorted(baseline), "the set of rendered files changed"
+    for path, content in sorted(baseline.items()):
+        assert files[path] == content, f"{path} changed for a plan stating no cadence day"
 
 
 def test_canon_coverage_fires_through_the_render_warn_sink() -> None:

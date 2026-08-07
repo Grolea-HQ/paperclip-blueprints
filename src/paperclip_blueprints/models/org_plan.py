@@ -15,6 +15,7 @@ import re
 from pydantic import BaseModel, field_validator, model_validator
 
 from ..patterns.builtins import BUILTIN_SKILLS
+from .cadence import Cadence
 
 _SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
@@ -70,10 +71,19 @@ class TaskStub(BaseModel):
     name: str
     project: str
     assignee: str
-    recurrence: str | None = None
-    """Cadence for genuinely schedule-driven standing work, else None (ADR-022, US3). The
-    org_planner sets this — a whole-org structural decision so only the truly scheduled tasks
-    are flagged recurring; threaded into TaskDefinition and keyed off by routine emission."""
+    recurrence: Cadence | None = None
+    """Structured cadence for genuinely schedule-driven standing work, else None (ADR-022 US3;
+    feature 018). org_planner sets it — a whole-org structural decision — and states every day
+    the brief states, because a day discarded here has no later channel. A legacy cadence string
+    is coerced on input."""
+    depends_on: list[str] = []
+    """Slugs of tasks whose output this task consumes (feature 018). Recorded by org_planner,
+    which knows the relationship because it created the tasks."""
+
+    @field_validator("recurrence", mode="before")
+    @classmethod
+    def _coerce_recurrence(cls, v: object) -> object:
+        return Cadence.coerce(v) if isinstance(v, str) else v
 
     @field_validator("slug")
     @classmethod
@@ -130,7 +140,15 @@ class OrgPlan(BaseModel):
         for p in self.projects:
             if p.owner not in agent_set:
                 raise ValueError(f"project {p.slug!r} owned by unknown agent {p.owner!r}")
+        task_set = {t.slug for t in self.tasks}
         for t in self.tasks:
+            # Declared dependencies must resolve, exactly as project/assignee must. A dangling
+            # dependency would otherwise reach render as an unreportable silence.
+            for dep in t.depends_on:
+                if dep == t.slug:
+                    raise ValueError(f"task {t.slug!r} declares a dependency on itself")
+                if dep not in task_set:
+                    raise ValueError(f"task {t.slug!r} depends on unknown task {dep!r}")
             if t.project not in project_set:
                 raise ValueError(f"task {t.slug!r} references unknown project {t.project!r}")
             if t.assignee not in agent_set:
