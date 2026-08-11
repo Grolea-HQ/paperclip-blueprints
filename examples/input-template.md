@@ -12,9 +12,9 @@ Fill out this template to describe the company you want the tool to generate. Th
 
 ---
 
-## Before you start: validation checklist
+## What a complete brief looks like
 
-Before passing this to the tool, verify:
+These are the bar to write to and the check to finish against — read them before you start, and verify them before you pass the file to the tool:
 
 - [ ] Company name and slug are set (slug is lowercase-hyphenated)
 - [ ] One-sentence description is ≤ 30 words
@@ -32,7 +32,7 @@ The `blueprints validate --input <this-file>.md` command runs this checklist for
 
 ---
 
-## What happens next
+## What this file produces
 
 Once filled out, run:
 
