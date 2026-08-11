@@ -4,7 +4,8 @@ Every brief on disk must parse to exactly what it parsed to before this feature.
 baselines in ``tests/fixtures/brief_baseline_020/`` were captured from a **detached
 worktree at the pre-change commit** (2f5159c), so they record the parser's behaviour at a
 commit no working-tree edit can reach. They are frozen references: this test COMPARES
-against them and must never regenerate them.
+against them and must never regenerate them. The conditions under which such a fixture may
+be edited rather than re-captured are in CONTRIBUTING.md.
 
 A baseline records the OUTCOME, whichever it was. Three briefs parse; the shipped template
 does not, and "it fails with exactly these messages" is behaviour too — a silent change to

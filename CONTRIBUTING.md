@@ -101,6 +101,24 @@ Commentary on why a mistake was tempting, or how it felt to find, does not:
 these files are read by people and sessions with no memory of the conversation
 that produced them.
 
+### When a frozen baseline may be edited
+
+Some fixtures are frozen parity references: captured from a git worktree at a pre-change
+commit and compared against, never regenerated. Re-capturing from the current tree compares
+an implementation against itself and passes vacuously.
+
+A frozen baseline may be **edited** only when all three hold:
+
+1. The changed content is provably outside what the baseline asserts. A comment is not
+   behaviour; a cron expression, a key name or an emitted value is.
+2. The change is a textual substitution, not a regeneration. Every other byte stays exactly
+   as captured.
+3. The commit names the line and says why.
+
+Anything not meeting all three is a re-capture, and a re-capture needs a worktree at the
+pre-change commit — not the current tree with the change applied, which would produce a
+baseline from a state that never existed.
+
 ## Filing bugs and feature requests
 
 Issues are tracked in [GitHub Issues](https://github.com/Grolea-HQ/paperclip-blueprints/issues).

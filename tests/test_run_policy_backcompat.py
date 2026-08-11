@@ -3,7 +3,9 @@
 A brief with no run-policy values MUST generate byte-identical output to today. The
 golden reference `tests/fixtures/runpolicy_baseline.paperclip.yaml` was frozen from the
 **unmodified** generator BEFORE the feature landed; this test COMPARES against it and must
-never regenerate it. If this test fails, the override layer has leaked into the no-override
+never regenerate it. The conditions under which such a fixture may be edited rather than
+re-captured are in CONTRIBUTING.md. If this test fails, the override layer has leaked into
+the no-override
 path and every existing operator's bundle is re-priced — treat it as release-blocking.
 """
 
