@@ -273,12 +273,34 @@ def slug_divergence_warning(brief: CompanyBrief) -> str | None:
     )
 
 
-class BriefValidationError(Exception):
-    """Raised when a brief fails to parse or validate. Carries all messages."""
+class BriefError(Exception):
+    """Base for every way a brief can be rejected. Carries all messages.
+
+    Two failures are distinguished below, and the distinction is in the *type* rather than
+    in an attribute a caller must read: the sections not lining up and the fields being
+    wrong are different states needing different responses, and one of them makes the other
+    unanswerable. A caller that does not care catches this base.
+
+    An exception name is never the machine contract — the documents emitted by the CLI
+    carry the failure class as a declared vocabulary value.
+    """
 
     def __init__(self, messages: list[str]) -> None:
         self.messages = messages
         super().__init__("\n".join(f"  - {m}" for m in messages))
+
+
+class BriefStructureError(BriefError):
+    """Raised when a brief's sections do not line up with the declared schema.
+
+    Distinct from :class:`BriefValidationError` because field errors from a misaligned
+    brief are artifacts of parsing the wrong text, not findings. When this is raised, field
+    validation has not been attempted and no brief object exists.
+    """
+
+
+class BriefValidationError(BriefError):
+    """Raised when a brief's fields fail validation. Carries all messages."""
 
     @classmethod
     def from_pydantic(cls, exc: ValidationError) -> BriefValidationError:

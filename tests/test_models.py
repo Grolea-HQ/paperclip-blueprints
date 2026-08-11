@@ -871,3 +871,49 @@ def test_skill_procedure_keeps_prose_that_legitimately_opens_with_a_number() -> 
         anti_patterns=["a"],
     )
     assert skill.procedure == ["2 business days must pass before the entry is promoted"]
+
+
+# --- feature 020: the exception hierarchy (C5.4) -----------------------------
+
+
+def test_structural_and_field_failures_are_distinct_types_sharing_a_base() -> None:
+    """C5.4 — a caller that does not care catches one thing; a caller that does separates.
+
+    The distinction is in the type rather than in a flag, so a consumer reads it from the
+    shape instead of parsing a field. The machine-readable documents carry the class as a
+    declared vocabulary value regardless — an exception name is never the wire contract.
+    """
+    from paperclip_blueprints.models.input import (
+        BriefError,
+        BriefStructureError,
+        BriefValidationError,
+    )
+
+    assert issubclass(BriefStructureError, BriefError)
+    assert issubclass(BriefValidationError, BriefError)
+    assert not issubclass(BriefStructureError, BriefValidationError)
+    assert not issubclass(BriefValidationError, BriefStructureError)
+
+
+def test_catching_the_base_catches_both_failure_kinds() -> None:
+    """C5.4 — the arrangement exists so `except BriefError` is sufficient."""
+    from paperclip_blueprints.models.input import (
+        BriefError,
+        BriefStructureError,
+        BriefValidationError,
+    )
+
+    for exc_type in (BriefStructureError, BriefValidationError):
+        with pytest.raises(BriefError):
+            raise exc_type(["something"])
+
+
+def test_the_existing_field_error_keeps_its_messages_and_rendering() -> None:
+    """Introducing a base must not change what an existing caller sees.
+
+    `cli._load_brief` prints `str(exc)` and the parity baselines record `exc.messages`, so
+    both are behaviour, not implementation.
+    """
+    exc = BriefValidationError(["name: Field required", "slug: Field required"])
+    assert exc.messages == ["name: Field required", "slug: Field required"]
+    assert str(exc) == "  - name: Field required\n  - slug: Field required"
