@@ -14,16 +14,15 @@ Accepted
 
 ## Context
 
-A full end-to-end generation on a Paperclip-ecosystem brief (a hypothetical
-opportunity-discovery company named **Prospector**, whose brief references the
-Paperclip platform, Hermes, OpenClaw, and watchlist repositories heavily as subject
-matter) produced a strong, structurally-valid bundle with one repeatable identity
-defect: in `agents/ceo/AGENTS.md` the synthesized mandate called the company itself
-**"Paperclip"** twice — "the primary owner and final internal orchestrator of
-Paperclip's opportunity-discovery engine" and "Decisions to expand or contract the
-scope of what Paperclip does or does not do." The company is Prospector. The leak was
-isolated to that one file (all eight `SOUL.md` files, `COMPANY.md`, and `OPERATIONS.md`
-used "Prospector" correctly), but it is a real, general exposure: **every
+A full end-to-end generation on a brief that names the platform heavily as subject
+matter produced a structurally-valid bundle with one repeatable identity defect: in
+`agents/ceo/AGENTS.md` the synthesized mandate referred to the company itself by the
+**platform's** name rather than its own, twice, in third-person possessive
+constructions — "the primary owner and final internal orchestrator of <platform>'s
+… engine" and "Decisions to expand or contract the scope of what <platform> does or
+does not do." The leak was isolated to that one file — every `SOUL.md`, `COMPANY.md`
+and `OPERATIONS.md` used the company's own name correctly — but it is a real, general
+exposure: **every
 Paperclip-ecosystem brief — the tool's core use case — names a platform heavily, and
 the synthesis can let the most salient proper noun stand in for the company**,
 especially in third-person possessive constructions ("<platform>'s engine", "what
@@ -51,7 +50,7 @@ bleeding into the company's identity.
    `soul_generator`, `identity_generator`, `operations_generator`), phrased and placed
    consistently with the ADR-016 naming guard. The rule states: the company is named
    exactly the given name; platforms, tools, runtimes, repositories, and ecosystems
-   named anywhere in the brief (Paperclip, Hermes, OpenClaw, GitHub, …) are **subject
+   named anywhere in the brief (Paperclip, Hermes, GitHub, …) are **subject
    matter the company works with and are never the company**; refer to the company
    only by its own name or a neutral noun phrase ("the company", "this company"),
    never by a platform or tool name and never in a possessive that implies a platform
@@ -61,7 +60,7 @@ bleeding into the company's identity.
    in, same pattern as the ADR-016 prompt tests). A gated integration test
    (`@pytest.mark.integration`) generates from a deliberately platform-heavy brief and
    asserts the company's own name appears in each agent's `AGENTS.md` mandate and that
-   no platform possessive (`Paperclip's`/`Hermes's`/`OpenClaw's`) appears in
+   no platform possessive (`Paperclip's`/`Hermes's`) appears in
    `COMPANY.md`, the `AGENTS.md` files, or `OPERATIONS.md`.
 
 4. **No hard bundle-gating validator.** A deterministic per-bundle check cannot be

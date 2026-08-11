@@ -55,16 +55,16 @@ def test_full_bundle_real_api(tmp_path: Path) -> None:
 
 
 # Platforms/tools the company works with (subject matter) — never the company (ADR-018).
-_PLATFORM_POSSESSIVES = ("Paperclip's", "Hermes's", "OpenClaw's")
+_PLATFORM_POSSESSIVES = ("Paperclip's", "Hermes's")
 
 _PLATFORM_HEAVY_BRIEF = """\
 # Company Brief
 
 ## 1. Company name and slug
 
-**Name:** Prospector
+**Name:** Lanternwick Signals
 
-**Slug:** prospector
+**Slug:** lanternwick-signals
 
 **One-sentence description:** An opportunity-discovery company surfacing leads from public repos.
 
@@ -86,8 +86,8 @@ Surface 50 operator-qualified opportunities per month within 6 months.
 **Your "we are" paragraph:**
 
 We are an opportunity-discovery company. We continuously scan the Paperclip ecosystem,
-Hermes runtimes, OpenClaw gateways, and GitHub watchlist repositories to surface
-high-signal opportunities for the operator. Paperclip, Hermes, and OpenClaw are the
+Hermes runtimes, and GitHub watchlist repositories to surface
+high-signal opportunities for the operator. Paperclip and Hermes are the
 platforms we observe — they are our subject matter, not us.
 
 ## 5. We are NOT
@@ -95,7 +95,7 @@ platforms we observe — they are our subject matter, not us.
 **Your "we are not" list:**
 
 1. **We are NOT** a Paperclip plugin. We observe the platform; we do not build on it.
-2. **We are NOT** a general web scraper. We focus on the Paperclip / Hermes / OpenClaw ecosystem.
+2. **We are NOT** a general web scraper. We focus on the Paperclip / Hermes ecosystem.
 
 ## 6. Constraints
 
@@ -118,15 +118,15 @@ platforms we observe — they are our subject matter, not us.
 def test_platform_name_does_not_bleed_into_company_identity(tmp_path: Path) -> None:
     """A platform-heavy brief must not let a platform name stand in as the company.
 
-    The brief names Paperclip/Hermes/OpenClaw/GitHub heavily as subject matter; the
-    company is "Prospector". Asserts the company's own name appears in every agent's
+    The brief names Paperclip/Hermes/GitHub heavily as subject matter; the
+    company is "Lanternwick Signals". Asserts the company's own name appears in every agent's
     AGENTS.md mandate and that no platform name appears as a possessive company
     referent (e.g. "Paperclip's") in COMPANY.md, the AGENTS.md files, or OPERATIONS.md
     (ADR-018). Legitimate non-possessive platform mentions ("scans the Paperclip repo")
     are expected and allowed.
     """
     brief = parse_brief(_PLATFORM_HEAVY_BRIEF)
-    assert brief.name == "Prospector"
+    assert brief.name == "Lanternwick Signals"
     client = LLMClient()  # real transport
 
     dest = build_and_write(brief, tmp_path, client)
@@ -135,7 +135,7 @@ def test_platform_name_does_not_bleed_into_company_identity(tmp_path: Path) -> N
     for adir in (d for d in (dest / "agents").iterdir() if d.is_dir()):
         agents_md = (adir / "AGENTS.md").read_text(encoding="utf-8")
         # The company's own name must appear in the mandate.
-        assert "Prospector" in agents_md, f"{adir.name}/AGENTS.md never names the company"
+        assert "Lanternwick Signals" in agents_md, f"{adir.name}/AGENTS.md never names the company"
         company_referent_files.append(adir / "AGENTS.md")
 
     for f in company_referent_files:

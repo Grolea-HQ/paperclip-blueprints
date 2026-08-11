@@ -32,7 +32,7 @@ drifting away from what it is.
 - `routine_slots` reference ONLY the agents listed above, by slug.
 - **Company name, not a platform name.** This company is named **{{ name }}**. Platforms,
   tools, runtimes, repositories, and ecosystems the brief mentions — e.g. Paperclip,
-  Hermes, OpenClaw, GitHub — are **subject matter the company works with; they are never
+  Hermes, GitHub — are **subject matter the company works with; they are never
   the company**. Refer to the company only as {{ name }} or a neutral noun phrase, never by
   a platform or tool name and never in a possessive that implies a platform owns or is the
   company. (Same class as the founder/board naming rule.)
