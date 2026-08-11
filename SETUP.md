@@ -70,7 +70,7 @@ cat examples/generated-companies/my-company/README.md   # Mermaid org chart insi
 # 5. Compare structure to a canonical example
 # (Reference companies are no longer bundled in this repo — see ADR-011.
 #  Download one from https://paperclip.community/companies to diff against.)
-diff -r ~/Downloads/newsletter-press/ \
+diff -r ~/Downloads/<downloaded-company>/ \
         examples/generated-companies/my-company/ | head -50
 ```
 
@@ -144,8 +144,9 @@ already passed the in-stack validators. There is no separate re-validation subco
 
 ### Re-importing duplicates agents/projects
 
-Import each bundle into a **fresh** target — e.g. `companies.sh add --target new
---include company,agents,projects,tasks,skills`. Importing a bundle over an existing
+Import each bundle into a **new** company rather than over an existing one —
+`npx companies.sh add <bundle> --target new --include company,agents,projects,tasks,skills`
+makes that explicit. Importing a bundle over an existing
 company uses Paperclip's default collision strategy, which silently duplicates
 entities (`-2`-suffixed agents and projects) rather than updating them. On the
 generation side, `blueprints generate` refuses a non-empty `--output` directory

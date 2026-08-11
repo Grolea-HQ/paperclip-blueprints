@@ -67,7 +67,7 @@ The generated bundle imports via Paperclip's import UI.
 
 **Name:** [Display name, e.g., "Newsletter Press" or "Niche Site Empire"]
 
-**Slug:** [Lowercase hyphenated, e.g., newsletter-press. This becomes the bundle directory name and the company ID in Paperclip.]
+**Slug:** [Lowercase hyphenated, e.g., acme-research. This becomes the bundle directory name and the company ID in Paperclip.]
 
 **One-sentence description:** [The pitch in 20 words or fewer. Used in `COMPANY.md` description, README, and as the company's identifying line in Paperclip's UI.]
 
@@ -129,7 +129,7 @@ Apply the same goal-as-outcome rule. Goals are persistent — once completed, th
 
 Positive identity statements. What kind of company is this, plainly stated, with the load-bearing distinctions baked in. The agents read this on every wakeup; it shapes every decision they make.
 
-The structure that works (from the reference examples): start with a noun phrase ("We are a paid newsletter publisher."), then unpack what that means in plain operational terms.
+The structure that works: start with a noun phrase ("We are a paid newsletter publisher."), then unpack what that means in plain operational terms.
 
 **Examples (newsletter):**
 
@@ -207,11 +207,11 @@ If you pick a pattern, the tool uses it as a starting template — suggested age
 - `content-operations` — 4 agents (CEO → Strategist, Writer, Editor). For blog / newsletter / publication operations.
 - `product-sprint` — 3 agents (CEO → CTO → QA). For two-week sprint delegation against an existing backlog.
 - `open-source-maintenance` — for OSS project maintenance (issue triage, PR review, doc drift).
-- `newsletter` — derived from the `newsletter-press` reference. ~14 agents covering editorial, growth, monetization, analytics.
-- `niche-site` — derived from the `niche-site-empire` reference. ~16 agents covering content production, technical SEO, link acquisition, monetization.
-- `agency` — derived from the `agency-engine` reference. ~19 agents covering creative, accounts, paid media, SEO, operations, finance. For client-services / retainer agencies.
-- `membership` — derived from the `membership-stack` reference. ~15 agents covering content, community, retention, billing, growth. For membership / subscription businesses.
-- `seo-bureau` — derived from the `seo-bureau` reference. ~15 agents covering technical SEO, content, link acquisition, reporting. For SEO-led service businesses.
+- `newsletter` — ~14 agents covering editorial, growth, monetization and analytics. For a paid publication with a send cadence, a free-to-paid funnel and sponsorship inventory.
+- `niche-site` — ~16 agents covering content production, technical SEO, link acquisition and monetization. For a portfolio of search-driven content sites earning through ads and affiliate placement.
+- `agency` — ~19 agents covering creative, accounts, paid media, SEO, operations and finance. For client-services work on retainer, where several accounts run in parallel and each needs its own delivery thread.
+- `membership` — ~15 agents covering content, community, retention, billing and growth. For a subscription business where renewal depends on ongoing community and content delivery rather than one-time sale.
+- `seo-bureau` — ~15 agents covering technical SEO, content, link acquisition and reporting. For an SEO-led service business delivering audits, content programmes and reporting to external clients.
 - `custom` — no template; the org_planner designs from scratch.
 
 **Your choice:** [pattern slug, or custom]

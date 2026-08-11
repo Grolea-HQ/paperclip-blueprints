@@ -1,4 +1,4 @@
-"""newsletter — derived from the newsletter-press reference (editorial + growth + monetization)."""
+"""newsletter — paid publication (editorial, growth, monetization, analytics)."""
 
 from __future__ import annotations
 

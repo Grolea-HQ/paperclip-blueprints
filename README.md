@@ -25,17 +25,17 @@ Give the tool a brief describing a company's identity, north star, goals, and co
 
 The result is a Paperclip-importable bundle ready to use.
 
-**How governance reaches agents (ADR-022).** A UI-imported company is database-backed — there is no company-root filesystem for agents to read. So the constitution and rules each agent enforces are folded into its `AGENTS.md` (the carrier the import surfaces to the agent), the board-approval gate ships as a `.paperclip.yaml` company setting, and schedule-driven work becomes routines. `OPERATIONS.md` stays as the operator's readable operating manual, not an agent-facing file.
+**How governance reaches agents.** A UI-imported company is database-backed — there is no company-root filesystem for agents to read. So the constitution and rules each agent enforces are folded into its `AGENTS.md` (the carrier the import surfaces to the agent), the board-approval gate ships as a `.paperclip.yaml` company setting, and schedule-driven work becomes routines. `OPERATIONS.md` stays as the operator's readable operating manual, not an agent-facing file.
 
-**Per-agent run-policy caps (ADR-034).** Each agent gets a turn cap and concurrent-run limit derived from its role. Section 12 of the brief overrides them per agent — including turning a heartbeat off so an agent runs only on demand. Leave the section blank to keep the defaults.
+**Per-agent run-policy caps.** Each agent gets a turn cap and concurrent-run limit derived from its role. Section 12 of the brief overrides them per agent — including turning a heartbeat off so an agent runs only on demand. Leave the section blank to keep the defaults.
 
-**Routine scheduling (ADR-036, ADR-039).** A cadence carries every schedule day the brief states — a named weekday, a day of the month, a set of months — and those reach the emitted schedule. Clock times are not stated in the brief, so each routine's time of day is derived deterministically from its task slug; the same brief always produces the same schedule. Routines landing on the same trigger, and consumers scheduled at or before a task they depend on, are reported as warnings for you to judge; neither blocks generation.
+**Routine scheduling.** A cadence carries every schedule day the brief states — a named weekday, a day of the month, a set of months — and those reach the emitted schedule. Clock times are not stated in the brief, so each routine's time of day is derived deterministically from its task slug; the same brief always produces the same schedule. Routines landing on the same trigger, and consumers scheduled at or before a task they depend on, are reported as warnings for you to judge; neither blocks generation.
 
-**Routine timezone (ADR-038).** Section 9 of the brief takes an optional IANA timezone (e.g. `Europe/Helsinki`); every routine is scheduled in it. Leave it blank for UTC. Because routine times are spread across the working day, binding your zone is what makes that window your hours rather than UTC's. A zone name the database does not recognise stops the run before any generation happens, so a typo costs nothing.
+**Routine timezone.** Section 9 of the brief takes an optional IANA timezone (e.g. `Europe/Helsinki`); every routine is scheduled in it. Leave it blank for UTC. Because routine times are spread across the working day, binding your zone is what makes that window your hours rather than UTC's. A zone name the database does not recognise stops the run before any generation happens, so a typo costs nothing.
 
 ## Operating canon (section 11)
 
-Section 11 of the brief is for the rules your agents should actually follow — procedures, rubrics, thresholds, domain decision rules. It is the one input with no other carrier, so it is threaded **whole and unmodified** into every generator that writes procedure (skills, agent mandates, tasks, projects), with an instruction to **encode it into procedure rather than summarise it** (ADR-037).
+Section 11 of the brief is for the rules your agents should actually follow — procedures, rubrics, thresholds, domain decision rules. It is the one input with no other carrier, so it is threaded **whole and unmodified** into every generator that writes procedure (skills, agent mandates, tasks, projects), with an instruction to **encode it into procedure rather than summarise it**.
 
 Because it is encoded rather than paraphrased, an offhand aside written there comes back as procedure too. Write it as canon or leave it out.
 
@@ -63,7 +63,7 @@ The tool handles the synthesis from a brief and produces a deployable bundle tha
 
 ## Status
 
-**v0.1 complete.** Generated bundles import successfully into a real Paperclip instance. The tool is in production use.
+**v0.1 complete.** Generated bundles import successfully into a real Paperclip instance.
 
 ## Cost
 
@@ -97,8 +97,9 @@ uv run blueprints check-canon --input examples/my-company-brief.md --bundle exam
 # Import into Paperclip via the UI's import flow
 ```
 
-> **Re-importing?** Import into a **fresh** target — e.g. `companies.sh add --target new
-> --include company,agents,projects,tasks,skills`. Importing over an existing company
+> **Re-importing?** Import into a **new** company rather than over an existing one —
+> `npx companies.sh add <bundle> --target new --include company,agents,projects,tasks,skills`
+> makes that explicit. Importing over an existing company
 > uses Paperclip's default collision strategy, which silently duplicates entities
 > (`-2`-suffixed agents/projects). On the generation side, `blueprints generate`
 > refuses a non-empty `--output` directory unless you pass `--force` (which cleanly

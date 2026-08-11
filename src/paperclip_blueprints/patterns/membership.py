@@ -1,4 +1,4 @@
-"""membership — derived from the membership-stack reference (subscription / community business)."""
+"""membership — subscription business (content, community, retention, billing, growth)."""
 
 from __future__ import annotations
 

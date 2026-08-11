@@ -15,7 +15,7 @@ model in CLAUDE.md.
 A generated bundle imported into a Paperclip company runs **ungoverned** and tells agents to
 read a **company-root filesystem that does not exist**. Verified against the Paperclip
 companies spec, importer source, and a live import (ADR-007). The granular firsthand evidence
-and incident detail are recorded in the local `docs/deployment-gaps.md` (G-P11/G-P12/G-P13);
+and incident detail are recorded outside this repo;
 this ADR records the decision framed as our own reasoning.
 
 ### One deployment model
@@ -158,8 +158,9 @@ output stays bespoke (same guard as ADR-015/016).
   ADR-002 (revised: OPERATIONS.md role), ADR-007 (source hierarchy), ADR-016 (governance content
   now delivered via the instruction bundle), ADR-017 (adapters as a per-agent choice — the
   correct frame for Hermes)
-- Local: `docs/deployment-gaps.md` G-P11 (constitution dropped on import), G-P12 (company-root
-  file-read assumption), G-P13 (operating rules mis-carried in HEARTBEAT + idle-state spin)
+- Import behaviour this decision rests on: the constitution is dropped on import; a company-root
+  file read is not available to an imported agent; operating rules carried in HEARTBEAT.md are
+  mis-delivered and can drive an idle-state spin
 - Spec: `specs/010-object-model-constitution/`
 - Templates touched: `templates/tools_md.j2`, `templates/heartbeat_md.j2`, and the agents/soul/
   operations generators

@@ -1,4 +1,4 @@
-"""seo-bureau — derived from the seo-bureau reference (SEO-led service business)."""
+"""seo-bureau — SEO-led service business (technical SEO, content, link acquisition, reporting)."""
 
 from __future__ import annotations
 

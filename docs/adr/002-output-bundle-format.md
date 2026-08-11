@@ -96,7 +96,7 @@ Total typical: 50-100 files per company. The reference companies are at the high
 
 **Risks accepted:**
 
-- The Paperclip schemas (`paperclip/v1`, `agentcompanies/v1`) may evolve. The tool may need updates when Paperclip releases a new schema version. We accept this risk; the schemas have been stable in the reference examples and the docs.
+- The Paperclip schemas (`paperclip/v1`, `agentcompanies/v1`) may evolve. The tool may need updates when Paperclip releases a new schema version. We accept this risk; the schemas have been stable across the examples and docs available so far.
 - Some files in the bundle are runtime-mutable (PROJECT-INVENTORY.md gets updated by agents as they work). The tool only seeds initial content; subsequent updates are Paperclip's runtime concern.
 
 ## Alternatives considered

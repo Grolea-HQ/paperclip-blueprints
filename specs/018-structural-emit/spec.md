@@ -122,16 +122,6 @@ produces a plausible schedule, and a dangling dependency produces none.
   ordering is compared there rather than skipped.
 - **A plan from before this feature**, carrying only the coarse cadence token: continues to work
   unchanged, producing today's day patterns.
-- **Three copies of the reference bundle exist and they do not agree.** Anything reading one later —
-  a coverage check, a regeneration, a future session — must know which it has:
-  - `paperclip-bundles/productivity-radar` — **pristine generated output.** All eight crons verified
-    to match `slot_for(slug)` exactly, so nothing here has been hand-edited. This is the copy to read
-    when the question is "what did the generator produce".
-  - `paperclip-blueprints-pro/examples/generated-companies/productivity-radar` — **hand-edited.**
-  - The **deployed Paperclip company** — carries the operator's corrected schedules.
-
-  The corrected schedules exist only in the deployment. Verifying against a corrected copy and
-  concluding the loss was already fixed is the specific error this note prevents.
 
 ## Requirements *(mandatory)*
 

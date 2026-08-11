@@ -14,8 +14,8 @@ Generated `.paperclip.yaml` bundles ship with **no per-agent budgets**, so every
 generated company has zero cost guardrails until the operator sets them by hand.
 This is a gap, not a deliberate choice: `examples/input-template.md` collects a
 monthly capital cap, `MASTER_PROMPTS.md` calls for "per-agent budget caps", and
-`docs/deployment-gaps.md` lists governance-scaled per-agent caps as a pattern to
-encode. But `templates/paperclip_yaml.j2` emits only schema, sidebar, agents
+governance-scaled per-agent caps are an established
+pattern to encode. But `templates/paperclip_yaml.j2` emits only schema, sidebar, agents
 (slug + role), and projects.
 
 The input model (`models/input.py`) captures `capital_monthly_eur` — a
@@ -194,7 +194,7 @@ defect this amendment exists to close.
 - ADR-002 (output bundle format), ADR-003 (optional input fields),
   ADR-004 (prompt architecture / deterministic rendering),
   ADR-007 (source-of-truth hierarchy), ADR-011 (reference companies removed)
-- `docs/deployment-gaps.md` P-PAT-4 (governance-scaled per-agent caps)
+- Established pattern: governance-scaled per-agent caps
 - Paperclip official docs: `how-to/set-monthly-budget.md`,
   `guides/power/export-import.md`
 - `paperclipai/paperclip` `server/src/services/company-portability.ts`

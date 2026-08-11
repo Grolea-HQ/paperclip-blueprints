@@ -124,7 +124,7 @@ class CompanyBrief(BaseModel):
     @classmethod
     def _slug_shape(cls, v: str) -> str:
         if not _SLUG_RE.match(v):
-            raise ValueError("slug must be lowercase-hyphenated (e.g. 'newsletter-press')")
+            raise ValueError("slug must be lowercase-hyphenated (e.g. 'acme-research')")
         return v
 
     @field_validator("description")

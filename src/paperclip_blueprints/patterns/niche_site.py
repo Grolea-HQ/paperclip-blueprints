@@ -1,4 +1,4 @@
-"""niche-site — derived from the niche-site-empire reference (content + SEO + monetization)."""
+"""niche-site — search-driven content portfolio (production, technical SEO, links, monetization)."""
 
 from __future__ import annotations
 

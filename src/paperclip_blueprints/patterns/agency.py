@@ -1,4 +1,4 @@
-"""agency — derived from the agency-engine reference (client services / retainer agency)."""
+"""agency — client-services / retainer agency (creative, accounts, media, SEO, ops)."""
 
 from __future__ import annotations
 

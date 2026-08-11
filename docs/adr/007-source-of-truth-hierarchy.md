@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted
+Accepted — amended 2026-08-11
+
+**Amendment.** Struck: tier 2's local example oracle, `examples/reference-companies/`. Those
+bundles were removed from this repo (ADR-011), so the tier-2 clause naming them is inactive. The
+hierarchy itself stands unchanged; the shape decisions they drove are frozen in
+`src/paperclip_blueprints/templates/` and the generator, and canonical examples can be re-sourced
+from paperclip.community/companies.
 
 ## Date
 
