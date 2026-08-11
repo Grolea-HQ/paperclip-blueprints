@@ -1,0 +1,38 @@
+{
+  "brief": {
+    "adapter_preferences": [
+      "CEO → claudelocal opus",
+      "Editor-in-Chief → claudelocal opus"
+    ],
+    "capital_monthly_eur": 250,
+    "capital_setup_eur": 400,
+    "constraints": [
+      "One issue a week. Depth and accuracy beat frequency.",
+      "Every published claim cites a primary source. No exceptions.",
+      "Sponsorships are disclosed and never shape editorial conclusions."
+    ],
+    "description": "A weekly newsletter that turns peer-reviewed research into plain-language briefings for working professionals.",
+    "free_text": "**The claim-support rule.** Every claim inherits the tier of its weakest support, and that tier travels with the claim into the published issue.\n(1) *Byline traceability* — whether a named person stands behind the claim.\n(2) *Corroboration depth* — how many unrelated outlets carry it independently.\n(3) *Correction history* — whether the outlet has amended this story before.\n\n---",
+    "goals": [
+      "The weekly issue ships every Tuesday on cadence, never slipping two weeks in a row",
+      "Free-to-paid conversion holds above 4% quarter over quarter",
+      "Every claim in a published issue traces to a cited primary source"
+    ],
+    "governance_position": "balanced",
+    "hours_per_week": 8,
+    "name": "Research Digest",
+    "north_star": "10,000 engaged paid subscribers at a 40%+ weekly open rate, sustained for two consecutive quarters within 18 months.\n\n---",
+    "routine_timezone": null,
+    "run_policy_preferences": null,
+    "slug": "research-digest",
+    "use_case_notes": "Editorial-led; the editor-in-chief owns accuracy and the growth side reports to the founder.\n---",
+    "use_case_pattern": "content-operations",
+    "we_are": "We are a single-cadence research newsletter. One issue a week, every claim sourced,\nwritten for a smart non-specialist. We grow through referrals and accuracy, not\nhot takes or volume. Open rate, conversion, and citation integrity are the numbers\nthat matter on a given day.\n\n---",
+    "we_are_not": [
+      "**We are NOT** a hot-takes blog. We do not chase the news cycle, we do not publish without a primary source, and we do not run unsourced opinion. Every issue is evidence-first, because trust is the entire product.",
+      "**We are NOT** a content farm. We do not pad the calendar with daily posts, we do not spin one study into five articles, and we do not trade depth for volume. One careful issue a week beats seven shallow ones."
+    ]
+  },
+  "outcome": "valid",
+  "source": "examples/example-brief-research-digest.md"
+}
