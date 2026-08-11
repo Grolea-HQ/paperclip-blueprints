@@ -15,6 +15,7 @@ import pytest
 
 from paperclip_blueprints.models.brief_sections import (
     BRIEF_SECTIONS,
+    check_structure,
     heading_lines_in,
     normalise_heading,
     section_for,
@@ -196,3 +197,146 @@ def test_an_indented_code_block_needs_no_handling() -> None:
 def test_the_scanner_returns_lines_in_document_order() -> None:
     """INV-001 — never an unordered collection."""
     assert heading_lines_in("## A\nx\n## B\ny\n## C") == ["## A", "## B", "## C"]
+
+
+# --- C3/C4: structural validation ------------------------------------------
+
+
+def _brief_with(*headings: str) -> str:
+    """A document carrying the given heading lines, each with a token body."""
+    return "\n\n".join(f"{h}\n\nbody for {h}" for h in headings) + "\n"
+
+
+def _all_declared() -> list[str]:
+    return [s.render() for s in BRIEF_SECTIONS]
+
+
+def _kinds(findings) -> list[str]:
+    return [f.kind for f in findings]
+
+
+def test_a_correct_document_produces_no_findings() -> None:
+    """The baseline the other cases are read against."""
+    result = check_structure(_brief_with(*_all_declared()))
+    assert result.findings == []
+    assert result.advisories == []
+
+
+def test_a_mismatched_heading_is_reported_with_found_and_expected() -> None:
+    """C3.1 — one finding, naming the ordinal, what was found and what was expected."""
+    headings = _all_declared()
+    headings[10] = "## 11. Adapter preferences (optional)"
+    findings = check_structure(_brief_with(*headings)).findings
+
+    assert _kinds(findings) == ["heading_mismatch"]
+    assert findings[0].ordinal == 11
+    assert findings[0].found == "Adapter preferences (optional)"
+    assert findings[0].expected == "Operating canon"
+
+
+def test_a_renumbering_insertion_reports_every_displaced_section() -> None:
+    """C5.3 and the feature's motivating case.
+
+    Inserting one section renumbers everything below it. Before this feature the same
+    document parsed clean with the operating canon dropped, because section 11's anchor was
+    simply not found and the value fell out of the payload.
+    """
+    headings = [s.render() for s in BRIEF_SECTIONS if s.ordinal <= 9]
+    headings += ["## 10. Something the operator added"]
+    headings += [f"## {s.ordinal + 1}. {s.heading}" for s in BRIEF_SECTIONS if s.ordinal >= 10]
+    result = check_structure(_brief_with(*headings))
+
+    # 10, 11 and 12 now carry the wrong headings. Section 11 is the one that mattered:
+    # its anchor would not be found and the operating canon would fall out of the payload.
+    assert _kinds(result.findings) == ["heading_mismatch"] * 3
+    assert [f.ordinal for f in result.findings] == [10, 11, 12]
+    displaced = next(f for f in result.findings if f.ordinal == 11)
+    assert displaced.expected == "Operating canon"
+    assert displaced.found == "Adapter preferences (optional)"
+
+    # The shifted section 13 is beyond the declared range: advisory, never a finding.
+    assert [a.ordinal for a in result.advisories if a.kind == "undeclared_section"] == [13]
+
+
+def test_a_duplicate_ordinal_is_reported_rather_than_overwriting() -> None:
+    """C3.2 — today the second body silently replaces the first."""
+    headings = _all_declared()
+    headings.insert(9, "## 9. Operator working pattern")
+    findings = check_structure(_brief_with(*headings)).findings
+
+    assert _kinds(findings) == ["duplicate_ordinal"]
+    assert findings[0].ordinal == 9
+
+
+def test_an_absent_required_section_is_reported() -> None:
+    """C3.3 — sections 1-9 must exist."""
+    headings = [h for h in _all_declared() if not h.startswith("## 6.")]
+    findings = check_structure(_brief_with(*headings)).findings
+
+    assert _kinds(findings) == ["missing_required_section"]
+    assert findings[0].ordinal == 6
+    assert findings[0].expected == "Constraints"
+
+
+def test_absent_optional_sections_are_not_a_fault() -> None:
+    """C3.3, C1.2 — `scripts/probe_brief.md` stops at section 9 and must keep parsing."""
+    headings = [s.render() for s in BRIEF_SECTIONS if s.ordinal <= 9]
+    assert check_structure(_brief_with(*headings)).findings == []
+
+
+def test_findings_are_ordered_by_ordinal_not_by_discovery() -> None:
+    """C3.9, INV-001 — discovery order depends on scan order, an implementation detail."""
+    headings = _all_declared()
+    headings[11] = "## 12. Wrong"
+    headings[3] = "## 4. Wrong"
+    headings[7] = "## 8. Wrong"
+    findings = check_structure(_brief_with(*headings)).findings
+
+    assert [f.ordinal for f in findings] == [4, 8, 12]
+
+
+def test_section_eleven_may_use_its_earlier_heading() -> None:
+    """C7.2 — the alias in use, which is why heading text is not the identity key."""
+    headings = _all_declared()
+    headings[10] = "## 11. Anything else"
+    assert check_structure(_brief_with(*headings)).findings == []
+
+
+# --- C4: beyond-range ordinals ---------------------------------------------
+
+
+def test_a_beyond_range_ordinal_is_advisory_and_does_not_block() -> None:
+    """C4.1 — rejecting would make a newer-template brief fail against an older tool."""
+    result = check_structure(_brief_with(*_all_declared(), "## 13. My own notes"))
+
+    assert result.findings == []
+    assert [a.kind for a in result.advisories] == ["undeclared_section"]
+    assert result.advisories[0].ordinal == 13
+
+
+def test_a_beyond_range_ordinal_beside_a_missing_section_names_the_likely_typo() -> None:
+    """C4.2 — the case that reproduces this feature's own failure class.
+
+    `## 13.` typed where `## 12.` was meant leaves section 12 absent. Section 12 is
+    optional, so nothing else fires, and the run-policy overrides are dropped.
+    """
+    headings = [h for h in _all_declared() if not h.startswith("## 12.")]
+    result = check_structure(_brief_with(*headings, "## 13. Run-policy overrides (optional)"))
+
+    kinds = [a.kind for a in result.advisories]
+    assert "likely_mistyped_ordinal" in kinds
+    typo = next(a for a in result.advisories if a.kind == "likely_mistyped_ordinal")
+    assert "13" in typo.message and "12" in typo.message
+
+
+def test_an_annotation_beside_a_complete_document_is_not_called_a_typo() -> None:
+    """C4.3 — annotation and a newer-template section leave every declared section present."""
+    result = check_structure(_brief_with(*_all_declared(), "## 13. My own notes"))
+    assert [a.kind for a in result.advisories] == ["undeclared_section"]
+
+
+def test_advisories_do_not_make_a_document_structurally_invalid() -> None:
+    """C4.1 — advisory means advisory."""
+    result = check_structure(_brief_with(*_all_declared(), "## 14. Notes"))
+    assert result.findings == []
+    assert result.advisories != []

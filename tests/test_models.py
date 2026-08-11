@@ -897,15 +897,17 @@ def test_structural_and_field_failures_are_distinct_types_sharing_a_base() -> No
 
 def test_catching_the_base_catches_both_failure_kinds() -> None:
     """C5.4 — the arrangement exists so `except BriefError` is sufficient."""
+    from paperclip_blueprints.models.brief_sections import StructuralFinding
     from paperclip_blueprints.models.input import (
         BriefError,
         BriefStructureError,
         BriefValidationError,
     )
 
-    for exc_type in (BriefStructureError, BriefValidationError):
-        with pytest.raises(BriefError):
-            raise exc_type(["something"])
+    with pytest.raises(BriefError):
+        raise BriefStructureError([StructuralFinding(kind="duplicate_ordinal", ordinal=9)])
+    with pytest.raises(BriefError):
+        raise BriefValidationError(["something"])
 
 
 def test_the_existing_field_error_keeps_its_messages_and_rendering() -> None:
@@ -917,3 +919,86 @@ def test_the_existing_field_error_keeps_its_messages_and_rendering() -> None:
     exc = BriefValidationError(["name: Field required", "slug: Field required"])
     assert exc.messages == ["name: Field required", "slug: Field required"]
     assert str(exc) == "  - name: Field required\n  - slug: Field required"
+
+
+# --- feature 020: structure gates fields (C5.1-C5.3) -------------------------
+
+
+def _renumbered_brief() -> str:
+    """The motivating case: one inserted section renumbers everything below it."""
+    return VALID_BRIEF.replace(
+        "## 10. Adapter preferences (optional)",
+        "## 10. Notes to self\n\nAnything.\n\n## 11. Adapter preferences (optional)",
+    ).replace("## 11. Anything else", "## 12. Anything else")
+
+
+def test_a_renumbered_brief_is_rejected_rather_than_losing_its_canon() -> None:
+    """C5.1 — the failure this feature exists to convert into an error.
+
+    Before this gate the same document parsed clean: section 11's anchor was not found,
+    `free_text` fell out of the payload, and nothing downstream knew the operating canon
+    had been stated.
+    """
+    from paperclip_blueprints.models.input import BriefStructureError
+
+    with pytest.raises(BriefStructureError) as excinfo:
+        parse_brief(_renumbered_brief())
+
+    joined = "\n".join(excinfo.value.messages)
+    assert "section 11" in joined
+    assert "Operating canon" in joined
+
+
+def test_a_structural_failure_reports_no_field_messages() -> None:
+    """C5.1 — field errors from a misaligned brief are artifacts of parsing the wrong text.
+
+    The renumbered brief below also has an unparseable governance position, because
+    section 8's content now sits under a different number. That is a consequence, not a
+    finding, and reporting it would present a guess as a result.
+    """
+    from paperclip_blueprints.models.input import BriefStructureError
+
+    with pytest.raises(BriefStructureError) as excinfo:
+        parse_brief(_renumbered_brief())
+
+    assert not any("Field required" in m for m in excinfo.value.messages)
+    assert not any("governance_position" in m for m in excinfo.value.messages)
+
+
+def test_a_structural_failure_states_that_fields_were_not_checked() -> None:
+    """C5.2 — an operator who fixes the structure and then meets field errors must not
+    conclude the fix caused them."""
+    from paperclip_blueprints.models.input import BriefStructureError
+
+    with pytest.raises(BriefStructureError) as excinfo:
+        parse_brief(_renumbered_brief())
+
+    assert excinfo.value.fields_checked is False
+    assert any("not attempted" in m for m in excinfo.value.messages)
+
+
+def test_structural_failures_aggregate_in_one_run() -> None:
+    """C5.3 — every misaligned section, not the first."""
+    from paperclip_blueprints.models.input import BriefStructureError
+
+    with pytest.raises(BriefStructureError) as excinfo:
+        parse_brief(_renumbered_brief())
+
+    ordinals = {f.ordinal for f in excinfo.value.findings}
+    assert ordinals == {10, 11, 12}
+
+
+def test_a_structurally_sound_brief_still_reports_its_field_errors() -> None:
+    """The gate must not swallow the failures it defers to."""
+    broken = VALID_BRIEF.replace("**Slug:** indie-game-studio", "**Slug:** Not A Slug")
+    with pytest.raises(BriefValidationError) as excinfo:
+        parse_brief(broken)
+    assert any("slug" in m for m in excinfo.value.messages)
+
+
+def test_field_validation_records_that_it_was_attempted() -> None:
+    """The counterpart to C5.2 — the flag distinguishes the two states, not the message."""
+    broken = VALID_BRIEF.replace("**Slug:** indie-game-studio", "**Slug:** Not A Slug")
+    with pytest.raises(BriefValidationError) as excinfo:
+        parse_brief(broken)
+    assert excinfo.value.fields_checked is True

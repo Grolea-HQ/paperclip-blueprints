@@ -269,7 +269,11 @@ def test_generate_invalid_brief_exits_nonzero(tmp_path, monkeypatch) -> None:
         app, ["generate", "--input", str(bad), "--output", str(tmp_path / "out"), "--single-agent"]
     )
     assert result.exit_code == 1
-    assert "validation failed" in result.output
+    # A document with no sections fails structurally, not on its fields: there is nothing
+    # to read fields from, so reporting them would be reporting on the wrong text.
+    assert "brief structure failed" in result.output
+    assert "section 1 is missing" in result.output
+    assert "not attempted" in result.output
 
 
 # --- feature 017: an unknown timezone stops the run before it costs anything -
@@ -488,7 +492,7 @@ def test_preview_invalid_brief_aborts_before_api(tmp_path, monkeypatch) -> None:
     bad.write_text("# Empty brief with no sections\n", encoding="utf-8")
     result = runner.invoke(app, ["preview", "--input", str(bad)])
     assert result.exit_code == 1
-    assert "validation failed" in result.output
+    assert "brief structure failed" in result.output
 
 
 # --- check-canon (feature 016 / ADR-037) ------------------------------------

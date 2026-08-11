@@ -29,7 +29,8 @@ about what a heading is would be a defect of exactly the kind this module exists
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Literal
 
 # A trailing qualifier is presentation, not identity: `Use case pattern (optional)` and
 # `Use case pattern` name the same section. Stripped before punctuation flattening, which
@@ -210,3 +211,175 @@ def heading_lines_in(text: str) -> list[str]:
             found.append(line.rstrip())
 
     return found
+
+
+# --- structural findings ----------------------------------------------------
+
+StructuralFindingKind = Literal[
+    "heading_mismatch",
+    "duplicate_ordinal",
+    "missing_required_section",
+    "absorbed_heading",
+]
+
+AdvisoryKind = Literal["undeclared_section", "likely_mistyped_ordinal"]
+
+# Fixed report order for findings sharing an ordinal. Never the order they were discovered
+# in, which follows scan order — an implementation detail that would leak into output.
+_KIND_ORDER: dict[str, int] = {
+    "missing_required_section": 0,
+    "duplicate_ordinal": 1,
+    "heading_mismatch": 2,
+    "absorbed_heading": 3,
+}
+
+
+@dataclass(frozen=True)
+class StructuralFinding:
+    """One way in which a brief's sections fail to line up with the declaration."""
+
+    kind: StructuralFindingKind
+    ordinal: int
+    found: str | None = None
+    expected: str | None = None
+    detail: str | None = None
+    """The absorbed heading's text, for ``absorbed_heading``."""
+
+    def describe(self) -> str:
+        """Render this finding as one operator-facing line."""
+        if self.kind == "heading_mismatch":
+            return (
+                f"section {self.ordinal} is headed {self.found!r}; "
+                f"expected {self.expected!r} — the sections appear renumbered or renamed"
+            )
+        if self.kind == "duplicate_ordinal":
+            return (
+                f"section {self.ordinal} appears more than once; only one of the bodies "
+                "would be read and the rest discarded"
+            )
+        if self.kind == "missing_required_section":
+            return f"section {self.ordinal} is missing; expected {self.expected!r}"
+        return (
+            f"section {self.ordinal} contains the heading {self.detail!r}, which carries no "
+            "section number — its body has been absorbed into this section"
+        )
+
+
+@dataclass(frozen=True)
+class Advisory:
+    """A non-blocking observation. Never changes whether a brief is structurally valid."""
+
+    kind: AdvisoryKind
+    message: str
+    ordinal: int | None = None
+
+
+@dataclass(frozen=True)
+class StructureResult:
+    """The outcome of checking a document's sections against the declaration."""
+
+    findings: list[StructuralFinding] = field(default_factory=list)
+    advisories: list[Advisory] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        """Whether the sections line up. Advisories do not affect this."""
+        return not self.findings
+
+
+_NUMBERED_HEADING = re.compile(r"^##\s+(\d+)\.\s+(.*)$")
+
+
+def _ordinals_present(text: str) -> dict[int, list[str]]:
+    """Map each ordinal found in the document to every heading written for it.
+
+    A list rather than a single value: two sections numbered 9 is the case the parser's
+    ``dict`` assignment silently collapses, and collapsing it here would reproduce that.
+    """
+    seen: dict[int, list[str]] = {}
+    for line in heading_lines_in(text):
+        match = _NUMBERED_HEADING.match(line)
+        if match is None:
+            continue
+        seen.setdefault(int(match.group(1)), []).append(match.group(2).strip())
+    return seen
+
+
+def check_structure(text: str) -> StructureResult:
+    """Verify that each ordinal in ``text`` carries the section that ordinal names.
+
+    Runs before any field is read. Where a field lookup would silently return nothing for a
+    displaced section, this returns a finding naming it.
+
+    Args:
+        text: The whole brief document.
+
+    Returns:
+        Findings and advisories, findings ordered by ordinal then by a fixed kind order.
+    """
+    present = _ordinals_present(text)
+    findings: list[StructuralFinding] = []
+    advisories: list[Advisory] = []
+
+    for section in BRIEF_SECTIONS:
+        headings = present.get(section.ordinal, [])
+        if not headings:
+            if section.required:
+                findings.append(
+                    StructuralFinding(
+                        kind="missing_required_section",
+                        ordinal=section.ordinal,
+                        expected=section.heading,
+                    )
+                )
+            continue
+        if len(headings) > 1:
+            findings.append(StructuralFinding(kind="duplicate_ordinal", ordinal=section.ordinal))
+        for written in headings:
+            if not section.matches(written):
+                findings.append(
+                    StructuralFinding(
+                        kind="heading_mismatch",
+                        ordinal=section.ordinal,
+                        found=written,
+                        expected=section.heading,
+                    )
+                )
+
+    declared = {section.ordinal for section in BRIEF_SECTIONS}
+    beyond = sorted(ordinal for ordinal in present if ordinal not in declared)
+    missing = sorted(
+        section.ordinal for section in BRIEF_SECTIONS if section.ordinal not in present
+    )
+
+    for ordinal in beyond:
+        advisories.append(
+            Advisory(
+                kind="undeclared_section",
+                ordinal=ordinal,
+                message=(
+                    f"section {ordinal} is beyond the declared range and is not read by the "
+                    "parser; its content reaches nothing"
+                ),
+            )
+        )
+        # An undeclared ordinal adjacent to an absent declared one is the case that drops a
+        # real section: `## 13.` typed for `## 12.` leaves 12 absent, and 12 being optional
+        # means nothing else would fire. Annotation and newer-template sections normally
+        # leave every declared section present, which is what separates them from this.
+        neighbours = [candidate for candidate in (ordinal - 1, ordinal + 1) if candidate in missing]
+        for neighbour in neighbours:
+            advisories.append(
+                Advisory(
+                    kind="likely_mistyped_ordinal",
+                    ordinal=ordinal,
+                    message=(
+                        f"section {ordinal} is undeclared while section {neighbour} is "
+                        f"absent — {ordinal} may be a mistyped {neighbour}, in which case "
+                        f"that section's content is being dropped"
+                    ),
+                )
+            )
+
+    findings.sort(key=lambda f: (f.ordinal, _KIND_ORDER[f.kind]))
+    return StructureResult(findings=findings, advisories=advisories)

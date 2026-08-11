@@ -14,7 +14,12 @@ import typer
 from .config import MissingAPIKeyError
 from .generators.client import GenerationError, LLMClient
 from .generators.identity import generate_identity
-from .models.input import BriefValidationError, parse_brief, slug_divergence_warning
+from .models.input import (
+    BriefStructureError,
+    BriefValidationError,
+    parse_brief,
+    slug_divergence_warning,
+)
 from .renderers.bundle import BundleError, build_and_write
 from .renderers.canon import (
     canon_coverage,
@@ -38,14 +43,23 @@ def _make_client() -> LLMClient:
 
 
 def _load_brief(input_path: Path):
-    """Parse and validate a brief file, raising typer.Exit(1) on failure."""
+    """Parse and validate a brief file, raising typer.Exit(1) on failure.
+
+    The two failure classes are reported differently because they are different states. A
+    structural failure means the sections do not line up, so no field error can be trusted;
+    the message says which sections and says that fields were not examined.
+    """
     try:
         text = input_path.read_text(encoding="utf-8")
     except OSError as exc:
         typer.echo(f"error: cannot read {input_path}: {exc}", err=True)
         raise typer.Exit(1) from exc
     try:
-        return parse_brief(text)
+        return parse_brief(text, warn=lambda message: typer.echo(f"warning: {message}", err=True))
+    except BriefStructureError as exc:
+        typer.echo("brief structure failed:", err=True)
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
     except BriefValidationError as exc:
         typer.echo("brief validation failed:", err=True)
         typer.echo(str(exc), err=True)

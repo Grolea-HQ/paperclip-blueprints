@@ -10,11 +10,13 @@ any Anthropic API call.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable, Sequence
 from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError, field_validator
 
 from ..paperclip_slug import slugify_project_name
+from .brief_sections import Advisory, StructuralFinding, check_structure
 
 GovernancePosition = Literal["tight", "balanced", "loose"]
 
@@ -285,9 +287,18 @@ class BriefError(Exception):
     carry the failure class as a declared vocabulary value.
     """
 
+    fields_checked: bool = True
+    """Whether field validation ran. False means the reported problems are all there is."""
+
     def __init__(self, messages: list[str]) -> None:
         self.messages = messages
         super().__init__("\n".join(f"  - {m}" for m in messages))
+
+
+_FIELDS_NOT_ATTEMPTED = (
+    "field validation was not attempted — the sections do not line up, so any field error "
+    "reported now would come from parsing the wrong text"
+)
 
 
 class BriefStructureError(BriefError):
@@ -296,11 +307,28 @@ class BriefStructureError(BriefError):
     Distinct from :class:`BriefValidationError` because field errors from a misaligned
     brief are artifacts of parsing the wrong text, not findings. When this is raised, field
     validation has not been attempted and no brief object exists.
+
+    The final message states that explicitly rather than leaving it to be inferred: an
+    operator who fixes the structure and then meets five field errors would otherwise
+    conclude the fix caused them.
     """
+
+    fields_checked = False
+
+    def __init__(
+        self,
+        findings: Sequence[StructuralFinding],
+        advisories: Sequence[Advisory] = (),
+    ) -> None:
+        self.findings = list(findings)
+        self.advisories = list(advisories)
+        super().__init__([f.describe() for f in self.findings] + [_FIELDS_NOT_ATTEMPTED])
 
 
 class BriefValidationError(BriefError):
     """Raised when a brief's fields fail validation. Carries all messages."""
+
+    fields_checked = True
 
     @classmethod
     def from_pydantic(cls, exc: ValidationError) -> BriefValidationError:
@@ -375,13 +403,37 @@ def _to_int(value: str | None) -> int | None:
     return int(digits) if digits else None
 
 
-def parse_brief(markdown: str) -> CompanyBrief:
+def parse_brief(markdown: str, *, warn: Callable[[str], None] | None = None) -> CompanyBrief:
     """Parse a filled-in brief Markdown document into a validated CompanyBrief.
 
+    Structure is verified before any field is read. Every field lookup below keys on a
+    section *number*, and nothing about a number tells you which section carries it — so a
+    document renumbered by one insertion would otherwise parse successfully with a field
+    silently absent.
+
+    Structure gates fields: on any structural finding this raises immediately and no field
+    is examined. Field errors from a misaligned brief are artifacts of parsing the wrong
+    text, and reporting them would present guesses as results.
+
+    Args:
+        markdown: The brief document.
+        warn: Optional sink for advisories — observations that do not make a brief
+            invalid, such as a section numbered beyond the declared range. Advisory means
+            advisory: nothing here blocks on one.
+
     Raises:
-        BriefValidationError: if any required field is missing/unfilled or any
-            validation rule fails. All problems are reported together.
+        BriefStructureError: if the sections do not line up with the declared schema. Field
+            validation is not attempted, and the error says so.
+        BriefValidationError: if any required field is missing/unfilled or any validation
+            rule fails. All problems are reported together.
     """
+    structure = check_structure(markdown)
+    if structure.findings:
+        raise BriefStructureError(structure.findings, structure.advisories)
+    if warn is not None:
+        for advisory in structure.advisories:
+            warn(advisory.message)
+
     sec = _split_sections(markdown)
 
     data: dict[str, Any] = {}
