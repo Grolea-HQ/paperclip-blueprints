@@ -11,18 +11,20 @@ from pathlib import Path
 
 import typer
 
+from .api import check_canon as api_check_canon
+from .api import validate_brief as api_validate_brief
 from .config import MissingAPIKeyError
 from .generators.client import GenerationError, LLMClient
 from .generators.identity import generate_identity
-from .models.input import BriefValidationError, parse_brief, slug_divergence_warning
-from .renderers.bundle import BundleError, build_and_write
-from .renderers.canon import (
-    canon_coverage,
-    canon_warnings,
-    extract_canon_terms,
-    extraction_warnings,
+from .models.input import (
+    BriefStructureError,
+    BriefValidationError,
+    parse_brief,
+    slug_divergence_warning,
 )
+from .renderers.bundle import BundleError, build_and_write
 from .renderers.render import render_company_md
+from .serialisation import canon_document, dumps, validate_document
 from .validators import BundleValidationError
 
 app = typer.Typer(
@@ -38,14 +40,23 @@ def _make_client() -> LLMClient:
 
 
 def _load_brief(input_path: Path):
-    """Parse and validate a brief file, raising typer.Exit(1) on failure."""
+    """Parse and validate a brief file, raising typer.Exit(1) on failure.
+
+    The two failure classes are reported differently because they are different states. A
+    structural failure means the sections do not line up, so no field error can be trusted;
+    the message says which sections and says that fields were not examined.
+    """
     try:
         text = input_path.read_text(encoding="utf-8")
     except OSError as exc:
         typer.echo(f"error: cannot read {input_path}: {exc}", err=True)
         raise typer.Exit(1) from exc
     try:
-        return parse_brief(text)
+        return parse_brief(text, warn=lambda message: typer.echo(f"warning: {message}", err=True))
+    except BriefStructureError as exc:
+        typer.echo("brief structure failed:", err=True)
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
     except BriefValidationError as exc:
         typer.echo("brief validation failed:", err=True)
         typer.echo(str(exc), err=True)
@@ -122,10 +133,31 @@ def _print_cost_summary(client: LLMClient, *, verbose: bool) -> None:
 @app.command()
 def validate(
     input: Path = typer.Option(..., "--input", help="Path to the company brief Markdown."),
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit a machine-readable document instead of human output."
+    ),
 ) -> None:
-    """Validate a brief against the input rules (no API calls)."""
-    brief = _load_brief(input)
-    typer.echo(f"brief OK: {brief.name} ({brief.slug})")
+    """Validate a brief against the input rules (no API calls).
+
+    Human output is the default and is unchanged by this flag's existence. With ``--json``,
+    stdout carries one document and nothing else — a consumer reads the failure class from a
+    declared field rather than matching on message text.
+    """
+    if not json_output:
+        brief = _load_brief(input)
+        typer.echo(f"brief OK: {brief.name} ({brief.slug})")
+        return
+
+    try:
+        text = input.read_text(encoding="utf-8")
+    except OSError as exc:
+        typer.echo(f"error: cannot read {input}: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    report = api_validate_brief(text)
+    typer.echo(dumps(validate_document(report)), nl=False)
+    if not report.valid:
+        raise typer.Exit(1)
 
 
 _BUNDLE_TEXT_SUFFIXES = frozenset({".md", ".yaml", ".yml", ".txt"})
@@ -191,6 +223,9 @@ def check_canon(
     bundle: str = typer.Option(
         ..., "--bundle", help="Directory of an already-rendered bundle to scan."
     ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit a machine-readable document instead of human output."
+    ),
 ) -> None:
     """Check an existing bundle for the brief's section-11 operating canon (ADR-037).
 
@@ -203,7 +238,10 @@ def check_canon(
     """
     brief = _load_brief(input)
     if not brief.free_text:
-        typer.echo("brief has no section-11 operating canon — nothing to check.")
+        if json_output:
+            typer.echo(dumps(canon_document(api_check_canon(brief, {}))), nl=False)
+        else:
+            typer.echo("brief has no section-11 operating canon — nothing to check.")
         return
     bundle_dir = _resolve_bundle_dir(bundle)
     files = _load_rendered_bundle(bundle_dir)
@@ -211,36 +249,30 @@ def check_canon(
         typer.echo(f"error: no readable text files under {bundle_dir}", err=True)
         raise typer.Exit(1)
 
-    terms = extract_canon_terms(
-        brief.free_text,
-        exclude_texts=[
-            brief.description,
-            brief.north_star,
-            brief.we_are,
-            *brief.goals,
-            *brief.we_are_not,
-            *brief.constraints,
-        ],
-    )
+    # The analysis — including which brief fields are excluded from extraction — lives in
+    # the entry point. This command formats; it does not decide.
+    report = api_check_canon(brief, files)
+
+    if json_output:
+        typer.echo(dumps(canon_document(report)), nl=False)
+        return
+
     typer.echo(f"scanned {len(files)} files in {bundle_dir}")
-    typer.echo(f"extracted {len(terms)} canon term(s) unique to section 11:")
-    for term in terms:
+    typer.echo(f"extracted {len(report.terms)} canon term(s) unique to section 11:")
+    for term in report.terms:
         typer.echo(f"  - {term.text}")
 
-    coverage = canon_coverage(terms, files)
-    warnings = extraction_warnings(brief.free_text, terms) + canon_warnings(coverage)
+    warnings = [finding.message for finding in report.extraction_findings]
+    warnings += list(report.coverage_messages)
     if warnings:
         typer.echo("")
         for message in warnings:
             typer.echo(f"warning: {message}", err=True)
-    probed = [c for c in coverage if c.term.probeable]
-    missing = sum(1 for c in probed if c.is_missing)
-    thin = sum(1 for c in probed if c.is_thin)
-    unprobeable = len(coverage) - len(probed)
+    counts = report.counts
     typer.echo("")
-    summary = f"{len(probed) - missing - thin} carried, {thin} thin, {missing} missing"
-    if unprobeable:
-        summary += f", {unprobeable} not searchable"
+    summary = f"{counts.carried} carried, {counts.thin} thin, {counts.missing} missing"
+    if counts.not_searchable:
+        summary += f", {counts.not_searchable} not searchable"
     typer.echo(summary)
 
 

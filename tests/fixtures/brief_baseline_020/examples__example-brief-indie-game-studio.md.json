@@ -1,0 +1,37 @@
+{
+  "brief": {
+    "adapter_preferences": [
+      "CEO → claudelocal opus"
+    ],
+    "capital_monthly_eur": 150,
+    "capital_setup_eur": 300,
+    "constraints": [
+      "One title at a time. The live game gets every cycle until it is healthy.",
+      "No dark patterns. Every monetization decision is honest by default.",
+      "Store-facing changes (pricing, metadata, screenshots) wait for operator approval for the first 30 days."
+    ],
+    "description": "A solo-founder studio shipping one premium mobile puzzle game a year, sold once at a fair price.",
+    "free_text": "**The release-readiness rule.** A build goes to the store only when all three hold; any one failing sends it back to the previous milestone.\n(1) *Crash-free session rate* — measured on the current device set, never a historical average.\n(2) *Store metadata parity* — every locale states the same claims as the primary listing.\n(3) *Rollback readiness* — the previous build is still deployable without a data migration.\n\n---",
+    "goals": [
+      "Maintain a 4.6+ App Store rating across the live title",
+      "A content update lands every 6 weeks on cadence, never slipping two cycles in a row",
+      "Refund rate stays below 3% quarter over quarter"
+    ],
+    "governance_position": "balanced",
+    "hours_per_week": 6,
+    "name": "Indie Game Studio",
+    "north_star": "$30,000 monthly net revenue from premium sales, sustained for two consecutive quarters within 12 months of launch.\n\n---",
+    "routine_timezone": null,
+    "run_policy_preferences": null,
+    "slug": "indie-game-studio",
+    "use_case_notes": "Keep it lean — one owner agent for the v0.1a slice.\n---",
+    "use_case_pattern": "custom",
+    "we_are": "We are a single-title premium mobile studio. One game, polished relentlessly,\nsold once at a fair price. We grow through word of mouth and store features, not\nad spend. Rating, refund rate, and update cadence are the only numbers that\nmatter on a given day.\n\n---",
+    "we_are_not": [
+      "**We are NOT** a free-to-play studio. We do not ship loot boxes, we do not run energy timers, and we do not gate content behind currency. Monetization is a single honest purchase, because the brand is \"premium, no tricks.\"",
+      "**We are NOT** a multi-title shop. We do not split focus across a portfolio, and we do not start a second title while the live one needs work. The live title gets all attention, because focus is the only edge a solo studio has."
+    ]
+  },
+  "outcome": "valid",
+  "source": "examples/example-brief-indie-game-studio.md"
+}

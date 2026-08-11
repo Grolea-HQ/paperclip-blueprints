@@ -1,0 +1,33 @@
+{
+  "brief": {
+    "adapter_preferences": null,
+    "capital_monthly_eur": 120,
+    "capital_setup_eur": 200,
+    "constraints": [
+      "Every claim carries a dated primary source. No exceptions.",
+      "One publication per week. Volume is never the answer."
+    ],
+    "description": "A two-person research desk publishing a subscriber-only coastal shipping report.",
+    "free_text": null,
+    "goals": [
+      "Subscriber churn below 4% per month, sustained across two quarters",
+      "Every published claim traceable to a dated primary source"
+    ],
+    "governance_position": "balanced",
+    "hours_per_week": 4,
+    "name": "Tideline Reports",
+    "north_star": "400 paying subscribers and EUR 6,000 monthly recurring revenue within 9 months of launch.",
+    "routine_timezone": "Europe/Helsinki",
+    "run_policy_preferences": null,
+    "slug": "tideline-reports",
+    "use_case_notes": "Exactly three agents: an editor (the owner), a sources analyst reporting to the editor, and a\npublication coordinator reporting to the editor. Do not add roles beyond these three.\n\nExactly three activities run on a standing schedule, and no others:\n\n1. The sources analyst runs a **source sweep every week, on Tuesdays**.\n2. The publication coordinator runs a **subscriber-list reconciliation monthly, on the 5th**.\n3. The editor runs a **quarterly correction audit on the 8th of January, April, July and\n   October**.\n\nThe subscriber-list reconciliation **consumes the output of the source sweep** — it works from\nthe entries the sweep has verified, and must run after it.\n\nEverything else is handoff-driven, not scheduled.",
+    "use_case_pattern": "custom",
+    "we_are": "We are a small research desk. We publish slowly, source everything, and correct in public.",
+    "we_are_not": [
+      "**We are NOT** a news wire. We do not chase breaking stories or same-day turnaround.",
+      "**We are NOT** a consultancy. We do not take client briefs or bespoke work."
+    ]
+  },
+  "outcome": "valid",
+  "source": "scripts/probe_brief.md"
+}
