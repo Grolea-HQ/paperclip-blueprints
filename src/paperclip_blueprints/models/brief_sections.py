@@ -237,7 +237,7 @@ StructuralFindingKind = Literal[
     "absorbed_heading",
 ]
 
-AdvisoryKind = Literal["undeclared_section", "likely_mistyped_ordinal"]
+AdvisoryKind = Literal["undeclared_section", "likely_mistyped_ordinal", "slug_divergence"]
 
 # Fixed report order for findings sharing an ordinal. Never the order they were discovered
 # in, which follows scan order — an implementation detail that would leak into output.

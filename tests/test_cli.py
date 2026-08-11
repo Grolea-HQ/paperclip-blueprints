@@ -4,6 +4,7 @@ A fake transport dispatches canned JSON by the system prompt so the whole real
 pipeline runs without any live Anthropic call.
 """
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -158,9 +159,20 @@ def _patch_client(monkeypatch, transport=_dispatch) -> None:
     monkeypatch.setattr(cli_module, "_make_client", lambda: LLMClient(_invoke=transport))
 
 
-def _write_brief(tmp_path: Path) -> Path:
+def _write_brief(tmp_path: Path, *, extra_canon: str | None = None) -> Path:
+    """Write the shared fixture brief, optionally with marked-up operating canon.
+
+    `extra_canon` is appended inside section 11, after its anchor — the only place canon
+    can live and be read.
+    """
+    text = VALID_BRIEF
+    if extra_canon is not None:
+        text = text.replace(
+            "Evenings only; optimize for async review.",
+            "Evenings only; optimize for async review.\n\n" + extra_canon,
+        )
     p = tmp_path / "brief.md"
-    p.write_text(VALID_BRIEF, encoding="utf-8")
+    p.write_text(text, encoding="utf-8")
     return p
 
 
@@ -594,3 +606,114 @@ def test_check_canon_refuses_a_directory_that_is_not_a_bundle(tmp_path, monkeypa
     )
     assert result.exit_code == 1
     assert "does not look like a rendered bundle" in result.output
+
+
+# --- feature 020: machine-readable output ------------------------------------
+
+
+def _json_out(result) -> dict:
+    """Parse a command's stdout as one JSON document, proving nothing else is on it."""
+    return json.loads(result.stdout)
+
+
+def test_validate_json_emits_one_document_and_no_human_text(tmp_path, monkeypatch) -> None:
+    """V1.2 — stdout carries the document and nothing else."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+    result = runner.invoke(app, ["validate", "--input", str(brief), "--json"])
+
+    assert result.exit_code == 0, result.output
+    document = _json_out(result)
+    assert document["schema"] == "blueprints.validate/1"
+    assert document["valid"] is True
+    assert "brief OK" not in result.stdout
+
+
+def test_validate_human_output_is_unchanged_without_the_flag(tmp_path, monkeypatch) -> None:
+    """V1.1, FR-021 — the default is exactly what it was."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+    result = runner.invoke(app, ["validate", "--input", str(brief)])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith("brief OK: ")
+    assert "{" not in result.stdout
+
+
+def test_validate_json_and_human_modes_state_the_same_identity(tmp_path, monkeypatch) -> None:
+    """V2.6, SC-012 — compared against each other, not asserted separately.
+
+    Two tests each asserting a hardcoded name would both pass while disagreeing with the
+    other; only comparing the modes catches a divergence.
+    """
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+
+    human = runner.invoke(app, ["validate", "--input", str(brief)]).stdout.strip()
+    document = _json_out(runner.invoke(app, ["validate", "--input", str(brief), "--json"]))
+
+    assert human == f"brief OK: {document['brief']['name']} ({document['brief']['slug']})"
+
+
+def test_validate_json_reports_a_structural_failure_by_class(tmp_path, monkeypatch) -> None:
+    """V1.3, V2.2 — the class is read from the document; the status only says pass/fail."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    bad = tmp_path / "bad.md"
+    bad.write_text("# no sections at all\n", encoding="utf-8")
+    result = runner.invoke(app, ["validate", "--input", str(bad), "--json"])
+
+    assert result.exit_code == 1
+    document = _json_out(result)
+    assert document["failureClass"] == "structural"
+    assert document["fieldsChecked"] is False
+    assert document["fieldMessages"] == []
+    assert "brief" not in document
+
+
+def test_check_canon_json_reports_findings_and_still_succeeds(tmp_path, monkeypatch) -> None:
+    """K1.3, INV-002 — findings are advisory; only an operational failure fails the command."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(
+        tmp_path,
+        extra_canon="**The provenance citation format.** Every claim carries its source.",
+    )
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "COMPANY.md").write_text("nothing relevant here\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app, ["check-canon", "--input", str(brief), "--bundle", str(bundle), "--json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    document = _json_out(result)
+    assert document["outcome"] == "scanned"
+    assert document["counts"]["missing"] >= 1
+    assert str(bundle) not in result.stdout
+
+
+def test_check_canon_json_still_fails_on_an_operational_error(tmp_path, monkeypatch) -> None:
+    """K1.4 — the existing guards keep their behaviour under --json."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path, extra_canon="**A rule.** Something.")
+    result = runner.invoke(app, ["check-canon", "--input", str(brief), "--bundle", "", "--json"])
+    assert result.exit_code == 1
+
+
+def test_check_canon_human_output_is_unchanged_without_the_flag(tmp_path, monkeypatch) -> None:
+    """K1.1, FR-021 — the default output keeps its shape."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(
+        tmp_path,
+        extra_canon="**The provenance citation format.** Every claim carries its source.",
+    )
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "COMPANY.md").write_text("nothing relevant\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["check-canon", "--input", str(brief), "--bundle", str(bundle)])
+
+    assert result.exit_code == 0, result.output
+    assert "scanned 1 files in" in result.stdout
+    assert "canon term(s) unique to section 11" in result.stdout
+    assert "carried," in result.stdout

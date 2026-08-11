@@ -53,6 +53,10 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # models import renderers for pure helpers; no runtime cycle
+    from ..models.input import CompanyBrief
 
 # --- calibration constants --------------------------------------------------
 #
@@ -387,3 +391,32 @@ def canon_warnings(coverage: Iterable[CanonCoverage]) -> list[str]:
                 f"({item.carriers[0]})"
             )
     return lines
+
+
+def canon_exclusions(brief: CompanyBrief) -> list[str]:
+    """The brief fields whose content is excluded from canon extraction.
+
+    A phrase also carried by one of these reaches the generators by an existing path, so its
+    coverage says nothing about the defect this check guards and would be pure noise. This
+    is the check's main precision lever.
+
+    **One definition, deliberately.** This list previously existed twice — once in the CLI
+    and once in the renderer — character for character. Two copies of a precision lever can
+    drift, and a drifted copy answers a different question than the one asked while looking
+    like an answer to this one.
+
+    Args:
+        brief: The parsed brief.
+
+    Returns:
+        The excluded texts, in a fixed order. Order does not affect the result, but a stable
+        one keeps any future diffing of this list meaningful.
+    """
+    return [
+        brief.description,
+        brief.north_star,
+        brief.we_are,
+        *brief.goals,
+        *brief.we_are_not,
+        *brief.constraints,
+    ]

@@ -851,11 +851,14 @@ def test_free_text_has_exactly_one_read_site_outside_its_prior_consumers() -> No
     #   renderers/render.py — the COVERAGE read. Scans the rendered bundle for canon.
     #   cli.py              — the CALIBRATION read (`check-canon`), scanning a bundle
     #                         already on disk.
-    # Neither of the latter two threads anything to a generator. A *generator* appearing
+    #   api.py              — the ENTRY-POINT read (feature 020). Decides whether a brief
+    #                         states canon at all, which is what separates "no canon
+    #                         stated" from a scan that found nothing.
+    # None of the latter three threads anything to a generator. A *generator* appearing
     # here means a carrier started reading the brief directly instead of receiving
     # `canon=`, which is exactly how the wholesale guarantee would decay — so this list is
     # meant to be edited deliberately, with the new reader's job named, never widened to
     # make a failure go away.
-    assert readers == ["cli.py", "renderers/bundle.py", "renderers/render.py"], (
+    assert readers == ["api.py", "cli.py", "renderers/bundle.py", "renderers/render.py"], (
         f"unexpected free_text read site(s): {readers}"
     )
