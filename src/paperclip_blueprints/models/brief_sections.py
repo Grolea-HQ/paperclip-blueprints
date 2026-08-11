@@ -189,17 +189,32 @@ def heading_lines_in(text: str) -> list[str]:
     Returns:
         The heading lines, right-stripped, in the order they appear.
     """
-    found: list[str] = []
-    fence: tuple[str, int] | None = None
+    return [line for _, _, line in _heading_spans(text)]
 
-    for line in text.splitlines():
-        marker = _FENCE.match(line)
+
+def _heading_spans(text: str) -> list[tuple[int, int, str]]:
+    """Every section-level heading as ``(start_offset, end_offset, line)``.
+
+    Offsets index into ``text`` so a caller can slice the original rather than rejoining
+    split lines — rejoining would silently rewrite CRLF line endings into LF, changing
+    section bodies on a file nobody thought this code touched.
+    """
+    found: list[tuple[int, int, str]] = []
+    fence: tuple[str, int] | None = None
+    offset = 0
+
+    for line in text.splitlines(keepends=True):
+        stripped = line.rstrip("\r\n")
+        start, end = offset, offset + len(stripped)
+        offset += len(line)
+
+        marker = _FENCE.match(stripped)
         if fence is not None:
             if marker is not None:
                 char, length = fence
                 run = marker.group(1)
                 # A closing fence carries no info string.
-                closes = run[0] == char and len(run) >= length and not line.strip()[len(run) :]
+                closes = run[0] == char and len(run) >= length and not stripped.strip()[len(run) :]
                 if closes:
                     fence = None
             continue
@@ -207,8 +222,8 @@ def heading_lines_in(text: str) -> list[str]:
             run = marker.group(1)
             fence = (run[0], len(run))
             continue
-        if _SECTION_LEVEL.match(line):
-            found.append(line.rstrip())
+        if _SECTION_LEVEL.match(stripped):
+            found.append((start, end, stripped.rstrip()))
 
     return found
 
@@ -290,19 +305,52 @@ class StructureResult:
 _NUMBERED_HEADING = re.compile(r"^##\s+(\d+)\.\s+(.*)$")
 
 
-def _ordinals_present(text: str) -> dict[int, list[str]]:
-    """Map each ordinal found in the document to every heading written for it.
+@dataclass(frozen=True)
+class ScannedSection:
+    """A numbered section as it actually appears in a document."""
 
-    A list rather than a single value: two sections numbered 9 is the case the parser's
-    ``dict`` assignment silently collapses, and collapsing it here would reproduce that.
+    ordinal: int
+    heading: str
+    body: str
+    absorbed: tuple[str, ...] = ()
+    """Section-level headings found inside this section's body.
+
+    A section boundary is the next *numbered* heading, so an unnumbered one does not end a
+    section: its body falls inside the section above, where that section's anchors are live
+    for matching. An absorbed line whose text happens to parse as a valid value would be
+    accepted with no complaint, and nothing else would show it.
     """
-    seen: dict[int, list[str]] = {}
-    for line in heading_lines_in(text):
-        match = _NUMBERED_HEADING.match(line)
-        if match is None:
-            continue
-        seen.setdefault(int(match.group(1)), []).append(match.group(2).strip())
-    return seen
+
+
+def scan_sections(text: str) -> list[ScannedSection]:
+    """Split a document into its numbered sections, in document order.
+
+    Fence-aware, so a ``## 5.`` inside a fenced example neither ends the section it sits in
+    nor starts one of its own. Duplicates are preserved as separate entries: two sections
+    numbered 9 is precisely the case a mapping keyed by ordinal collapses.
+    """
+    spans = _heading_spans(text)
+    numbered = [
+        (index, match)
+        for index, (_, _, line) in enumerate(spans)
+        if (match := _NUMBERED_HEADING.match(line)) is not None
+    ]
+
+    sections: list[ScannedSection] = []
+    for position, (index, match) in enumerate(numbered):
+        body_start = spans[index][1]
+        next_index = numbered[position + 1][0] if position + 1 < len(numbered) else None
+        body_end = spans[next_index][0] if next_index is not None else len(text)
+        absorbed = tuple(line for _, _, line in spans[index + 1 : next_index])
+        sections.append(
+            ScannedSection(
+                ordinal=int(match.group(1)),
+                heading=match.group(2).strip(),
+                body=text[body_start:body_end].strip(),
+                absorbed=absorbed,
+            )
+        )
+    return sections
 
 
 def check_structure(text: str) -> StructureResult:
@@ -317,12 +365,26 @@ def check_structure(text: str) -> StructureResult:
     Returns:
         Findings and advisories, findings ordered by ordinal then by a fixed kind order.
     """
-    present = _ordinals_present(text)
+    scanned = scan_sections(text)
+    present: dict[int, list[ScannedSection]] = {}
+    for entry in scanned:
+        present.setdefault(entry.ordinal, []).append(entry)
+
     findings: list[StructuralFinding] = []
     advisories: list[Advisory] = []
 
+    # Absorption is asserted for every scanned section, whatever its heading and whether or
+    # not its ordinal is declared. It is a separate fault from a mismatched heading: a
+    # section can absorb a foreign body while its own heading is perfectly correct, which
+    # is the residual hole a heading check alone leaves.
+    for entry in scanned:
+        for absorbed in entry.absorbed:
+            findings.append(
+                StructuralFinding(kind="absorbed_heading", ordinal=entry.ordinal, detail=absorbed)
+            )
+
     for section in BRIEF_SECTIONS:
-        headings = present.get(section.ordinal, [])
+        headings = [entry.heading for entry in present.get(section.ordinal, [])]
         if not headings:
             if section.required:
                 findings.append(

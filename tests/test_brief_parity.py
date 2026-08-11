@@ -93,3 +93,28 @@ def test_template_baseline_records_the_absorption_defect() -> None:
     # Lines from the two unnumbered trailing sections, neither of which is a run policy.
     assert "One-sentence description" in run_policy[0]
     assert "LICENSE.txt" in run_policy[0]
+
+
+def test_the_restructured_template_no_longer_absorbs_its_trailing_sections() -> None:
+    """The counterpart to the baseline above: what the restructure actually removed.
+
+    The pre-change baseline records twenty checklist and closing-guidance lines being read
+    as run-policy overrides. After moving both trailing sections ahead of section 1, the
+    template fails on its unfilled fields and nothing else — which is correct for a
+    template, whose fields are deliberately unfilled.
+
+    Asserted against the baseline rather than against a hardcoded count, so this test
+    states a *change* rather than a snapshot: it fails if the defect returns and it fails
+    if the restructure silently removed something else as well.
+    """
+    before = _baseline(_TEMPLATE)["messages"]
+    assert isinstance(before, list)
+
+    with pytest.raises(BriefValidationError) as excinfo:
+        parse_brief((_REPO_ROOT / _TEMPLATE).read_text(encoding="utf-8"))
+    after = excinfo.value.messages
+
+    removed = [m for m in before if m not in after]
+    assert [m.split(":")[0] for m in removed] == ["run_policy_preferences"]
+    assert [m for m in after if m not in before] == []
+    assert all(m.endswith("Field required") for m in after)

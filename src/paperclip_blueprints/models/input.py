@@ -16,7 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ValidationError, field_validator
 
 from ..paperclip_slug import slugify_project_name
-from .brief_sections import Advisory, StructuralFinding, check_structure
+from .brief_sections import Advisory, StructuralFinding, check_structure, scan_sections
 
 GovernancePosition = Literal["tight", "balanced", "loose"]
 
@@ -341,18 +341,20 @@ class BriefValidationError(BriefError):
 
 # --- Markdown parsing -------------------------------------------------------
 
-_SECTION_RE = re.compile(r"^##\s+(\d+)\.\s+(.*)$", re.MULTILINE)
-
 
 def _split_sections(text: str) -> dict[int, str]:
-    """Split a brief into ``{section_number: body}``."""
-    sections: dict[int, str] = {}
-    matches = list(_SECTION_RE.finditer(text))
-    for i, m in enumerate(matches):
-        start = m.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        sections[int(m.group(1))] = text[start:end].strip()
-    return sections
+    """Split a brief into ``{section_number: body}``.
+
+    Delegates to the same fence-aware scan the structural check uses, so a ``## 5.`` inside
+    a fenced example neither ends the section it sits in nor starts one of its own. Before
+    that, such a line split the document and displaced every field below it — silently,
+    since nothing downstream could tell a real section boundary from a code sample.
+
+    A repeated ordinal still keeps the last body, as it always has. That case is reported
+    by the structural check, which runs first, so a brief reaching this function has no
+    duplicates left to collapse.
+    """
+    return {entry.ordinal: entry.body for entry in scan_sections(text)}
 
 
 def _is_placeholder(value: str) -> bool:

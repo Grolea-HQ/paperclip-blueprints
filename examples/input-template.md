@@ -12,6 +12,57 @@ Fill out this template to describe the company you want the tool to generate. Th
 
 ---
 
+## Before you start: validation checklist
+
+Before passing this to the tool, verify:
+
+- [ ] Company name and slug are set (slug is lowercase-hyphenated)
+- [ ] One-sentence description is ≤ 30 words
+- [ ] North star is a persistent outcome with a measurable target and timeline (passes the "can this be done in one session?" test — answer must be no)
+- [ ] At least 2 goals, all persistent outcomes
+- [ ] "We are" paragraph is 2-5 sentences and includes the operational distinctions
+- [ ] "We are NOT" list has at least 2 entries
+- [ ] At least 2 constraints (real non-negotiable rules, not soft preferences)
+- [ ] Use case pattern picked (or explicit `custom`)
+- [ ] Governance position picked
+- [ ] Hours/week and capital caps filled in
+- [ ] No `[bracketed placeholders]` remain
+
+The `blueprints validate --input <this-file>.md` command runs this checklist for you without making any Anthropic API calls.
+
+---
+
+## What happens next
+
+Once filled out, run:
+
+```bash
+# Single-agent slice (v0.1a)
+blueprints generate --input <this-file>.md --output <output-dir>/ --single-agent
+
+# Full bundle (v0.1b)
+blueprints generate --input <this-file>.md --output <output-dir>/
+```
+
+The tool will produce a directory matching Paperclip's bundle structure:
+
+- `.paperclip.yaml` — runtime config (sidebar, agents map, projects map)
+- `COMPANY.md` — your identity content (Identity, We are, We are not, Constraints, Goals, North star)
+- `README.md` — auto-generated overview with mermaid org chart
+- `OPERATIONS.md` — phase model, idle-state protocol, approval rules, anti-drift checks (v0.1b only)
+- `PROJECT-INVENTORY.md` — starter projects and deliverables tracker (v0.1b only)
+- `agents/<slug>/` per agent — AGENTS.md, SOUL.md, HEARTBEAT.md, TOOLS.md
+- `projects/<slug>/PROJECT.md` per starter project (v0.1b only)
+- `tasks/<slug>/TASK.md` per starter task (v0.1b only)
+- `skills/<slug>/SKILL.md` per shared skill
+- `LICENSE.txt`
+
+Total generation time: 1-3 minutes for v0.1a, 5-10 minutes for a full v0.1b bundle (parallelized across agents and skills).
+
+The generated bundle imports via Paperclip's import UI.
+
+---
+
 ## 1. Company name and slug
 
 **Name:** [Display name, e.g., "Newsletter Press" or "Niche Site Empire"]
@@ -297,54 +348,3 @@ Name the agent by role, title, or slug — the same way as adapter preferences. 
 
 - [e.g., "research-analyst: max turns 8, heartbeat off"]
 - [e.g., "CEO: max concurrent 1"]
-
----
-
-## Validation checklist
-
-Before passing this to the tool, verify:
-
-- [ ] Company name and slug are set (slug is lowercase-hyphenated)
-- [ ] One-sentence description is ≤ 30 words
-- [ ] North star is a persistent outcome with a measurable target and timeline (passes the "can this be done in one session?" test — answer must be no)
-- [ ] At least 2 goals, all persistent outcomes
-- [ ] "We are" paragraph is 2-5 sentences and includes the operational distinctions
-- [ ] "We are NOT" list has at least 2 entries
-- [ ] At least 2 constraints (real non-negotiable rules, not soft preferences)
-- [ ] Use case pattern picked (or explicit `custom`)
-- [ ] Governance position picked
-- [ ] Hours/week and capital caps filled in
-- [ ] No `[bracketed placeholders]` remain
-
-The `blueprints validate --input <this-file>.md` command runs this checklist for you without making any Anthropic API calls.
-
----
-
-## What happens next
-
-Once filled out, run:
-
-```bash
-# Single-agent slice (v0.1a)
-blueprints generate --input <this-file>.md --output <output-dir>/ --single-agent
-
-# Full bundle (v0.1b)
-blueprints generate --input <this-file>.md --output <output-dir>/
-```
-
-The tool will produce a directory matching Paperclip's bundle structure:
-
-- `.paperclip.yaml` — runtime config (sidebar, agents map, projects map)
-- `COMPANY.md` — your identity content (Identity, We are, We are not, Constraints, Goals, North star)
-- `README.md` — auto-generated overview with mermaid org chart
-- `OPERATIONS.md` — phase model, idle-state protocol, approval rules, anti-drift checks (v0.1b only)
-- `PROJECT-INVENTORY.md` — starter projects and deliverables tracker (v0.1b only)
-- `agents/<slug>/` per agent — AGENTS.md, SOUL.md, HEARTBEAT.md, TOOLS.md
-- `projects/<slug>/PROJECT.md` per starter project (v0.1b only)
-- `tasks/<slug>/TASK.md` per starter task (v0.1b only)
-- `skills/<slug>/SKILL.md` per shared skill
-- `LICENSE.txt`
-
-Total generation time: 1-3 minutes for v0.1a, 5-10 minutes for a full v0.1b bundle (parallelized across agents and skills).
-
-The generated bundle imports via Paperclip's import UI.

@@ -11,6 +11,9 @@ fence-aware heading scanner (C3.6, C3.7).
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from paperclip_blueprints.models.brief_sections import (
@@ -340,3 +343,148 @@ def test_advisories_do_not_make_a_document_structurally_invalid() -> None:
     result = check_structure(_brief_with(*_all_declared(), "## 14. Notes"))
     assert result.findings == []
     assert result.advisories != []
+
+
+# --- C3.4/C3.5/C3.8: absorbed headings --------------------------------------
+
+
+def test_an_unnumbered_heading_is_reported_against_the_section_that_absorbed_it() -> None:
+    """C3.4 — the section boundary is the next *numbered* heading, so an unnumbered one
+    does not end a section; its body falls inside the section above it, where that
+    section's anchors are live for matching."""
+    headings = _all_declared()
+    document = _brief_with(*headings).replace(
+        "body for ## 10. Adapter preferences (optional)",
+        "body for ## 10. Adapter preferences (optional)\n\n## Notes\n\nstray content",
+    )
+    findings = check_structure(document).findings
+
+    assert _kinds(findings) == ["absorbed_heading"]
+    assert findings[0].ordinal == 10
+    assert findings[0].detail == "## Notes"
+
+
+def test_a_malformed_section_heading_is_reported_as_an_absorption() -> None:
+    """C3.4 — the mechanism that actually occurred.
+
+    `## 11 Operating canon` without its period is not a section heading, so section 11
+    does not exist and its body is absorbed by section 10. Reporting only "11 is missing"
+    would name a symptom; reporting the absorption names the cause.
+    """
+    headings = _all_declared()
+    headings[10] = "## 11 Operating canon"  # no period
+    findings = check_structure(_brief_with(*headings)).findings
+
+    absorbed = [f for f in findings if f.kind == "absorbed_heading"]
+    assert len(absorbed) == 1
+    assert absorbed[0].ordinal == 10
+    assert absorbed[0].detail == "## 11 Operating canon"
+
+
+def test_absorption_is_reported_even_when_the_heading_matches() -> None:
+    """C3.5 — the two assertions are independent.
+
+    This is the residual hole a heading check alone leaves: a section can absorb a foreign
+    body while its own heading is perfectly correct, and nothing about the heading would
+    reveal it.
+    """
+    document = _brief_with(*_all_declared()).replace(
+        "body for ## 6. Constraints",
+        "body for ## 6. Constraints\n\n## An interjection\n\nmore",
+    )
+    findings = check_structure(document).findings
+
+    assert _kinds(findings) == ["absorbed_heading"]
+    assert findings[0].ordinal == 6
+
+
+def test_one_section_can_report_both_a_mismatch_and_an_absorption() -> None:
+    """C3.5 — neither finding suppresses the other."""
+    headings = _all_declared()
+    headings[5] = "## 6. Something else entirely"
+    document = _brief_with(*headings).replace(
+        "body for ## 6. Something else entirely",
+        "body for ## 6. Something else entirely\n\n## Stray\n\nmore",
+    )
+    findings = [f for f in check_structure(document).findings if f.ordinal == 6]
+
+    assert _kinds(findings) == ["heading_mismatch", "absorbed_heading"]
+
+
+def test_a_fenced_heading_in_a_section_body_is_not_an_absorption() -> None:
+    """C3.6 — section 11's own guidance carries a fenced block, and operating canon may
+    legitimately contain markdown examples."""
+    document = _brief_with(*_all_declared()).replace(
+        "body for ## 11. Operating canon",
+        "body for ## 11. Operating canon\n\n```markdown\n## Example heading\n```\n",
+    )
+    assert check_structure(document).findings == []
+
+
+def test_content_before_the_first_section_is_not_absorbed_by_anything() -> None:
+    """Text ahead of section 1 belongs to no section, which is what makes relocating the
+    template's checklist above section 1 safe."""
+    document = "# Company Brief\n\n## Preamble\n\nintro text\n\n" + _brief_with(*_all_declared())
+    assert check_structure(document).findings == []
+
+
+def test_a_fenced_numbered_heading_does_not_split_a_section() -> None:
+    """C3.8, FR-033 — the splitter defect.
+
+    A fenced `## 5.` currently ends section 4 and starts a section 5, displacing every
+    field below it. The parse must be identical with and without the fenced example.
+    """
+    from paperclip_blueprints.models.input import _split_sections
+
+    plain = _brief_with(*_all_declared())
+    with_fence = plain.replace(
+        "body for ## 3. Goals",
+        "body for ## 3. Goals\n\n```\n## 5. Not a real section\n```\n",
+    )
+
+    assert set(_split_sections(with_fence)) == set(_split_sections(plain))
+    assert "Not a real section" in _split_sections(with_fence)[3]
+    assert _split_sections(with_fence)[5] == _split_sections(plain)[5]
+
+
+# --- C6: the template and the schema are one declaration --------------------
+
+_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "examples" / "input-template.md"
+
+
+def test_the_shipped_template_carries_exactly_the_declared_headings() -> None:
+    """C6.2, C6.3 — one test, both directions.
+
+    This fails if the template's headings are edited without the schema, and fails if the
+    schema is edited without the template. It is what gives the convention that a brief
+    parser change carries its template update mechanical force in the direction nothing
+    else checks.
+    """
+    template = _TEMPLATE_PATH.read_text(encoding="utf-8")
+    numbered = [line for line in heading_lines_in(template) if re.match(r"^##\s+\d+\.", line)]
+    assert numbered == [section.render() for section in BRIEF_SECTIONS]
+
+
+def test_the_shipped_template_is_structurally_sound() -> None:
+    """C6.2 — structural validity only.
+
+    A template's fields are deliberately unfilled; that is what makes it a template.
+    Requiring them filled would mean carrying example values, which defeats the
+    placeholder detection the parser depends on.
+    """
+    result = check_structure(_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    assert result.findings == []
+    assert result.advisories == []
+
+
+def test_nothing_unnumbered_follows_the_last_declared_section_of_the_template() -> None:
+    """C6.4 — asserted on the file, with no exemption rule anywhere in the code.
+
+    "Everything after the last declared section is ignored" would be exemption by
+    accident: it would exist because the template happened to be shaped that way, and it
+    would silently cover a real absorption later.
+    """
+    template = _TEMPLATE_PATH.read_text(encoding="utf-8")
+    headings = heading_lines_in(template)
+    last_numbered = max(i for i, line in enumerate(headings) if re.match(r"^##\s+\d+\.", line))
+    assert headings[last_numbered + 1 :] == []
