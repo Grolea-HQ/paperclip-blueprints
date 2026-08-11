@@ -13,6 +13,9 @@ surviving a future edit.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -268,3 +271,40 @@ def test_documents_round_trip_through_json() -> None:
     only look like lists until something reads them."""
     document = validate_document(validate_brief(_renumbered()))
     assert json.loads(dumps(document)) == document
+
+
+def test_documents_are_identical_across_processes_with_different_hash_seeds(tmp_path) -> None:
+    """INV-001, SC-006 — the cross-machine property, made structural.
+
+    Ordering derived from iterating a set agrees with itself throughout a single-process
+    suite and diverges in the field, because string hashing is salted per process. Every
+    in-process determinism test above is therefore blind to exactly the defect that matters
+    most; only separate interpreters with different `PYTHONHASHSEED` values can see it.
+    """
+    script = tmp_path / "emit.py"
+    script.write_text(
+        "from pathlib import Path\n"
+        "from paperclip_blueprints.api import check_canon, validate_brief\n"
+        "from paperclip_blueprints.serialisation import canon_document, dumps, validate_document\n"
+        f"text = Path({str(_GOOD_BRIEF)!r}).read_text(encoding='utf-8')\n"
+        "report = validate_brief(text)\n"
+        "files = {'b.md': 'byline traceability', 'a.md': 'correction history',\n"
+        "         'c.md': 'byline traceability and correction history'}\n"
+        "print(dumps(validate_document(report)), end='')\n"
+        "print(dumps(canon_document(check_canon(report.brief_object, files))), end='')\n",
+        encoding="utf-8",
+    )
+
+    outputs = set()
+    for seed in ("0", "1", "12345", "99999"):
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env,
+            cwd=_REPO_ROOT,
+        )
+        outputs.add(result.stdout)
+    assert len(outputs) == 1, "output varies with PYTHONHASHSEED — an ordering derives from a set"
