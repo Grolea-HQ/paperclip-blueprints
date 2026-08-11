@@ -26,6 +26,7 @@ from .adapter import assign_adapters, parse_model_preferences
 from .budget import allocate_budgets
 from .canon import (
     canon_coverage,
+    canon_exclusions,
     canon_warnings,
     extract_canon_terms,
     extraction_warnings,
@@ -559,15 +560,7 @@ def render_files(
     # generators by an existing path, so its coverage says nothing about this defect.
     if warn is not None and config.brief.free_text:
         brief = config.brief
-        exclude_texts = [
-            brief.description,
-            brief.north_star,
-            brief.we_are,
-            *brief.goals,
-            *brief.we_are_not,
-            *brief.constraints,
-        ]
-        terms = extract_canon_terms(brief.free_text, exclude_texts=exclude_texts)
+        terms = extract_canon_terms(brief.free_text, exclude_texts=canon_exclusions(brief))
         # Extraction failures first: canon present but nothing recognised means the
         # coverage result below is empty for a reason that has nothing to do with the
         # bundle, and a silent zero-term run would read as "all clear".
