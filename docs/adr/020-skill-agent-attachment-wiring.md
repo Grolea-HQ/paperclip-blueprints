@@ -23,11 +23,8 @@ those declarations into actual agent attachments.
 **That assumption is false, confirmed firsthand on a healthy instance.** When a generated
 bundle is imported through the UI company-import flow, its skills land in the **company
 library** but every one shows **"0 agents / No agents attached."** The `AGENTS.md skills:`
-frontmatter does **not** drive agent attachment on import. (This surfaced importing the
-Prospector bundle; the operator's production company had its skills hand-attached, which is
-what caused the earlier audience/persona drift.) The earlier MUST-2 conclusion (issue #2,
-"attachment already wires on import — no rebuild needed") was wrong and has been reopened and
-corrected.
+frontmatter does **not** drive agent attachment on import. The earlier conclusion —
+"attachment already wires on import, no rebuild needed" — was wrong and is corrected here.
 
 Two consequences define the scope:
 
@@ -120,7 +117,8 @@ skill into the company library **and** attach it per agent — neither is automa
 - ADR-019 (commodity-skill reuse — builds on this emitter), ADR-015 (portability — attachment
   *intent* in `AGENTS.md` is portable; the *act* of attaching is operator/deployer-side),
   ADR-009 (in-stack validator — I5 closure), ADR-002 (bundle format)
-- Issue #2 (MUST-2, reopened and corrected: skills do not auto-attach on import)
+- Finding: skills declared in `AGENTS.md` frontmatter do not auto-attach to agents on import;
+  imported skills land in the company library showing no attached agents
 - Live findings: (1) `listCatalogSkills` 500 on self-hosted npm, fixed @canary — gates
   ADR-019 referencing, not this; (2) imported skills show "0 agents attached" — this ADR
 - Current wiring: `prompts/org_planner.md` (skill slug assignment), `renderers/render.py`
