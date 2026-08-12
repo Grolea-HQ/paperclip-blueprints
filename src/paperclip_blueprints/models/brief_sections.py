@@ -306,12 +306,43 @@ _NUMBERED_HEADING = re.compile(r"^##\s+(\d+)\.\s+(.*)$")
 
 
 @dataclass(frozen=True)
+class Span:
+    """A half-open ``[start, end)`` range of **UTF-8 bytes** in the source document.
+
+    Bytes rather than code points because that is the unit where forgetting to convert
+    fails loudly: a consumer slicing a string with a byte offset in a UTF-16 language breaks
+    on the first em dash, and briefs carry them in quantity. Code-point offsets slice
+    natively and correctly there until a character outside the Basic Multilingual Plane
+    appears — the version that ships.
+
+    Not a line range. The standard library's line splitting treats U+2028, U+000B, U+000C
+    and U+0085 as breaks where a consumer splitting on carriage-return/newline does not, so
+    we do not agree on what a line is.
+
+    Offsets index the source **as read without newline translation**. Against a translated
+    copy they are wrong by one byte per preceding line on a CRLF document, which is why
+    briefs are read faithfully.
+    """
+
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
 class ScannedSection:
     """A numbered section as it actually appears in a document."""
 
     ordinal: int
     heading: str
     body: str
+    span: Span = Span(0, 0)
+    """Where ``body`` sits in the source, in UTF-8 bytes.
+
+    Covers the body only — never the heading. Heading text is structural identity, so a
+    consumer able to locate and replace a heading could undo the schema check; replacing a
+    body span cannot change which section it is. No value carries a span in any form.
+    """
+
     absorbed: tuple[str, ...] = ()
     """Section-level headings found inside this section's body.
 
@@ -342,11 +373,22 @@ def scan_sections(text: str) -> list[ScannedSection]:
         next_index = numbered[position + 1][0] if position + 1 < len(numbered) else None
         body_end = spans[next_index][0] if next_index is not None else len(text)
         absorbed = tuple(line for _, _, line in spans[index + 1 : next_index])
+        raw_body = text[body_start:body_end]
+        body = raw_body.strip()
+        # The body's own first character, after the leading whitespace `strip` discards —
+        # the scan's offsets delimit the untrimmed region, so slicing those would not
+        # reproduce the reported body.
+        body_offset = body_start + (len(raw_body) - len(raw_body.lstrip()))
+        byte_start = len(text[:body_offset].encode("utf-8"))
+        # Derived, never scanned independently: the slice is then the encoding of exactly
+        # this string by construction, so only `byte_start` can be wrong.
+        byte_end = byte_start + len(body.encode("utf-8"))
         sections.append(
             ScannedSection(
                 ordinal=int(match.group(1)),
                 heading=match.group(2).strip(),
-                body=text[body_start:body_end].strip(),
+                body=body,
+                span=Span(byte_start, byte_end),
                 absorbed=absorbed,
             )
         )
