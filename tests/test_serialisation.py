@@ -551,3 +551,48 @@ def test_a_section_that_absorbed_a_heading_still_appears(tmp_path) -> None:
     six = next(s for s in document["sections"] if s["ordinal"] == 6)
     raw = source.encode("utf-8")
     assert "## Stray heading" in raw[six["span"]["start"] : six["span"]["end"]].decode("utf-8")
+
+
+def test_the_inspect_document_is_identical_across_processes_with_different_hash_seeds(
+    tmp_path,
+) -> None:
+    """I5.1, INV-001 — the cross-machine property, made structural.
+
+    Two runs in one interpreter cannot see per-process string-hash salting, so an ordering
+    derived from a set agrees with itself throughout the suite and diverges in the field.
+    Only separate interpreters under differing seeds can distinguish the two.
+    """
+    script = tmp_path / "emit.py"
+    script.write_text(
+        "from pathlib import Path\n"
+        "from paperclip_blueprints.api import inspect_brief\n"
+        "from paperclip_blueprints.serialisation import dumps, inspect_document\n"
+        f"text = Path({str(_DISTINCT)!r}).read_bytes().decode('utf-8')\n"
+        "print(dumps(inspect_document(inspect_brief(text))), end='')\n",
+        encoding="utf-8",
+    )
+    outputs = set()
+    for seed in ("0", "1", "12345", "99999"):
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, "PYTHONHASHSEED": seed},
+            cwd=_REPO_ROOT,
+        )
+        outputs.add(result.stdout)
+    assert len(outputs) == 1, "output varies with PYTHONHASHSEED"
+
+
+def test_the_inspect_document_ends_with_one_newline_and_is_utf8_safe() -> None:
+    """I5.3."""
+    rendered = dumps(_inspect(_distinct_source()))
+    assert rendered.endswith("}\n") and not rendered.endswith("\n\n")
+    rendered.encode("utf-8")
+
+
+def test_the_inspect_document_round_trips_through_json() -> None:
+    """Whatever is built must be serialisable — no tuples that only look like lists."""
+    document = _inspect(_distinct_source())
+    assert json.loads(dumps(document)) == document

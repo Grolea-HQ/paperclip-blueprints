@@ -119,25 +119,42 @@ Anything not meeting all three is a re-capture, and a re-capture needs a worktre
 pre-change commit — not the current tree with the change applied, which would produce a
 baseline from a state that never existed.
 
-### A mutation test proves nothing until the mutation is verified to have landed
+### A check that reports clean must first show it could have reported otherwise
 
-Deliberately breaking the code to confirm a test catches it is only evidence if the break
-actually happened. Before reading the result, print and check three things:
+A passing check is evidence only if it was capable of failing. Before treating one as
+evidence, establish that it can fire — then run it.
 
-1. **The module still imports.** A syntax error fails at collection, and a collection failure
-   is not the assertion firing.
-2. **The intended line actually changed.** Assert the target substring occurred exactly once
-   and that it is gone afterwards. A replacement that matched nothing prints a meaningless
-   pass.
-3. **The failure is on the assertion under test**, not somewhere upstream of it.
+The failure is not a wrong answer. It is a **confident answer to a question that was never
+asked**, and it is worse than having no check at all: it retires the doubt that would
+otherwise have kept someone looking.
 
-Then restore, and re-run to confirm the restore took.
+Three worked instances, all from one feature:
 
-A green result from a mutation that never mutated is worse than no test at all: it retires
-the doubt that would otherwise have kept someone looking. Applying this in feature 021 found
-two tests that passed under a mutation which genuinely broke the behaviour they claimed to
-cover — one because mocked generators never see the changed value, one because the capture
-read a keyword the transport does not take and compared identical `None`s.
+**A mutation test.** Break the code deliberately and confirm the test catches it. Before
+reading the result, print and check: the module still imports (a syntax error fails at
+collection, and a collection failure is not the assertion firing); the intended line actually
+changed (assert the target occurred exactly once and is gone afterwards, or a replacement that
+matched nothing prints a meaningless pass); and the failure is on the assertion under test.
+Then restore and re-run to confirm the restore took.
+
+**A fixture that carries a property.** If tests depend on an input having some characteristic —
+CRLF endings, an astral character, values distinguishable per field — assert the fixture still
+has it. A reformatting pass can strip the property and leave every dependent test passing for
+the wrong reason.
+
+**A scan or grep.** Print what was actually examined, and include a control term known to be
+present. A boundary check over three files once reported six categories clean while its file
+argument matched nothing at all.
+
+**A guard cannot be its own oracle.** Where a check and the thing it checks read the same
+table, the check cannot see an error *within* that table. An exhaustiveness test over a
+field-mapping catches a missing entry and never a transposition, because a swap moves both
+sides of the comparison together. Verified: a per-field test that walked the mapping stayed
+green when two entries were exchanged. The oracle has to be an independent statement of the
+expected result.
+
+The general form: **ask what this check would have to see to fail, then arrange for it to see
+that.** A fourth kind of check will appear that is none of the above; the rule still applies.
 
 ## Filing bugs and feature requests
 
