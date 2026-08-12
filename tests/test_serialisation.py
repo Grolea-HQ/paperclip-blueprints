@@ -308,3 +308,85 @@ def test_documents_are_identical_across_processes_with_different_hash_seeds(tmp_
         )
         outputs.add(result.stdout)
     assert len(outputs) == 1, "output varies with PYTHONHASHSEED — an ordering derives from a set"
+
+
+# --- feature 021: the inspect document ---------------------------------------
+
+
+def _inspect(source: str) -> dict:
+    from paperclip_blueprints.api import inspect_brief
+    from paperclip_blueprints.serialisation import inspect_document
+
+    return inspect_document(inspect_brief(source))
+
+
+def test_the_inspect_document_declares_its_own_version() -> None:
+    """I2.3 — independent of the embedded document's, so a new brief field bumps this one."""
+    document = _inspect(_brief_text())
+    assert document["schema"] == "blueprints.inspect/1"
+    assert document["validation"]["schema"] == "blueprints.validate/1"
+
+
+def test_the_validation_half_is_the_validate_document_verbatim() -> None:
+    """I2.1, I2.2 — one definition of a failure, embedded rather than restated.
+
+    Compared against the live builder rather than a fixture of what it used to emit, so a
+    change to the validation document appears here automatically instead of silently
+    diverging.
+    """
+    from paperclip_blueprints.api import validate_brief
+
+    assert _inspect(_brief_text())["validation"] == validate_document(validate_brief(_brief_text()))
+
+
+def test_sections_carry_ordinal_heading_and_span() -> None:
+    document = _inspect(_brief_text())
+    assert document["sections"], "no sections reported"
+    for section in document["sections"]:
+        assert set(section) == {"ordinal", "heading", "span"}
+        assert set(section["span"]) == {"start", "end"}
+        assert section["span"]["start"] <= section["span"]["end"]
+
+
+def test_a_document_span_reproduces_the_body_from_the_source_bytes() -> None:
+    """The guarantee, asserted through the wire shape a consumer actually receives —
+    not only against the typed result it is derived from."""
+    from paperclip_blueprints.models.brief_sections import scan_sections
+
+    source = _brief_text()
+    raw = source.encode("utf-8")
+    bodies = {s.ordinal: s.body for s in scan_sections(source)}
+    for section in _inspect(source)["sections"]:
+        sliced = raw[section["span"]["start"] : section["span"]["end"]].decode("utf-8")
+        assert sliced == bodies[section["ordinal"]]
+
+
+def test_the_key_set_does_not_vary_with_outcome() -> None:
+    """I3.5 — `sections` and `brief` are present on every document, `brief` null when there
+    are no values, so a consumer never needs defensive access."""
+    valid = _inspect(_brief_text())
+    invalid = _inspect(_renumbered())
+    assert set(valid) == set(invalid) == {"schema", "validation", "sections", "brief"}
+
+
+def test_a_broken_brief_still_carries_its_sections_and_no_values() -> None:
+    """I3.1, I3.2 — the case a consumer meets first."""
+    document = _inspect(_renumbered())
+    assert document["validation"]["valid"] is False
+    assert document["sections"], "sections must survive a structural failure"
+    assert document["brief"] is None
+
+
+def test_sections_include_beyond_range_and_absorbing_sections() -> None:
+    """I3.4 — filtering to the declared twelve would turn an observation into an
+    interpretation."""
+    source = _brief_text() + "\n## 13. My own notes\n\nanything\n"
+    ordinals = [s["ordinal"] for s in _inspect(source)["sections"]]
+    assert 13 in ordinals
+
+
+def test_the_inspect_document_holds_no_absolute_path() -> None:
+    """I5.2."""
+    rendered = dumps(_inspect(_brief_text()))
+    assert str(_REPO_ROOT) not in rendered
+    assert "/Users/" not in rendered

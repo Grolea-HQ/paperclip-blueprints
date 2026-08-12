@@ -21,10 +21,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .api import BriefReport, CanonReport
+from .api import BriefInspection, BriefReport, CanonReport
 
 VALIDATE_SCHEMA = "blueprints.validate/1"
 CANON_SCHEMA = "blueprints.check-canon/1"
+INSPECT_SCHEMA = "blueprints.inspect/1"
 
 
 def validate_document(report: BriefReport) -> dict[str, Any]:
@@ -105,6 +106,40 @@ def canon_document(report: CanonReport) -> dict[str, Any]:
             {"kind": finding.kind, "message": finding.message}
             for finding in report.extraction_findings
         ],
+    }
+
+
+def inspect_document(inspection: BriefInspection) -> dict[str, Any]:
+    """Build the ``inspect`` document.
+
+    The validation half is :func:`validate_document`'s output **verbatim**, not a restatement
+    — one definition of what a failure is, and a change to that document appears here
+    automatically. The two ``schema`` versions are independent: a new brief field bumps this
+    document, never the one it embeds.
+
+    ``sections`` is present whatever the outcome; ``brief`` is ``null`` unless parsing
+    succeeded. Spans are observations and values are interpretations, so only the second is
+    gated.
+
+    Args:
+        inspection: The result of :func:`paperclip_blueprints.api.inspect_brief`.
+
+    Returns:
+        A JSON-ready mapping. Its key set does not vary with outcome, so a consumer never
+        needs defensive access.
+    """
+    return {
+        "schema": INSPECT_SCHEMA,
+        "validation": validate_document(inspection.validation),
+        "sections": [
+            {
+                "ordinal": section.ordinal,
+                "heading": section.heading,
+                "span": {"start": section.span.start, "end": section.span.end},
+            }
+            for section in inspection.sections
+        ],
+        "brief": None,
     }
 
 

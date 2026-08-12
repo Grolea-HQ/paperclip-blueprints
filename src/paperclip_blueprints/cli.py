@@ -12,6 +12,7 @@ from pathlib import Path
 import typer
 
 from .api import check_canon as api_check_canon
+from .api import inspect_brief as api_inspect_brief
 from .api import validate_brief as api_validate_brief
 from .config import MissingAPIKeyError
 from .generators.client import GenerationError, LLMClient
@@ -24,7 +25,7 @@ from .models.input import (
 )
 from .renderers.bundle import BundleError, build_and_write
 from .renderers.render import render_company_md
-from .serialisation import canon_document, dumps, validate_document
+from .serialisation import canon_document, dumps, inspect_document, validate_document
 from .validators import BundleValidationError
 
 app = typer.Typer(
@@ -184,6 +185,44 @@ def validate(
     report = api_validate_brief(text)
     typer.echo(dumps(validate_document(report)), nl=False)
     if not report.valid:
+        raise typer.Exit(1)
+
+
+@app.command()
+def inspect(
+    input: Path = typer.Option(..., "--input", help="Path to the company brief Markdown."),
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit a machine-readable document instead of human output."
+    ),
+) -> None:
+    """Report what the tool makes of a brief, and where each section sits in the source.
+
+    A separate command rather than a flag on ``validate``: one command emitting two document
+    shapes would force a consumer to branch on which it received. Named for what it does
+    under both outcomes — a command named for parsing would be incoherent when it emits a
+    document precisely because parsing failed, which is the first case a consumer meets.
+
+    Section spans are reported whether or not the brief parses; values only when it does.
+    """
+    try:
+        text = read_brief_source(input)
+    except OSError as exc:
+        typer.echo(f"error: cannot read {input}: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    inspection = api_inspect_brief(text)
+
+    if json_output:
+        typer.echo(dumps(inspect_document(inspection)), nl=False)
+    else:
+        report = inspection.validation
+        verdict = "valid" if report.valid else f"invalid ({report.failure_class})"
+        typer.echo(f"brief {verdict} — {len(inspection.sections)} section(s):")
+        for section in inspection.sections:
+            span = section.span
+            typer.echo(f"  {section.ordinal:>3}. {section.heading}  [{span.start}, {span.end})")
+
+    if not inspection.validation.valid:
         raise typer.Exit(1)
 
 

@@ -190,3 +190,59 @@ def test_the_entry_point_reads_no_environment_and_makes_no_client(monkeypatch) -
     report = validate_brief(_text())
     assert report.valid is True
     assert check_canon(report.brief_object, {"a.md": "x"}).outcome == "scanned"
+
+
+# --- feature 021: the inspection ---------------------------------------------
+
+
+def test_inspection_carries_the_validation_report_whole() -> None:
+    """The composition, at the typed level: one `BriefReport`, produced by one function.
+
+    Restating validity here would create a second definition free to drift from the first,
+    which is the defect the shipped documents were built to avoid.
+    """
+    from paperclip_blueprints.api import inspect_brief
+
+    inspection = inspect_brief(_text())
+    assert inspection.validation == validate_brief(_text())
+
+
+def test_inspection_carries_every_scanned_section() -> None:
+    """Sections come from the scan, so beyond-range and duplicated ordinals are included."""
+    from paperclip_blueprints.api import inspect_brief
+    from paperclip_blueprints.models.brief_sections import scan_sections
+
+    inspection = inspect_brief(_text())
+    assert [s.ordinal for s in inspection.sections] == [s.ordinal for s in scan_sections(_text())]
+
+
+def test_inspection_of_a_broken_brief_still_locates_its_sections() -> None:
+    """Spans are observations, values are interpretations.
+
+    A span says *this region is the section headed X at ordinal N*, which stays true even
+    when N should not be X. Interpreting misaligned text yields artifacts; observing where
+    text sits yields none.
+    """
+    from paperclip_blueprints.api import inspect_brief
+
+    broken = (
+        _text()
+        .replace(
+            "## 10. Adapter preferences (optional)",
+            "## 10. Notes to self\n\nAnything.\n\n## 11. Adapter preferences (optional)",
+        )
+        .replace("## 11. Operating canon", "## 12. Operating canon")
+    )
+
+    inspection = inspect_brief(broken)
+    assert inspection.validation.valid is False
+    assert inspection.sections, "sections must be located even when the brief does not parse"
+    assert inspection.brief_object is None
+
+
+def test_inspection_of_a_valid_brief_carries_the_parsed_brief() -> None:
+    from paperclip_blueprints.api import inspect_brief
+
+    inspection = inspect_brief(_text())
+    assert inspection.brief_object is not None
+    assert inspection.brief_object.slug == "research-digest"
