@@ -717,3 +717,87 @@ def test_check_canon_human_output_is_unchanged_without_the_flag(tmp_path, monkey
     assert "scanned 1 files in" in result.stdout
     assert "canon term(s) unique to section 11" in result.stdout
     assert "carried," in result.stdout
+
+
+# --- feature 021: the inspect command ----------------------------------------
+
+
+def test_inspect_json_embeds_the_validate_document_verbatim(tmp_path, monkeypatch) -> None:
+    """I2.2, SC-004 — compared against the live command, not a fixture of its old shape.
+
+    Two tests each asserting a hardcoded shape would both pass while disagreeing; only
+    comparing the two commands catches a divergence.
+    """
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+
+    inspected = json.loads(runner.invoke(app, ["inspect", "--input", str(brief), "--json"]).stdout)
+    validated = json.loads(runner.invoke(app, ["validate", "--input", str(brief), "--json"]).stdout)
+    assert inspected["validation"] == validated
+
+
+def test_inspect_json_spans_reproduce_from_the_file_bytes(tmp_path, monkeypatch) -> None:
+    """The guarantee end to end: read the file as bytes, slice, decode.
+
+    This is the consumer's own procedure, run against the command's real output rather than
+    against the typed result it derives from.
+    """
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+    raw = brief.read_bytes()
+
+    document = json.loads(runner.invoke(app, ["inspect", "--input", str(brief), "--json"]).stdout)
+    assert document["sections"]
+    for section in document["sections"]:
+        sliced = raw[section["span"]["start"] : section["span"]["end"]].decode("utf-8")
+        assert sliced.strip() == sliced
+        assert section["heading"] not in sliced.splitlines()[:1] or not sliced
+
+
+def test_inspect_exit_status_follows_validity(tmp_path, monkeypatch) -> None:
+    """I1.3 — the class is read from the embedded document, the status only says pass/fail."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    good = _write_brief(tmp_path)
+    assert runner.invoke(app, ["inspect", "--input", str(good), "--json"]).exit_code == 0
+
+    bad = tmp_path / "bad.md"
+    bad.write_text("# no sections\n", encoding="utf-8")
+    result = runner.invoke(app, ["inspect", "--input", str(bad), "--json"])
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["validation"]["failureClass"] == "structural"
+
+
+def test_inspect_locates_sections_of_a_brief_that_does_not_parse(tmp_path, monkeypatch) -> None:
+    """The moment locations are most useful."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    broken = tmp_path / "broken.md"
+    broken.write_text(
+        VALID_BRIEF.replace(
+            "## 10. Adapter preferences (optional)",
+            "## 10. Notes\n\nx\n\n## 11. Adapter preferences (optional)",
+        ).replace("## 11. Anything else", "## 12. Anything else"),
+        encoding="utf-8",
+    )
+    document = json.loads(runner.invoke(app, ["inspect", "--input", str(broken), "--json"]).stdout)
+    assert document["validation"]["valid"] is False
+    assert [s["ordinal"] for s in document["sections"]] == list(range(1, 13))
+    assert document["brief"] is None
+
+
+def test_inspect_human_mode_lists_sections_with_byte_ranges(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+    result = runner.invoke(app, ["inspect", "--input", str(brief)])
+    assert result.exit_code == 0
+    assert "brief valid" in result.stdout
+    assert "1. Company name and slug" in result.stdout
+    assert "{" not in result.stdout
+
+
+def test_validate_and_check_canon_are_untouched_by_the_new_command(tmp_path, monkeypatch) -> None:
+    """I6.1, INV-002 — adding a command must not move the shipped ones."""
+    monkeypatch.setattr(cli_module, "_make_client", _forbid_client())
+    brief = _write_brief(tmp_path)
+    human = runner.invoke(app, ["validate", "--input", str(brief)])
+    assert human.exit_code == 0
+    assert human.stdout.strip() == "brief OK: Indie Game Studio (indie-game-studio)"

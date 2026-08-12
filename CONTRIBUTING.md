@@ -119,6 +119,43 @@ Anything not meeting all three is a re-capture, and a re-capture needs a worktre
 pre-change commit — not the current tree with the change applied, which would produce a
 baseline from a state that never existed.
 
+### A check that reports clean must first show it could have reported otherwise
+
+A passing check is evidence only if it was capable of failing. Before treating one as
+evidence, establish that it can fire — then run it.
+
+The failure is not a wrong answer. It is a **confident answer to a question that was never
+asked**, and it is worse than having no check at all: it retires the doubt that would
+otherwise have kept someone looking.
+
+Three worked instances, all from one feature:
+
+**A mutation test.** Break the code deliberately and confirm the test catches it. Before
+reading the result, print and check: the module still imports (a syntax error fails at
+collection, and a collection failure is not the assertion firing); the intended line actually
+changed (assert the target occurred exactly once and is gone afterwards, or a replacement that
+matched nothing prints a meaningless pass); and the failure is on the assertion under test.
+Then restore and re-run to confirm the restore took.
+
+**A fixture that carries a property.** If tests depend on an input having some characteristic —
+CRLF endings, an astral character, values distinguishable per field — assert the fixture still
+has it. A reformatting pass can strip the property and leave every dependent test passing for
+the wrong reason.
+
+**A scan or grep.** Print what was actually examined, and include a control term known to be
+present. A boundary check over three files once reported six categories clean while its file
+argument matched nothing at all.
+
+**A guard cannot be its own oracle.** Where a check and the thing it checks read the same
+table, the check cannot see an error *within* that table. An exhaustiveness test over a
+field-mapping catches a missing entry and never a transposition, because a swap moves both
+sides of the comparison together. Verified: a per-field test that walked the mapping stayed
+green when two entries were exchanged. The oracle has to be an independent statement of the
+expected result.
+
+The general form: **ask what this check would have to see to fail, then arrange for it to see
+that.** A fourth kind of check will appear that is none of the above; the rule still applies.
+
 ## Filing bugs and feature requests
 
 Issues are tracked in [GitHub Issues](https://github.com/Grolea-HQ/paperclip-blueprints/issues).

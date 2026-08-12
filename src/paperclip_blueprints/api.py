@@ -22,7 +22,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
-from .models.brief_sections import Advisory, StructuralFinding
+from .models.brief_sections import Advisory, ScannedSection, StructuralFinding, scan_sections
 from .models.input import (
     BriefError,
     BriefStructureError,
@@ -198,6 +198,52 @@ def validate_brief(markdown: str) -> BriefReport:
     return BriefReport(valid=True, advisories=tuple(advisories), brief_object=brief)
 
 
+@dataclass(frozen=True)
+class BriefInspection:
+    """What the tool made of a brief, and where each section sits in the source.
+
+    Composes :class:`BriefReport` rather than restating validity, so there is one
+    definition of what a failure is and the two travel together for a caller that needs
+    both — which is exactly the failing case.
+    """
+
+    validation: BriefReport
+    sections: tuple[ScannedSection, ...] = ()
+    """Every scanned section, in document order.
+
+    Populated whether or not the brief parses. Spans are observations and values are
+    interpretations: a span says *this region is the section headed X at ordinal N*, which
+    stays true even when N should not be X. Structure gating exists because interpreting
+    misaligned text yields artifacts; observing where text sits yields none.
+
+    Includes beyond-range ordinals, duplicated ordinals and sections carrying absorbed
+    headings — filtering to the declared twelve would turn an observation into an
+    interpretation.
+    """
+
+    brief_object: CompanyBrief | None = None
+    """The parsed brief. ``None`` unless :attr:`validation` reports success."""
+
+
+def inspect_brief(markdown: str) -> BriefInspection:
+    """Validate a brief and locate its sections.
+
+    Args:
+        markdown: The brief document, read without newline translation so the offsets in
+            each section's span index the file rather than a normalised copy.
+
+    Returns:
+        The validation report, every scanned section with its span, and the parsed brief
+        when parsing succeeded.
+    """
+    report = validate_brief(markdown)
+    return BriefInspection(
+        validation=report,
+        sections=tuple(scan_sections(markdown)),
+        brief_object=report.brief_object,
+    )
+
+
 def parse_brief_strict(markdown: str) -> CompanyBrief:
     """Parse a brief, raising on any failure.
 
@@ -267,12 +313,14 @@ def check_canon(brief: CompanyBrief | None, files: Mapping[str, str]) -> CanonRe
 
 __all__ = [
     "BriefError",
+    "BriefInspection",
     "BriefReport",
     "CanonCounts",
     "CanonReport",
     "CanonTermResult",
     "ExtractionFinding",
     "check_canon",
+    "inspect_brief",
     "parse_brief_strict",
     "validate_brief",
 ]

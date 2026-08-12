@@ -21,6 +21,7 @@ from paperclip_blueprints.models.brief_sections import (
     check_structure,
     heading_lines_in,
     normalise_heading,
+    scan_sections,
     section_for,
 )
 
@@ -488,3 +489,135 @@ def test_nothing_unnumbered_follows_the_last_declared_section_of_the_template() 
     headings = heading_lines_in(template)
     last_numbered = max(i for i, line in enumerate(headings) if re.match(r"^##\s+\d+\.", line))
     assert headings[last_numbered + 1 :] == []
+
+
+# --- S1-S4: section spans ---------------------------------------------------
+
+_CRLF_ASTRAL = Path(__file__).resolve().parent / "fixtures" / "brief_crlf_astral.md"
+_REPO_BRIEFS = [
+    "examples/input-template.md",
+    "examples/example-brief-indie-game-studio.md",
+    "examples/example-brief-research-digest.md",
+    "scripts/probe_brief.md",
+]
+
+
+def _sources() -> list[tuple[str, str]]:
+    """Every brief in the repository, plus the fixture that varies the two blind axes."""
+    root = Path(__file__).resolve().parent.parent
+    sources = [(rel, (root / rel).read_bytes().decode("utf-8")) for rel in _REPO_BRIEFS]
+    sources.append(("fixtures/brief_crlf_astral.md", _CRLF_ASTRAL.read_bytes().decode("utf-8")))
+    return sources
+
+
+def test_every_section_carries_a_span() -> None:
+    """S1.1 — the capability."""
+    for name, source in _sources():
+        for section in scan_sections(source):
+            assert section.span is not None, f"{name}: section {section.ordinal} has no span"
+
+
+def test_spans_are_ordered_and_non_negative() -> None:
+    """S1.2 — half-open `[start, end)` with `0 <= start <= end`."""
+    for name, source in _sources():
+        limit = len(source.encode("utf-8"))
+        for section in scan_sections(source):
+            span = section.span
+            assert 0 <= span.start <= span.end <= limit, f"{name}: section {section.ordinal}"
+
+
+def test_slicing_a_span_reproduces_the_body() -> None:
+    """S3.1-S3.4 — the guarantee, on every brief AND on the fixture varying both axes.
+
+    Run over the repository's briefs alone this would establish only that it works on LF,
+    non-astral input, which is what the feature-020 baselines already established.
+    """
+    for name, source in _sources():
+        raw = source.encode("utf-8")
+        for section in scan_sections(source):
+            sliced = raw[section.span.start : section.span.end].decode("utf-8")
+            assert sliced == section.body, f"{name}: section {section.ordinal} does not reproduce"
+
+
+def test_the_guarantee_holds_on_crlf_and_astral_specifically() -> None:
+    """S3.2, S3.3 — named separately so a failure says which axis broke, and so removing
+    the fixture from the list above cannot silently drop the coverage."""
+    source = _CRLF_ASTRAL.read_bytes().decode("utf-8")
+    assert "\r\n" in source and any(ord(c) > 0xFFFF for c in source)
+    raw = source.encode("utf-8")
+    sections = scan_sections(source)
+    assert sections
+    for section in sections:
+        assert raw[section.span.start : section.span.end].decode("utf-8") == section.body
+
+
+def test_a_byte_span_differs_from_a_code_point_span_on_this_fixture() -> None:
+    """The fixture earns its place only if the two units actually diverge on it.
+
+    Without this, an implementation that emitted code-point offsets would pass every test
+    above — they would simply be a different, self-consistent set of numbers.
+    """
+    source = _CRLF_ASTRAL.read_bytes().decode("utf-8")
+    sections = scan_sections(source)
+    late = [s for s in sections if s.ordinal >= 5]
+    assert late, "expected sections after the astral character"
+    assert any(s.span.start != source.index(s.body) for s in late if s.body), (
+        "byte offsets coincide with code-point offsets; the fixture proves nothing about the unit"
+    )
+
+
+def test_a_span_never_covers_a_heading() -> None:
+    """S2.1 — heading text is structural identity; a span that reached it would let a
+    consumer rewrite the thing the schema checks."""
+    for name, source in _sources():
+        raw = source.encode("utf-8")
+        for section in scan_sections(source):
+            sliced = raw[section.span.start : section.span.end].decode("utf-8")
+            assert not sliced.lstrip().startswith(f"## {section.ordinal}."), name
+            assert section.heading not in sliced.split("\n")[0] or not section.heading
+
+
+def test_an_empty_body_yields_an_empty_span_not_an_absent_one() -> None:
+    """S4.1, S4.2 — one shape for a consumer to handle."""
+    document = "## 1. Company name and slug\n## 2. North star\n\nbody\n"
+    first = scan_sections(document)[0]
+    assert first.body == ""
+    assert first.span.start == first.span.end
+
+
+def test_a_duplicated_ordinal_gives_each_occurrence_its_own_span() -> None:
+    """S4.3 — the list reports what is in the file."""
+    document = "## 9. A\n\nfirst body\n\n## 9. B\n\nsecond body\n"
+    sections = scan_sections(document)
+    assert [s.body for s in sections] == ["first body", "second body"]
+    assert sections[0].span != sections[1].span
+    raw = document.encode("utf-8")
+    for section in sections:
+        assert raw[section.span.start : section.span.end].decode("utf-8") == section.body
+
+
+def test_an_absorbed_heading_is_inside_its_absorber_s_span() -> None:
+    """S4.4 — the span reports what is there, not what should be."""
+    document = "## 6. Constraints\n\nbody\n\n## Stray\n\nmore\n"
+    section = scan_sections(document)[0]
+    assert section.absorbed == ["## Stray"] or "## Stray" in section.absorbed
+    raw = document.encode("utf-8")
+    sliced = raw[section.span.start : section.span.end].decode("utf-8")
+    assert "## Stray" in sliced
+
+
+def test_no_span_is_emitted_for_any_value() -> None:
+    """S2.2, FR-008 — asserted against the source, not by inspection.
+
+    A value span would have to be constructed somewhere; the only construction site is the
+    section scan. A weak variant beside a strong one gets used as the strong one.
+    """
+    import re
+
+    src = Path(__file__).resolve().parent.parent / "src" / "paperclip_blueprints"
+    builders = sorted(
+        p.relative_to(src).as_posix()
+        for p in src.rglob("*.py")
+        if re.search(r"\bSpan\(", p.read_text(encoding="utf-8"))
+    )
+    assert builders == ["models/brief_sections.py"], f"a span is constructed elsewhere: {builders}"
