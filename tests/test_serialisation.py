@@ -390,3 +390,164 @@ def test_the_inspect_document_holds_no_absolute_path() -> None:
     rendered = dumps(_inspect(_brief_text()))
     assert str(_REPO_ROOT) not in rendered
     assert "/Users/" not in rendered
+
+
+# --- feature 021 US3: the value projection ------------------------------------
+
+_DISTINCT = _REPO_ROOT / "tests" / "fixtures" / "brief_distinct_fields.md"
+
+
+def _distinct_source() -> str:
+    return _DISTINCT.read_bytes().decode("utf-8")
+
+
+def test_the_projection_fixture_gives_every_field_a_distinguishable_value() -> None:
+    """I4.4, FR-022 — the property that makes the fixture a guard rather than a sample.
+
+    A transposition is invisible to both the exhaustiveness test and the round-trip check,
+    because both walk the projection's own table. Only values that cannot be mistaken for
+    one another expose a swap, so the fixture's distinguishability is asserted rather than
+    assumed — a later edit making two fields resemble each other would silently retire the
+    only guard that catches it.
+    """
+    from paperclip_blueprints.api import validate_brief
+
+    brief = validate_brief(_distinct_source()).brief_object
+    assert brief is not None
+    values = brief.model_dump()
+    assert all(v is not None for v in values.values()), "an unset field cannot be distinguished"
+    rendered = [repr(v) for v in values.values()]
+    assert len(set(rendered)) == len(rendered), "two fields share a value; a swap would hide"
+
+
+# The expected document, written out independently of the projection table.
+#
+# Walking `BRIEF_PROJECTION` to build this would inherit its defects: a transposition swaps
+# both sides of the comparison and the assertion still holds. Verified — transposing the
+# `name` and `slug` entries left an earlier, table-walking version of this test green. The
+# oracle has to be an independent statement of what the document should contain.
+_EXPECTED_BRIEF = {
+    "name": "Alpha Name Company",
+    "slug": "bravo-slug-company",
+    "description": "Charlie description of a company in a single short sentence.",
+    "northStar": "Delta north star reaching 4200 units within 18 months.",
+    "goals": [
+        "Echo goal sustained above 11 percent",
+        "Foxtrot goal held below 22 percent",
+    ],
+    "weAre": "Golf paragraph describing what this company is in plain operational terms.",
+    "weAreNot": [
+        "**We are NOT** hotel, the first thing this company is not.",
+        "**We are NOT** india, the second thing this company is not.",
+    ],
+    "constraints": [
+        "Juliett constraint that the company never violates.",
+        "Kilo constraint that the company never violates.",
+    ],
+    "governancePosition": "tight",
+    "useCasePattern": "solo-dev-shop",
+    "useCaseNotes": "Lima notes about customising the chosen pattern.",
+    "hoursPerWeek": 13,
+    "capitalMonthlyEur": 24,
+    "capitalSetupEur": 35,
+    "routineTimezone": "Europe/Helsinki",
+    "adapterPreferences": ["Mike adapter preference for one named role"],
+    "runPolicyPreferences": ["papa-agent: max turns 7"],
+    "freeText": "**Oscar canon rule.** November procedure that agents follow.",
+}
+
+
+def test_every_brief_field_reaches_the_document_under_its_own_key() -> None:
+    """I4.1, I4.4, SC-006 — the guard that sees a transposition.
+
+    Compared against a hand-written expectation rather than against the projection table,
+    because a test that walks the table cannot distinguish a correct mapping from a swapped
+    one: both sides move together.
+    """
+    document = _inspect(_distinct_source())["brief"]
+    assert document is not None
+    assert document == _EXPECTED_BRIEF
+
+
+def test_the_projection_covers_every_field_on_the_model() -> None:
+    """I4.3, FR-021, SC-005 — a new brief field fails the suite until it is deliberately
+    projected or deliberately excluded.
+
+    This converts "remember to update the wire" into "fails until you do".
+    """
+    from paperclip_blueprints.models.input import CompanyBrief
+    from paperclip_blueprints.serialisation import BRIEF_PROJECTION
+
+    projected = {field for field, _ in BRIEF_PROJECTION}
+    assert projected == set(CompanyBrief.model_fields), (
+        "the projection and the brief model disagree; project the new field or exclude it "
+        f"deliberately: {projected ^ set(CompanyBrief.model_fields)}"
+    )
+
+
+def test_projected_keys_are_unique_and_camel_case() -> None:
+    """I4.2 — matching the two shipped documents, and no key claimed twice."""
+    import re
+
+    from paperclip_blueprints.serialisation import BRIEF_PROJECTION
+
+    keys = [key for _, key in BRIEF_PROJECTION]
+    assert len(set(keys)) == len(keys)
+    for key in keys:
+        assert re.fullmatch(r"[a-z]+(?:[A-Z][a-z0-9]*)*", key), key
+
+
+def test_values_are_absent_when_parsing_failed() -> None:
+    """I3.2, FR-014 — values read from text that failed to parse are artifacts."""
+    assert _inspect(_renumbered())["brief"] is None
+
+
+# --- feature 021 US4: observations survive a failed interpretation -----------
+
+
+def test_a_structurally_broken_brief_reports_every_section_and_no_values() -> None:
+    """I3.1, I3.2, SC-003 — one response carries both facts."""
+    document = _inspect(_renumbered())
+    assert document["validation"]["valid"] is False
+    assert document["brief"] is None
+    assert len(document["sections"]) >= 12
+
+
+def test_spans_of_a_broken_brief_still_reproduce() -> None:
+    """The guarantee does not depend on the brief being interpretable.
+
+    A span says *this region is the section headed X at ordinal N*; that stays true when N
+    should not be X, which is why observations are not gated on interpretation succeeding.
+    """
+    source = _renumbered()
+    raw = source.encode("utf-8")
+    from paperclip_blueprints.models.brief_sections import scan_sections
+
+    bodies = {(s.ordinal, s.heading): s.body for s in scan_sections(source)}
+    for section in _inspect(source)["sections"]:
+        sliced = raw[section["span"]["start"] : section["span"]["end"]].decode("utf-8")
+        assert sliced == bodies[(section["ordinal"], section["heading"])]
+
+
+def test_a_duplicated_ordinal_appears_once_per_occurrence() -> None:
+    """I3.4 — the list reports what is in the file, not what should be."""
+    source = _brief_text().replace(
+        "## 9. Operator working pattern",
+        "## 9. Operator working pattern\n\nfirst\n\n## 9. Operator working pattern",
+        1,
+    )
+    ordinals = [s["ordinal"] for s in _inspect(source)["sections"]]
+    assert ordinals.count(9) == 2
+
+
+def test_a_section_that_absorbed_a_heading_still_appears(tmp_path) -> None:
+    """I3.4 — filtering it out would turn an observation into an interpretation."""
+    source = _brief_text().replace(
+        "## 6. Constraints", "## 6. Constraints\n\n## Stray heading\n\nstray body\n", 1
+    )
+    document = _inspect(source)
+    assert document["validation"]["valid"] is False
+    assert 6 in [s["ordinal"] for s in document["sections"]]
+    six = next(s for s in document["sections"] if s["ordinal"] == 6)
+    raw = source.encode("utf-8")
+    assert "## Stray heading" in raw[six["span"]["start"] : six["span"]["end"]].decode("utf-8")

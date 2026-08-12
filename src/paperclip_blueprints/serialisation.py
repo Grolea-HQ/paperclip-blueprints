@@ -22,10 +22,45 @@ import json
 from typing import Any
 
 from .api import BriefInspection, BriefReport, CanonReport
+from .models.input import CompanyBrief
 
 VALIDATE_SCHEMA = "blueprints.validate/1"
 CANON_SCHEMA = "blueprints.check-canon/1"
 INSPECT_SCHEMA = "blueprints.inspect/1"
+
+
+BRIEF_PROJECTION: tuple[tuple[str, str], ...] = (
+    ("name", "name"),
+    ("slug", "slug"),
+    ("description", "description"),
+    ("north_star", "northStar"),
+    ("goals", "goals"),
+    ("we_are", "weAre"),
+    ("we_are_not", "weAreNot"),
+    ("constraints", "constraints"),
+    ("governance_position", "governancePosition"),
+    ("use_case_pattern", "useCasePattern"),
+    ("use_case_notes", "useCaseNotes"),
+    ("hours_per_week", "hoursPerWeek"),
+    ("capital_monthly_eur", "capitalMonthlyEur"),
+    ("capital_setup_eur", "capitalSetupEur"),
+    ("routine_timezone", "routineTimezone"),
+    ("adapter_preferences", "adapterPreferences"),
+    ("run_policy_preferences", "runPolicyPreferences"),
+    ("free_text", "freeText"),
+)
+"""Brief model field → document key, one entry per field.
+
+Explicit rather than a model dump. The wire contract has to be stable independently of the
+model: dumping would make every model edit a wire change by default, with nowhere to mark a
+field internal and no way to keep a rename from breaking every consumer — while the version
+number kept reading the same.
+
+A test asserts this covers every field on the model, so a new field fails the suite until it
+is deliberately projected or deliberately excluded. That test cannot see a *transposition*,
+since it walks this same table; only a fixture whose per-field values are obviously
+distinguishable can.
+"""
 
 
 def validate_document(report: BriefReport) -> dict[str, Any]:
@@ -139,8 +174,15 @@ def inspect_document(inspection: BriefInspection) -> dict[str, Any]:
             }
             for section in inspection.sections
         ],
-        "brief": None,
+        "brief": _brief_values(inspection.brief_object),
     }
+
+
+def _brief_values(brief: CompanyBrief | None) -> dict[str, Any] | None:
+    """Project a parsed brief onto its document keys, or ``None`` when there is none."""
+    if brief is None:
+        return None
+    return {key: getattr(brief, field) for field, key in BRIEF_PROJECTION}
 
 
 def dumps(document: dict[str, Any]) -> str:
