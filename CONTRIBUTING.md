@@ -119,6 +119,26 @@ Anything not meeting all three is a re-capture, and a re-capture needs a worktre
 pre-change commit — not the current tree with the change applied, which would produce a
 baseline from a state that never existed.
 
+### A mutation test proves nothing until the mutation is verified to have landed
+
+Deliberately breaking the code to confirm a test catches it is only evidence if the break
+actually happened. Before reading the result, print and check three things:
+
+1. **The module still imports.** A syntax error fails at collection, and a collection failure
+   is not the assertion firing.
+2. **The intended line actually changed.** Assert the target substring occurred exactly once
+   and that it is gone afterwards. A replacement that matched nothing prints a meaningless
+   pass.
+3. **The failure is on the assertion under test**, not somewhere upstream of it.
+
+Then restore, and re-run to confirm the restore took.
+
+A green result from a mutation that never mutated is worse than no test at all: it retires
+the doubt that would otherwise have kept someone looking. Applying this in feature 021 found
+two tests that passed under a mutation which genuinely broke the behaviour they claimed to
+cover — one because mocked generators never see the changed value, one because the capture
+read a keyword the transport does not take and compared identical `None`s.
+
 ## Filing bugs and feature requests
 
 Issues are tracked in [GitHub Issues](https://github.com/Grolea-HQ/paperclip-blueprints/issues).

@@ -39,6 +39,33 @@ def _make_client() -> LLMClient:
     return LLMClient()
 
 
+def read_brief_source(path: Path) -> str:
+    """Read a brief as the file's bytes decoded, with no newline translation.
+
+    Text mode translates CRLF to LF by default, so on a CRLF brief the string parsed would
+    not be the file. Byte offsets computed against it would be shifted by one byte per
+    preceding line, and a consumer slicing the file it holds would land in the wrong region
+    — silently, and only on CRLF input.
+
+    Every command that reads a brief goes through here. Reading faithfully in one place and
+    not another would let two commands parse different strings for one file and disagree
+    about it.
+
+    Args:
+        path: The brief file.
+
+    Returns:
+        The file's contents, decoded as UTF-8, line endings intact.
+
+    Raises:
+        OSError: if the file cannot be read.
+    """
+    # `Path.read_text` only accepts `newline` from Python 3.13; this project supports 3.11+,
+    # so the read goes through `open`, which has always taken it.
+    with path.open(encoding="utf-8", newline="") as handle:
+        return handle.read()
+
+
 def _load_brief(input_path: Path):
     """Parse and validate a brief file, raising typer.Exit(1) on failure.
 
@@ -47,7 +74,7 @@ def _load_brief(input_path: Path):
     the message says which sections and says that fields were not examined.
     """
     try:
-        text = input_path.read_text(encoding="utf-8")
+        text = read_brief_source(input_path)
     except OSError as exc:
         typer.echo(f"error: cannot read {input_path}: {exc}", err=True)
         raise typer.Exit(1) from exc
@@ -149,7 +176,7 @@ def validate(
         return
 
     try:
-        text = input.read_text(encoding="utf-8")
+        text = read_brief_source(input)
     except OSError as exc:
         typer.echo(f"error: cannot read {input}: {exc}", err=True)
         raise typer.Exit(1) from exc
