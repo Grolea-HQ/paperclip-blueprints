@@ -205,6 +205,15 @@ def test_full_missing_idle_belief_rejected() -> None:
         structural_check(files)
 
 
+# One definition of what the pre-022 parity anchors below no longer cover. Feature 022
+# (ADR-042) changed README.md deliberately — it dropped the goals advertisement and added the
+# file classification and the compatibility pointer. The three baselines below anchor claims
+# about canon threading, timezone emission and structured cadence, none of which touch the
+# README, so excluding that one file costs those claims nothing. The README is not left
+# unanchored: baseline_022 covers it, including an assertion that it did change.
+_CHANGED_BY_LATER_FEATURES = {"README.md"}
+
+
 # --- feature 016: no-op parity for a brief without section 11 (C-T5) ---------
 
 
@@ -228,6 +237,8 @@ def test_bundle_without_canon_renders_byte_identically_to_the_pre_change_baselin
     files = render_files(config)
     assert sorted(files) == sorted(baseline), "the set of rendered files changed"
     for path, content in sorted(baseline.items()):
+        if path in _CHANGED_BY_LATER_FEATURES:
+            continue
         assert files[path] == content, f"{path} changed for a brief with no operating canon"
 
 
@@ -286,6 +297,8 @@ def test_routine_bearing_bundle_without_timezone_matches_the_pre_change_baseline
     files = render_files(config)
     assert sorted(files) == sorted(baseline), "the set of rendered files changed"
     for path, content in sorted(baseline.items()):
+        if path in _CHANGED_BY_LATER_FEATURES:
+            continue
         assert files[path] == content, f"{path} changed for a brief with no stated timezone"
 
 
@@ -329,6 +342,8 @@ def test_legacy_string_cadences_render_identically_to_the_pre_018_baseline() -> 
     files = render_files(config)
     assert sorted(files) == sorted(baseline), "the set of rendered files changed"
     for path, content in sorted(baseline.items()):
+        if path in _CHANGED_BY_LATER_FEATURES:
+            continue
         assert files[path] == content, f"{path} changed for a plan stating no cadence day"
 
 
@@ -428,3 +443,170 @@ def test_license_lineage_is_company_derivation_not_tool_provenance() -> None:
     text = render_files(_config())["LICENSE.txt"]
     assert "Lineage:\n(none — original work)" in text
     assert "Blueprints" not in text, "tool attribution belongs in the README, not the licence"
+
+
+# --- feature 022: the README stops advertising what import discards ----------
+
+
+def _classification(readme: str) -> str:
+    """The classification section only — from its heading to the footer rule."""
+    start = readme.index("## What import reads")
+    return readme[start : readme.index("\n---", start)]
+
+
+def test_readme_drops_goals_and_states_what_import_keeps() -> None:
+    """C1.1/C1.2/C1.3 (FR-001, FR-002, FR-003).
+
+    The two halves are asserted over one render on purpose. A bare absence check is
+    satisfied by a template that renders nothing at all, so "no Goals section" is only
+    evidence when something positive is asserted alongside it.
+
+    Goals are the case ADR-022 already settled: they have no counterpart object, which is
+    why the root agent's AGENTS.md carries them. Advertising a count of them in the README
+    contradicted a decision this codebase already implements.
+    """
+    readme = render_files(_config())["README.md"]
+
+    assert "| Goals |" not in readme
+    assert "## Goals" not in readme
+    for goal in _config().company.goals:
+        assert goal not in readme, f"goal text still advertised: {goal!r}"
+
+    block = _classification(readme)
+    for landing in (
+        "`.paperclip.yaml`",
+        "`agents/<slug>/`",
+        "`projects/<slug>/PROJECT.md`",
+        "`tasks/<slug>/TASK.md`",
+        "`skills/<slug>/SKILL.md`",
+    ):
+        assert landing in block, f"{landing} missing from the classification"
+    assert "`COMPANY.md`" in block
+    assert "read in part" in block
+
+
+def test_readme_names_only_reader_facing_files_the_bundle_actually_contains() -> None:
+    """C2.3 (FR-006).
+
+    OPERATIONS.md and PROJECT-INVENTORY.md are rendered only when operations content
+    exists. A single-agent bundle has neither, and a README that lists them sends the
+    operator looking for files that are not in the tree.
+    """
+    from paperclip_blueprints.models.output import CompanyConfig
+    from test_models import _full_config_kwargs
+
+    single = render_files(_config())["README.md"]
+    assert "OPERATIONS.md" not in single
+    assert "PROJECT-INVENTORY.md" not in single
+
+    full = render_files(CompanyConfig(**_full_config_kwargs()))["README.md"]
+    assert "`OPERATIONS.md`" in _classification(full)
+    assert "`PROJECT-INVENTORY.md`" in _classification(full)
+
+
+def test_readme_classification_describes_rather_than_editorialises() -> None:
+    """C2.4/C2.5 (FR-004, FR-005).
+
+    The bundle states what lands and what does not. Characterising the difference — as a
+    gap, a limitation, something the platform ought to do differently — is out of bounds
+    for this repository, as is any classification finer than the file.
+    """
+    import re
+
+    block = _classification(render_files(_config())["README.md"]).lower()
+    for word in ("gap", "limitation", "unsupported", "unfortunately", "only", "fails", "should"):
+        assert not re.search(rf"\b{word}\b", block), (
+            f"editorialising word in classification: {word}"
+        )
+
+
+def test_readme_points_at_the_compatibility_record_reachably() -> None:
+    """C3.1/C3.3 (FR-007).
+
+    The reader holds a bundle, not a checkout, so the pointer has to be resolvable — but it
+    does not need a second full URL to be so. The repository URL is already on the line, and
+    the record is named relative to it, which is one link rather than two.
+    """
+    from paperclip_blueprints import __version__
+
+    last = [
+        line for line in render_files(_config())["README.md"].strip().splitlines() if line.strip()
+    ][-1]
+    assert __version__ in last
+    assert "https://github.com/Grolea-HQ/paperclip-blueprints" in last
+    assert "docs/platform-compatibility.md" in last
+    assert "verified against" in last
+    assert last.count("https://") == 1, "one link, not two"
+
+
+def test_readme_pointer_is_suppressed_when_the_version_resolves_to_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """C3.2 (FR-008, SC-007).
+
+    A bundle built from an uninstalled source tree stamps the fallback version, which is a
+    key into no entry in the record while looking entirely authoritative. Silence beats a
+    pointer that does not resolve — the plausible-looking failure is the one that does not
+    announce itself. The stamp itself still renders; suppression is scoped to the pointer.
+    """
+    from paperclip_blueprints import UNKNOWN_VERSION
+    from paperclip_blueprints.renderers import render as render_module
+
+    monkeypatch.setattr(render_module, "__version__", UNKNOWN_VERSION)
+    readme = render_files(_config())["README.md"]
+
+    assert "platform-compatibility.md" not in readme
+    assert "verified against" not in readme
+    assert UNKNOWN_VERSION in readme, "the provenance stamp itself must survive"
+
+
+def test_no_bundle_file_declares_a_platform_schema_revision() -> None:
+    """C4.3 (FR-009). ADR-042: emitting nothing is the decision, not an omission."""
+    from paperclip_blueprints.models.output import CompanyConfig
+    from test_models import _full_config_kwargs
+
+    for files in (render_files(_config()), render_files(CompanyConfig(**_full_config_kwargs()))):
+        for path, content in files.items():
+            assert "schemaVersion" not in content, f"{path} declares a schema revision"
+
+
+def test_rendering_the_same_input_twice_is_byte_identical() -> None:
+    """C4.2 (FR-010, SC-004). No clock entered the render path with the provenance pointer."""
+    assert render_files(_config()) == render_files(_config())
+
+
+def test_every_file_but_the_readme_matches_the_pre_022_baseline() -> None:
+    """C4.1 (FR-011, SC-005).
+
+    ``tests/fixtures/baseline_022.json`` was captured from the unmodified tree before any
+    source edit in this feature, holding both the full-bundle and single-agent file maps.
+    Re-capturing it from the edited tree would compare the implementation against itself
+    and pass vacuously — ADR-036's third class, and the failure this project has hit twice
+    this week.
+    """
+    import json
+    import pathlib
+
+    from paperclip_blueprints.models.output import CompanyConfig
+    from test_models import _full_config_kwargs
+
+    baseline = json.loads(
+        (pathlib.Path(__file__).resolve().parent / "fixtures" / "baseline_022.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    rendered = {
+        "full": render_files(CompanyConfig(**_full_config_kwargs())),
+        "single": render_files(_config()),
+    }
+
+    for kind, files in rendered.items():
+        assert sorted(files) == sorted(baseline[kind]), f"{kind}: the set of rendered files changed"
+        for path, content in sorted(baseline[kind].items()):
+            if path == "README.md":
+                continue
+            assert files[path] == content, f"{kind}: {path} changed"
+
+    # The README is the one file this feature is allowed to change — assert it did, so the
+    # loop above cannot pass by the whole feature having silently done nothing.
+    assert rendered["single"]["README.md"] != baseline["single"]["README.md"]

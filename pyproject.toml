@@ -1,6 +1,6 @@
 [project]
 name = "paperclip-blueprints"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "Generate deployable Paperclip company bundles from a structured Markdown brief."
 readme = "README.md"
 requires-python = ">=3.11"
