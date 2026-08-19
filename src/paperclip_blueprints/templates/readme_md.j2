@@ -37,7 +37,16 @@ graph TD
 
 These become objects in Paperclip:
 
-- `.paperclip.yaml` — the agents map with each agent's adapter, per-agent monthly budget, the board-approval gate, the projects map, and routine schedules
+{# What .paperclip.yaml actually carries in THIS bundle. Per-agent budgets are emitted only
+   when the brief declares capital, and routine schedules only when a task recurs, so naming
+   them unconditionally sends the operator looking for keys that are not in the file — the
+   same defect as advertising goals, one layer down. Each clause is gated on the very data it
+   describes rather than on a flag derived from it, so there is no second predicate to keep in
+   step with the first. #}
+{% set carried = ["the agents map with each agent's adapter and model", "the board-approval gate", "the projects map"]
+    + (["per-agent monthly budget"] if budgets else [])
+    + (["routine schedules"] if routines else []) %}
+- `.paperclip.yaml` — {{ carried[:-1] | join(', ') }}, and {{ carried[-1] }}
 - `agents/<slug>/` — one agent each
 - `projects/<slug>/PROJECT.md` — one project each
 - `tasks/<slug>/TASK.md` — one task each

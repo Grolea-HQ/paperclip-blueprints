@@ -610,3 +610,63 @@ def test_every_file_but_the_readme_matches_the_pre_022_baseline() -> None:
     # The README is the one file this feature is allowed to change — assert it did, so the
     # loop above cannot pass by the whole feature having silently done nothing.
     assert rendered["single"]["README.md"] != baseline["single"]["README.md"]
+
+
+def test_readme_names_only_the_paperclip_yaml_keys_this_bundle_carries() -> None:
+    """C2.3 (FR-006), applied to the platform-facing bullet.
+
+    ``budgetMonthlyCents`` is emitted only when the brief declares capital, and the routines
+    block only when a task recurs. A bullet naming them unconditionally sends the operator
+    looking for keys that are not in the file — the goals defect one layer down.
+
+    The assertion is against the rendered ``.paperclip.yaml`` rather than against expected
+    text, so it cannot be satisfied by a sentence that merely happens to read correctly for
+    the fixture.
+    """
+    from paperclip_blueprints.models.cadence import Cadence
+    from paperclip_blueprints.models.output import CompanyConfig
+    from paperclip_blueprints.models.task import TaskDefinition
+    from test_models import _full_config_kwargs
+
+    def task(slug: str, rec: str | None = None) -> TaskDefinition:
+        return TaskDefinition(
+            slug=slug,
+            name=slug,
+            project="launch-v1",
+            assignee="cto",
+            objective="o",
+            completion_criteria=["done"],
+            recurrence=Cadence.coerce(rec) if rec else None,
+        )
+
+    bare = _full_config_kwargs()
+    rich = _full_config_kwargs(tasks=[task("ship"), task("scan", "mon,wed,fri")])
+    rich["brief"] = rich["brief"].model_copy(update={"capital_monthly_eur": 500})
+
+    shapes = [CompanyConfig(**bare), CompanyConfig(**rich), _config()]
+    seen_budget, seen_routines = set(), set()
+
+    for config in shapes:
+        files = render_files(config)
+        yaml_text = files[".paperclip.yaml"]
+        bullet = next(
+            line
+            for line in files["README.md"].splitlines()
+            if line.startswith("- `.paperclip.yaml`")
+        )
+        carries_budget = "budgetMonthlyCents" in yaml_text
+        carries_routines = "routines:" in yaml_text
+
+        assert ("monthly budget" in bullet) == carries_budget, bullet
+        assert ("routine schedules" in bullet) == carries_routines, bullet
+        # Unconditional halves stay unconditional.
+        assert "adapter and model" in bullet
+        assert "board-approval gate" in bullet
+
+        seen_budget.add(carries_budget)
+        seen_routines.add(carries_routines)
+
+    # Both branches of each gate were exercised — otherwise the iff above is satisfied by a
+    # bullet that is simply always right for one bundle shape.
+    assert seen_budget == {True, False}
+    assert seen_routines == {True, False}
