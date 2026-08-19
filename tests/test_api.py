@@ -19,7 +19,11 @@ from paperclip_blueprints.api import (
     parse_brief_strict,
     validate_brief,
 )
-from paperclip_blueprints.models.input import BriefStructureError, BriefValidationError
+from paperclip_blueprints.models.input import (
+    BriefStructureError,
+    BriefValidationError,
+    CompanyBrief,
+)
 from paperclip_blueprints.renderers.canon import canon_exclusions
 from paperclip_blueprints.serialisation import canon_document, dumps, validate_document
 
@@ -129,8 +133,8 @@ def test_widening_the_excluded_set_changes_what_the_entry_point_reports(monkeypa
         term.text for term in check_canon(brief, {"a.md": "x"}).terms
     }
 
-    def widened(b: object) -> list[str]:
-        return [*canon_exclusions(b), getattr(b, "free_text", "") or ""]
+    def widened(b: CompanyBrief) -> list[str]:
+        return [*canon_exclusions(b), b.free_text or ""]
 
     monkeypatch.setattr(api, "canon_exclusions", widened)
     assert check_canon(brief, {"a.md": "x"}).terms == ()

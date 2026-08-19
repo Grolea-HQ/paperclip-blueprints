@@ -63,7 +63,9 @@ The tool handles the synthesis from a brief and produces a deployable bundle tha
 
 ## Status
 
-**v0.1 complete.** Generated bundles import successfully into a real Paperclip instance.
+**v0.1 complete.** Generated bundles have been verified to import into a running Paperclip — see
+[platform compatibility](docs/platform-compatibility.md) for what was verified, against which
+platform revision, and how far that reaches. The claim is dated and it expires.
 
 ## Cost
 

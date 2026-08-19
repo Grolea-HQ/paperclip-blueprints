@@ -14,7 +14,7 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from .. import __version__
+from .. import UNKNOWN_VERSION, __version__
 from ..models.agent import AgentDefinition
 from ..models.company import CompanyDefinition
 from ..models.goal import GoalHierarchy
@@ -474,6 +474,11 @@ def render_files(
         for message in _routine_skill_incoherence(config):
             warn(message)
 
+    # One predicate, two uses: it gates whether the reader-facing files are rendered at all,
+    # and whether the README names them. Written twice, the two would eventually disagree and
+    # the README would list files that are not in the tree.
+    has_operations = config.operations is not None
+
     base = {
         "brief": config.brief,
         "company": config.company,
@@ -491,6 +496,14 @@ def render_files(
         # bundle. Diagnostic first, attribution second — a bundle in the wild with no
         # version is one you cannot reason about when a defect turns up in it.
         "blueprints_version": __version__,
+        # The README's compatibility pointer is only useful if the version it names is a key
+        # into the record. A bundle built from an uninstalled source tree stamps the fallback,
+        # which resolves to no entry while looking authoritative — so the pointer is dropped
+        # rather than rendered with a version nobody can look up (ADR-042).
+        "version_is_known": __version__ != UNKNOWN_VERSION,
+        # Whether the reader-facing bundle files exist at all. The single-agent path renders
+        # neither, and a README naming files that are not in the tree is its own defect.
+        "has_operations": has_operations,
     }
 
     files: dict[str, str] = {
@@ -500,7 +513,7 @@ def render_files(
         "LICENSE.txt": _render("license_txt.j2", **base),
     }
 
-    if config.operations is not None:
+    if has_operations:
         files["OPERATIONS.md"] = _render(
             "operations_md.j2",
             company=config.company,
