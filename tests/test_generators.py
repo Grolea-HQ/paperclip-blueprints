@@ -5,11 +5,13 @@ injectable transport, malformed-response handling). No live API calls.
 """
 
 import json
+from collections.abc import Callable
 
 import pytest
 
 from paperclip_blueprints.generators.agents import generate_agent
 from paperclip_blueprints.generators.client import (
+    APIRequestError,
     GenerationError,
     LLMClient,
     extract_fenced_block,
@@ -862,3 +864,239 @@ def test_free_text_has_exactly_one_read_site_outside_its_prior_consumers() -> No
     assert readers == ["api.py", "cli.py", "renderers/bundle.py", "renderers/render.py"], (
         f"unexpected free_text read site(s): {readers}"
     )
+
+
+# --- handoff targets are drawn from a closed set (feature 023) --------------
+#
+# Contract clauses from specs/023-closed-set-handoffs/contracts/handoff-generation.md.
+
+
+_HANDOFF_TARGETS = ["cto", "qa-lead", "writer"]
+
+_HANDOFF_BODY = """\
+```json
+{
+  "mandate": "Owns the north star and ships the title.",
+  "triggers": ["A release candidate is ready."],
+  "receives_from": [{"agent": "qa-lead", "flow": "verified release candidates"}],
+  "hands_to": [{"agent": "cto", "flow": "approved scope"},
+               {"agent": "writer", "flow": "launch notes"}],
+  "deliverables": ["Approved release builds."],
+  "can_approve": ["Store metadata within the plan."],
+  "must_escalate": ["Pricing changes."],
+  "escalation_text": "Escalate to the operator on pricing.",
+  "tools_role_specific": "Reviews build status in App Store Connect."
+}
+```
+"""
+
+_NEAR_MISS_BODY = _HANDOFF_BODY.replace('"agent": "qa-lead"', '"agent": "qa-led"')
+
+
+def _ceo_stub() -> AgentStub:
+    return AgentStub(
+        slug="ceo", name="CEO", title="CEO", reports_to=None, skills=["release-checklist"]
+    )
+
+
+def _soul() -> AgentSoul:
+    """The soul the pre-change baseline was captured with.
+
+    Must stay identical to the one in the capture, or the parity assertion in
+    :func:`test_assembled_handoffs_match_the_pre_change_baseline` fails on an input this
+    feature does not touch — the soul is passed straight through.
+    """
+    return AgentSoul(
+        identity="I am the CEO.",
+        what_we_are="We are a single-title premium studio.",
+        product_reality="The product is one polished game.",
+        beliefs=["Focus is the moat.", "Idle is a success state; I wait between cycles."],
+        how_i_act=["I decide quickly on scope."],
+        what_i_dont_do=["I do not ship dark patterns."],
+        my_north_star="$30,000 MRR within 12 months.",
+    )
+
+
+def _generate(
+    invoke: Callable[..., str],
+    *,
+    single_agent: bool = False,
+    handoff_targets: list[str] | None = None,
+) -> AgentDefinition:
+    return generate_agent(
+        _ceo_stub(),
+        _company(),
+        _brief(),
+        _soul(),
+        LLMClient(_invoke=invoke),
+        single_agent=single_agent,
+        handoff_targets=handoff_targets,
+    )
+
+
+def test_handoff_request_constrains_both_fields_to_the_legal_set() -> None:
+    """C1.1, C1.2, C1.3 (FR-001, FR-002, FR-003)."""
+    seen: dict[str, object] = {}
+
+    def invoke(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _HANDOFF_BODY
+
+    _generate(invoke, handoff_targets=_HANDOFF_TARGETS)
+    schema = seen["schema"]
+    assert isinstance(schema, dict)
+    for field in ("receives_from", "hands_to"):
+        frag = schema["properties"][field]
+        assert frag["type"] == "array", f"{field} must carry the target as a field"
+        items = frag["items"]
+        assert items["properties"]["agent"]["enum"] == _HANDOFF_TARGETS
+        assert items["properties"]["flow"] == {"type": "string"}
+        assert items["additionalProperties"] is False
+
+
+def test_handoff_prompt_lists_the_same_slugs_the_schema_constrains() -> None:
+    """C1.4 (FR-001). Instruction and constraint cannot be allowed to disagree."""
+    seen: dict[str, object] = {}
+
+    def invoke(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _HANDOFF_BODY
+
+    _generate(invoke, handoff_targets=_HANDOFF_TARGETS)
+    prompt = str(seen["user"])
+    for slug in _HANDOFF_TARGETS:
+        assert f"`{slug}`" in prompt, f"{slug} is constrained but never named in the prompt"
+
+
+def test_single_agent_is_not_asked_for_a_handoff_at_all() -> None:
+    """C1.5 (FR-009, R6). An empty enum has no satisfying value, so do not offer one."""
+    seen: dict[str, object] = {}
+
+    def invoke(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _AGENT_BODY_JSON
+
+    agent = _generate(invoke, single_agent=True, handoff_targets=[])
+    schema = seen["schema"]
+    assert isinstance(schema, dict)
+    for field in ("receives_from", "hands_to"):
+        assert field not in schema["properties"]
+        assert field not in schema["required"]
+    assert '"agent":' not in str(seen["user"])
+    assert agent.receives_from == [] and agent.hands_to == []
+
+
+def test_a_near_miss_costs_one_call_not_the_run() -> None:
+    """C2.3 (FR-005, SC-001). The operator's stated outcome."""
+    calls = {"n": 0}
+
+    def invoke(**_: object) -> str:
+        calls["n"] += 1
+        return _NEAR_MISS_BODY if calls["n"] == 1 else _HANDOFF_BODY
+
+    agent = _generate(invoke, handoff_targets=_HANDOFF_TARGETS)
+    assert calls["n"] == 2, "the rejection must re-sample this call, not abort the run"
+    assert agent.receives_from == ["qa-lead — verified release candidates"]
+
+
+def test_an_unrecoverable_near_miss_fails_at_this_agent_naming_the_target() -> None:
+    """C2.5 (FR-006, SC-002)."""
+    calls = {"n": 0}
+
+    def invoke(**_: object) -> str:
+        calls["n"] += 1
+        return _NEAR_MISS_BODY
+
+    with pytest.raises(GenerationError) as exc:
+        _generate(invoke, handoff_targets=_HANDOFF_TARGETS)
+    message = str(exc.value)
+    assert "qa-led" in message and "ceo" in message
+    assert calls["n"] == 3, "bounded by the existing per-leaf attempt budget"
+
+
+def test_the_rejection_holds_when_the_schema_is_ignored_entirely() -> None:
+    """C3.1, C3.2 (FR-007, SC-004).
+
+    The transport never looks at the schema — the state the project is in if
+    ``STRUCTURAL_MODEL`` does not support constrained output. The guarantee must not
+    depend on it.
+
+    The call count is the load-bearing half of this assertion, not the raise. A rejection
+    also happens when the entries are rejoined after the call, so asserting only that it
+    raises passes even with the post-parse check removed — it was written that way first,
+    and a mutation check caught it. Three attempts mean the check ran inside the retry
+    loop; one attempt would mean the run aborted on the first bad response, which is the
+    behaviour this feature exists to replace.
+    """
+    calls = {"n": 0}
+
+    def invoke(**_: object) -> str:
+        calls["n"] += 1
+        return _NEAR_MISS_BODY
+
+    with pytest.raises(GenerationError) as exc:
+        _generate(invoke, handoff_targets=_HANDOFF_TARGETS)
+    assert "qa-led" in str(exc.value)
+    assert calls["n"] == 3, "the check must run inside the retry loop, not after it"
+
+
+def test_the_rejection_holds_when_the_model_declines_the_schema() -> None:
+    """C3.1, C3.2 (FR-007, SC-004).
+
+    ``complete_json`` drops a declined schema and retries unconstrained (ADR-014),
+    silently. That is precisely when the check has to be the thing that holds.
+    """
+    saw_unconstrained = {"n": 0}
+
+    def invoke(*, schema: object = None, **_: object) -> str:
+        if schema is not None:
+            raise APIRequestError("model does not support output_config.format")
+        saw_unconstrained["n"] += 1
+        return _NEAR_MISS_BODY
+
+    with pytest.raises(GenerationError) as exc:
+        _generate(invoke, handoff_targets=_HANDOFF_TARGETS)
+    assert saw_unconstrained["n"] > 1, (
+        "the check must run on every unconstrained attempt, not just abort on the first"
+    )
+    assert "qa-led" in str(exc.value)
+
+
+def test_a_near_miss_is_never_resolved_to_the_real_slug() -> None:
+    """C4.1 (FR-008, SC-003, SC-006). The prohibition, at generator level."""
+    with pytest.raises(GenerationError):
+        _generate(lambda **_: _NEAR_MISS_BODY, handoff_targets=_HANDOFF_TARGETS)
+
+
+def test_assembled_handoffs_match_the_pre_change_baseline() -> None:
+    """C5.1, C5.2 (FR-010, SC-005).
+
+    ``tests/fixtures/baseline_023.json`` was captured from a detached worktree at the
+    pre-change commit, driven by the OLD joined-string wire form. The new object form must
+    assemble to exactly the same ``AgentDefinition`` — downstream (templates, renderers,
+    validator I8) must not be able to tell this feature happened.
+    """
+    import json
+    import pathlib
+
+    baseline = json.loads(
+        (pathlib.Path(__file__).resolve().parent / "fixtures" / "baseline_023.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    multi = _generate(lambda **_: _HANDOFF_BODY, handoff_targets=_HANDOFF_TARGETS)
+    single = _generate(lambda **_: _AGENT_BODY_JSON, single_agent=True, handoff_targets=[])
+
+    assert multi.model_dump(mode="json") == baseline["multi"]
+    assert single.model_dump(mode="json") == baseline["single"]
+    # Guard against a baseline that would pass while covering nothing.
+    assert baseline["multi"]["hands_to"], "the baseline must exercise handoffs"
+
+
+def test_assembled_handoffs_still_yield_their_slug_to_the_i8_check() -> None:
+    """C5.1, C5.3 (FR-010, FR-012). The validator is untouched and still reads these."""
+    from paperclip_blueprints.validators.integrity import _handoff_head
+
+    agent = _generate(lambda **_: _HANDOFF_BODY, handoff_targets=_HANDOFF_TARGETS)
+    heads = [_handoff_head(e) for e in (*agent.receives_from, *agent.hands_to)]
+    assert heads == ["qa-lead", "cto", "writer"]
