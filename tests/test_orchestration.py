@@ -173,3 +173,67 @@ def test_the_orchestration_path_passes_a_set_that_excludes_the_agent_itself() ->
     assert sorted(seen) == [["ceo"], ["engineer"]], (
         "each agent's legal set must be the plan minus itself"
     )
+
+
+# --- a zero-cadence brief generates end to end (feature 024) ----------------
+
+
+def test_a_brief_with_no_recurring_work_generates_and_validates(tmp_path) -> None:
+    """C5.1 (SC-002). The regression guard, and the reason US1 and US2 ship together.
+
+    Validator I16 alone would make every zero-cadence brief ungenerable: the operations prompt
+    mandated scheduled-run language unconditionally, and the generator could not know the
+    mandate was wrong for this bundle, so no re-sample could ever clear the rule. Telling the
+    generator whether a routine will exist is what turns a permanent rejection into a rule the
+    run can satisfy.
+
+    Drives the whole pipeline — no task in the fixture carries a cadence — and asserts the
+    bundle both validates and reaches disk.
+    """
+    from paperclip_blueprints.renderers.bundle import build_and_write
+
+    out = tmp_path / "co"
+    build_and_write(_brief(), out, LLMClient(_invoke=_dispatch_full), single_agent=False)
+    assert (out / "OPERATIONS.md").is_file()
+    yaml_text = (out / ".paperclip.yaml").read_text(encoding="utf-8")
+    assert "routines:" not in yaml_text, "fixture must exercise the zero-routine path"
+
+
+def test_the_zero_routine_advisory_reaches_the_progress_sink(tmp_path) -> None:
+    """C4.1, end to end: the operator actually sees it during a real run."""
+    from paperclip_blueprints.renderers.bundle import build_and_write
+
+    seen: list[str] = []
+    build_and_write(
+        _brief(),
+        tmp_path / "co",
+        LLMClient(_invoke=_dispatch_full),
+        single_agent=False,
+        progress=seen.append,
+    )
+    assert any("emits no routine" in m for m in seen)
+
+
+def test_the_operations_generator_is_told_that_no_routine_will_exist() -> None:
+    """C1.2, C1.3 — the wiring in ``bundle.py``, asserted where it is observable.
+
+    ``test_a_brief_with_no_recurring_work_generates_and_validates`` does NOT catch a blind
+    generator: with the owners not passed, the prompt renders its old branch, the canned fixture
+    response happens to be clean, and the bundle validates anyway. A mutation check found that,
+    so the property asserted here is the distinguishing one — the request itself carries the
+    fact. If ``routine_owners`` stops being passed, this fails.
+    """
+    seen: list[str] = []
+
+    def capture(**kwargs: object) -> str:
+        if "operations manual" in str(kwargs["system"]).lower():
+            seen.append(str(kwargs["user"]))
+        return _dispatch_full(**kwargs)
+
+    generate_bundle_full(_brief(), LLMClient(_invoke=capture))
+    assert len(seen) == 1
+    assert "NO routine" in seen[0], (
+        "the operations generator was not told this bundle carries no routine — it is blind "
+        "again, and validator I16 becomes a rule no re-sample can clear"
+    )
+    assert "`routine_slots` MUST be an empty list" in seen[0]

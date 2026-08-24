@@ -218,8 +218,20 @@ async def _gather_full(
         generate_goal_hierarchy, company, brief, agent_defs, client, model=model
     )
     emit("→ Writing operations...")
+    # The agents that own recurring work (ADR-044). Routines are derived at render time from
+    # tasks carrying `recurrence`, so without this the operations generator cannot know whether
+    # any routine will exist and fills its slots from the agent list alone — the mechanical root
+    # of a bundle whose every agent was told the routine schedule was its liveness while no
+    # routine existed. An EMPTY list is meaningful: it says no routine will be emitted.
+    routine_owners = list(dict.fromkeys(t.assignee for t in tasks if t.recurrence is not None))
     operations = await asyncio.to_thread(
-        generate_operations, company, brief, plan.agents, client, model=model
+        generate_operations,
+        company,
+        brief,
+        plan.agents,
+        client,
+        routine_owners=routine_owners,
+        model=model,
     )
 
     try:

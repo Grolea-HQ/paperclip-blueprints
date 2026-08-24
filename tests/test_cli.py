@@ -110,7 +110,7 @@ _OPERATIONS = """```json
  "anti_drift_checks": ["We are NOT a free-to-play studio.", "We are NOT a multi-title shop.",
                        "One title at a time.", "No dark patterns."],
  "duplicate_prevention": "Check the inventory first.",
- "routine_slots": ["ceo: weekly review"],
+ "routine_slots": [],
  "critical_rules": ["Never ship without sign-off."]}
 ```"""
 
@@ -232,7 +232,7 @@ _OPERATIONS_NO_ECHO = """```json
  "approval_merge_rules": "The board approves strategy.", "delegation_checklist": ["outcome?"],
  "anti_drift_checks": ["Stay on mission and ship quality work."],
  "duplicate_prevention": "Check the inventory first.",
- "routine_slots": ["ceo: weekly review"], "critical_rules": ["Sign-off before ship."]}
+ "routine_slots": [], "critical_rules": ["Sign-off before ship."]}
 ```"""
 
 

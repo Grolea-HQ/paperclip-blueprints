@@ -473,6 +473,19 @@ def render_files(
         # ADR-024: a recurring task must defer format/storage/protocol to the governing skill.
         for message in _routine_skill_incoherence(config):
             warn(message)
+        # ADR-044: a company with no recurring work is a legitimate design, and also a
+        # consequence the operator cannot derive from the brief and did not knowingly choose.
+        # Reported, never graded, never a validation error.
+        #
+        # It says what is derivable and stops. NOT "the agents are inert": `heartbeatEnabled`
+        # is a brief-only field, unset by default, so this bundle asserts nothing about
+        # heartbeats and the stronger claim would be false.
+        if not routines and config.operations is not None:
+            warn(
+                "this bundle emits no routine — no task carries a cadence, so no agent has a "
+                "trigger from this bundle; agents act when the operator or another agent gives "
+                "them work"
+            )
 
     # One predicate, two uses: it gates whether the reader-facing files are rendered at all,
     # and whether the README names them. Written twice, the two would eventually disagree and

@@ -389,3 +389,107 @@ def test_s12_single_agent_bundle_is_clean() -> None:
 
     config = _config()  # single agent still carries a valid adapter; no env
     validate_bundle(config, render_files(config))  # must not raise
+
+
+# --- I16: no carrier asserts a rhythm the bundle has no routine for (feature 024) ---
+#
+# Contract clauses from specs/024-routine-claim-coherence/contracts/routine-claim-coherence.md.
+
+
+def _recurring(config: CompanyConfig) -> CompanyConfig:
+    """The same bundle with its first task given a cadence, so routines are emitted."""
+    from paperclip_blueprints.models.cadence import Cadence
+
+    tasks = list(config.tasks)
+    tasks[0] = tasks[0].model_copy(update={"recurrence": Cadence.coerce("tue")})
+    return config.model_copy(update={"tasks": tasks})
+
+
+def test_no_mechanism_term_matches_text_a_template_emits_unconditionally() -> None:
+    """The unsatisfiability guard — the most important test in this feature.
+
+    If any I16 term matched text a template always emits, the rule would fire on every
+    zero-routine bundle and NO regeneration could ever clear it. That is exactly the trap this
+    feature was redesigned to avoid: the original plan was to build the rule without telling the
+    generator anything, and it failed precisely because the prompt mandated the language
+    unconditionally.
+
+    This renders a clean zero-routine bundle — one whose generated content claims nothing — and
+    asserts the rule stays silent. If someone later adds "routine" or "weekly" to the term set,
+    this fails before the unsatisfiable rule can ship.
+    """
+    config, files = _valid()
+    assert not any("I16" in v for v in check_integrity(config, files)), (
+        "a clean zero-routine bundle must pass; a term matching unconditional template text "
+        "would make every zero-cadence brief ungenerable"
+    )
+
+
+def test_i16_operations_asserting_a_scheduled_run_with_no_routines() -> None:
+    """C3.1, C3.3, C3.6 (FR-004, FR-005). The reported instruction, verbatim."""
+    config, files = _valid()
+    files["OPERATIONS.md"] += "\n- On each scheduled run, audit that no gate is unowned.\n"
+    findings = [v for v in check_integrity(config, files) if v.startswith("I16")]
+    assert len(findings) == 1
+    assert "OPERATIONS.md" in findings[0] and "scheduled run" in findings[0]
+
+
+def test_i16_fires_per_agent_file_not_only_on_operations() -> None:
+    """C3.2 (FR-006, SC-003). The leading finding.
+
+    The idle-state protocol is rendered from one source into OPERATIONS.md *and* verbatim into
+    every agent's AGENTS.md, where V-gov requires it. A rule that checked only OPERATIONS.md
+    would report the visible share of a defect that is already distributed per-agent — which is
+    how eight deployed agents each came to carry it.
+    """
+    config, files = _valid()
+    for a in config.agents:
+        files[f"agents/{a.slug}/AGENTS.md"] += "\nThe routine schedule is your liveness.\n"
+    findings = [v for v in check_integrity(config, files) if v.startswith("I16")]
+    assert len(findings) == len(config.agents) >= 2
+    for a in config.agents:
+        assert any(f"agents/{a.slug}/AGENTS.md" in f for f in findings), (
+            f"{a.slug} carries the claim but was not reported"
+        )
+
+
+def test_i16_silent_when_the_bundle_emits_a_routine() -> None:
+    """C3.4 (FR-007). With a routine behind it, the claim is true."""
+    config = _recurring(CompanyConfig(**_full_config_kwargs()))
+    files = render_files(config)
+    files["OPERATIONS.md"] += "\n- On each scheduled run, audit that no gate is unowned.\n"
+    assert "routines:" in files[".paperclip.yaml"], "fixture must actually emit a routine"
+    assert not [v for v in check_integrity(config, files) if v.startswith("I16")]
+
+
+def test_i16_does_not_fire_on_an_operator_driven_rhythm() -> None:
+    """C3.5 (FR-004).
+
+    A cadence adjective describes a rhythm whose actor may be the operator, and that needs no
+    routine. Rejecting it would make the rule wrong in the case an operator most likely wrote
+    deliberately. The accepted cost is that an adjective-only over-claim is not caught.
+    """
+    config, files = _valid()
+    files["OPERATIONS.md"] += (
+        "\n- The operator reviews output weekly and reports monthly to the board.\n"
+        "- Each agent approves routine, low-consequence work on its own.\n"
+    )
+    assert not [v for v in check_integrity(config, files) if v.startswith("I16")]
+
+
+def test_i16_ignores_single_agent_bundles() -> None:
+    """C3.7. No OPERATIONS.md, no OperationsDefinition, nothing propagated."""
+    from test_templates import _config
+
+    config = _config()
+    files = render_files(config)
+    assert not [v for v in check_integrity(config, files) if v.startswith("I16")]
+
+
+def test_i16_blocks_the_write() -> None:
+    """SC-001. A bundle claiming a phantom rhythm does not reach disk."""
+    config, files = _valid()
+    files["OPERATIONS.md"] += "\n- Work runs on a schedule.\n"
+    with pytest.raises(BundleValidationError) as exc:
+        validate_bundle(config, files)
+    assert any("I16" in v for v in exc.value.violations)
