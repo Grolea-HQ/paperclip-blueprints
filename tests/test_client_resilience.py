@@ -212,3 +212,127 @@ def test_complete_json_non_object_raises() -> None:
     client = LLMClient(_invoke=invoke)
     with pytest.raises(GenerationError):
         client.complete_json(model="m", system="s", user="u", what="x", attempts=1)
+
+
+# --- post-parse contract check (feature 023) --------------------------------
+#
+# A response can be valid JSON and still not meet the contract the call stated — a
+# handoff naming an agent that does not exist is the motivating case. That is the same
+# kind of failure as a malformed reply (a response that did not meet the contract), so
+# it re-samples through the same loop rather than aborting the run.
+
+
+def test_check_failure_resamples_that_call() -> None:
+    """C2.3 (FR-005, SC-001). A rejected response costs one call, not the run."""
+    calls = {"n": 0}
+
+    def invoke(**_: object) -> str:
+        calls["n"] += 1
+        return '{"agent": "qa-led"}' if calls["n"] == 1 else '{"agent": "qa-lead"}'
+
+    def check(payload: dict[str, object]) -> None:
+        if payload.get("agent") != "qa-lead":
+            raise GenerationError("names 'qa-led', which is not an agent in this company")
+
+    client = LLMClient(_invoke=invoke)
+    out = client.complete_json(model="m", system="s", user="u", what="x", check=check)
+    assert out == {"agent": "qa-lead"}
+    assert calls["n"] == 2
+
+
+def test_check_failure_retry_prompt_carries_the_checks_own_message() -> None:
+    """C2.4 (R5).
+
+    The reply *was* valid JSON. Telling the model it was not sends it at formatting when
+    the defect is the value, and a model told to fix its JSON has no reason to change the
+    slug — the re-sample would be spent for nothing.
+    """
+    seen: list[str] = []
+
+    def invoke(*, user: str, **_: object) -> str:
+        seen.append(user)
+        return '{"agent": "qa-led"}' if len(seen) == 1 else '{"agent": "qa-lead"}'
+
+    def check(payload: dict[str, object]) -> None:
+        if payload.get("agent") != "qa-lead":
+            raise GenerationError("names 'qa-led', which is not an agent in this company")
+
+    LLMClient(_invoke=invoke).complete_json(
+        model="m", system="s", user="ORIGINAL", what="x", check=check
+    )
+    assert "ORIGINAL" in seen[1]
+    assert "not an agent in this company" in seen[1]
+    assert "not valid JSON" not in seen[1], "the reply was valid JSON; saying otherwise misdirects"
+
+
+def test_a_malformed_reply_still_gets_the_json_message() -> None:
+    """C2.4. The parse-failure path is unchanged by the new one."""
+    seen: list[str] = []
+
+    def invoke(*, user: str, **_: object) -> str:
+        seen.append(user)
+        return '{"bad"' if len(seen) == 1 else '{"ok": true}'
+
+    LLMClient(_invoke=invoke).complete_json(
+        model="m", system="s", user="u", what="x", check=lambda _: None
+    )
+    assert "not valid JSON" in seen[1]
+
+
+def test_check_exhaustion_names_the_leaf_and_the_reason() -> None:
+    """C2.5 (FR-006, SC-002)."""
+
+    def check(_: dict[str, object]) -> None:
+        raise GenerationError("names 'qa-led', which is not an agent in this company")
+
+    invoke, calls = _seq_transport(['{"agent": "qa-led"}'])
+    with pytest.raises(GenerationError) as exc:
+        LLMClient(_invoke=invoke).complete_json(
+            model="m", system="s", user="u", what="agent mandate", check=check, attempts=3
+        )
+    assert "agent mandate" in str(exc.value)
+    assert "qa-led" in str(exc.value)
+    assert calls["n"] == 3
+
+
+def test_check_runs_even_when_the_schema_was_dropped() -> None:
+    """C3.1, C3.2 (FR-007, SC-004).
+
+    The load-bearing case: the model declines the constrained request, ``complete_json``
+    drops the schema and retries unconstrained, and the check must still fire. A guarantee
+    that rested on the schema alone would evaporate here without any signal.
+    """
+    seen_schemas: list[object] = []
+    checked: list[dict[str, object]] = []
+
+    def invoke(*, schema: object = None, **_: object) -> str:
+        seen_schemas.append(schema)
+        if schema is not None:
+            raise APIRequestError("model does not support output_config.format")
+        return '{"agent": "qa-led"}'
+
+    def check(payload: dict[str, object]) -> None:
+        checked.append(payload)
+        raise GenerationError("names 'qa-led', which is not an agent in this company")
+
+    with pytest.raises(GenerationError) as exc:
+        LLMClient(_invoke=invoke).complete_json(
+            model="m",
+            system="s",
+            user="u",
+            what="agent mandate",
+            schema=strict_json_schema(AgentSoul),
+            check=check,
+            attempts=3,
+        )
+    assert checked, "the check never ran on the unconstrained path"
+    assert "qa-led" in str(exc.value)
+    assert seen_schemas[0] is not None and seen_schemas[-1] is None
+
+
+def test_check_defaults_to_none_so_existing_callers_are_unaffected() -> None:
+    """C5.4. The other call sites pass no check and must behave exactly as before."""
+    invoke, calls = _seq_transport(['{"a": 1}'])
+    client = LLMClient(_invoke=invoke)
+    assert client.complete_json(model="m", system="s", user="u", what="x") == {"a": 1}
+    assert calls["n"] == 1

@@ -283,23 +283,34 @@ class LLMClient:
         thinking: bool = False,
         effort: str | None = None,
         schema: dict[str, Any] | None = None,
+        check: Callable[[dict[str, Any]], None] | None = None,
         attempts: int = 3,
     ) -> dict[str, Any]:
-        """Complete and parse a JSON object, re-sampling on a malformed response (ADR-014).
+        """Complete and parse a JSON object, re-sampling on a bad response (ADR-014).
 
-        Resilient call/parse boundary: a single malformed response re-samples only
-        this call (feeding the parser error back) instead of aborting the run. When
-        ``schema`` is given the response is constrained via structured output; if
-        the model rejects that (``APIRequestError``), the schema is dropped and the
-        remaining attempts run unconstrained. Usage accumulates per attempt.
+        Resilient call/parse boundary: a single bad response re-samples only this call
+        (feeding the error back) instead of aborting the run. When ``schema`` is given the
+        response is constrained via structured output; if the model rejects that
+        (``APIRequestError``), the schema is dropped and the remaining attempts run
+        unconstrained. Usage accumulates per attempt.
+
+        A response can be valid JSON and still not meet the contract the call stated — a
+        handoff naming an agent that does not exist is the motivating case (ADR-043).
+        ``check`` runs after a successful parse and may raise ``GenerationError`` to
+        re-sample through this same loop. It runs on every attempt regardless of whether
+        the schema was sent, accepted, or dropped: a constraint expressed only in the
+        schema stops applying, silently, the moment the model declines it.
 
         Args:
             what: a short leaf label for error messages (e.g. "agent mandate").
+            check: optional post-parse contract check. Raising ``GenerationError`` from it
+                re-samples; its message is fed back verbatim, so it should say what was
+                wrong well enough for the next attempt to succeed.
             attempts: total tries before failing (default 3 = 1 + 2 retries).
 
         Raises:
-            GenerationError: if no attempt yields valid JSON; the message names the
-                leaf and the attempt count.
+            GenerationError: if no attempt yields a valid, contract-meeting response; the
+                message names the leaf, the attempt count and the last failure.
         """
         active_schema = schema
         prompt = user
@@ -322,13 +333,30 @@ class LLMClient:
                     continue
                 raise
             try:
-                return parse_json_response(raw, what=what)
+                payload = parse_json_response(raw, what=what)
             except GenerationError as exc:
                 last_error = exc
                 prompt = (
                     f"{user}\n\nYour previous reply was not valid JSON ({exc}). "
                     "Return ONLY valid JSON — no prose, no markdown code fence."
                 )
+                continue
+            if check is None:
+                return payload
+            try:
+                check(payload)
+            except GenerationError as exc:
+                # The reply WAS valid JSON — feeding back the parse-failure message here
+                # would send the model at formatting when the defect is a value, and it
+                # would have no reason to change that value. The check's own message is
+                # what makes the re-sample worth spending.
+                last_error = exc
+                prompt = (
+                    f"{user}\n\nYour previous reply was valid JSON but did not meet the "
+                    f"stated contract: {exc}. Return ONLY valid JSON, correcting that."
+                )
+                continue
+            return payload
         raise GenerationError(
             f"{what}: model did not return valid JSON after {attempts} attempts: {last_error}"
         )

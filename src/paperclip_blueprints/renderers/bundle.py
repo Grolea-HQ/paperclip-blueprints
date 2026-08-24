@@ -19,6 +19,7 @@ from typing import Any
 from ..generators.agents import generate_agent
 from ..generators.client import GenerationError, LLMClient
 from ..generators.goal_hierarchy import generate_goal_hierarchy
+from ..generators.handoffs import legal_targets
 from ..generators.identity import generate_identity
 from ..generators.operations import generate_operations
 from ..generators.org import AgentStub, generate_org, generate_org_plan
@@ -139,6 +140,8 @@ async def _gather_full(
         if a.reports_to is not None:
             reports_by_manager.setdefault(a.reports_to, []).append(a.slug)
 
+    all_slugs = [a.slug for a in plan.agents]
+
     async def make_agent(stub: AgentStub) -> Any:
         soul = await run(generate_soul, stub, company, client, model=model)
         peers = (
@@ -157,6 +160,11 @@ async def _gather_full(
             reports=reports_by_manager.get(stub.slug, []),
             peers=peers,
             canon=canon,
+            # The closed set of handoff targets (ADR-043) — every other planned agent,
+            # which is exactly validator I8's population, so generation and validation
+            # cannot disagree about what is legal. Computed here because this is where
+            # the whole plan is in scope; the adjacent sets above cannot reconstruct it.
+            handoff_targets=legal_targets(all_slugs, exclude=stub.slug),
             model=model,
         )
 

@@ -61,7 +61,8 @@ self-approves them.
 ## Place in the org
 
 {% if single_agent %}
-This is a SINGLE-AGENT company, so `receives_from` and `hands_to` are both empty lists.
+This is a SINGLE-AGENT company. There is no other agent to hand work to or receive it
+from, so no handoff is asked for below — do not add one.
 {% else %}
 {% if manager %}- This agent reports to: `{{ manager }}`.
 {% else %}- This agent is the company owner and reports to no one.
@@ -73,9 +74,20 @@ This is a SINGLE-AGENT company, so `receives_from` and `hands_to` are both empty
 {% else %}- No peers.
 {% endif %}
 
-Populate `receives_from` and `hands_to` ONLY with agents named above (by their
-slug), each as a string `"<slug> — what flows across the handoff"`. Every handoff
-must name a real agent from the list above; never invent a slug.
+{% if handoff_targets %}
+Every handoff names one agent from this closed list, and no other value is legal:
+{% for t in handoff_targets %}`{{ t }}`{% if not loop.last %}, {% endif %}{% endfor %}.
+
+Prefer this agent's own manager, direct reports and peers — a handoff reaching across
+the reporting structure usually means the work is in the wrong place. Any slug from the
+closed list above is accepted, but choose the one the work actually flows to.
+
+Each entry is an OBJECT with the target and the prose kept apart:
+
+- `agent` — the slug alone, copied exactly from the list above. Never invent, abbreviate
+  or re-spell a slug; a single wrong character names an agent that does not exist.
+- `flow` — what crosses the handoff, in your own words.
+{% endif %}
 {% endif %}
 
 {% if operating_canon %}
@@ -103,9 +115,9 @@ Return ONE fenced ```json block and nothing else:
 {
   "mandate": "1-2 paragraphs: what this agent owns and how it operates.",
   "triggers": ["what wakes the agent"],
-  "receives_from": [{% if not single_agent %}"manager-or-peer-slug — what flows in"{% endif %}],
-  "hands_to": [{% if not single_agent %}"report-or-peer-slug — what flows out"{% endif %}],
-  "deliverables": ["concrete recurring outputs"],
+{% if handoff_targets %}  "receives_from": [{"agent": "{{ handoff_targets[0] }}", "flow": "what flows in"}],
+  "hands_to": [{"agent": "{{ handoff_targets[0] }}", "flow": "what flows out"}],
+{% endif %}  "deliverables": ["concrete recurring outputs"],
   "can_approve": ["calibrated to governance; no escalation needed"],
   "must_escalate": ["calibrated to governance; plain-prose decisions, no approval-flow tokens"],
   "escalation_text": "One paragraph: when and how the agent escalates.",
