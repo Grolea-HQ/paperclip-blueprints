@@ -1100,3 +1100,161 @@ def test_assembled_handoffs_still_yield_their_slug_to_the_i8_check() -> None:
     agent = _generate(lambda **_: _HANDOFF_BODY, handoff_targets=_HANDOFF_TARGETS)
     heads = [_handoff_head(e) for e in (*agent.receives_from, *agent.hands_to)]
     assert heads == ["qa-lead", "cto", "writer"]
+
+
+# --- the operations generator can see whether a routine will exist (feature 024) ---
+#
+# Contract clauses from specs/024-routine-claim-coherence/contracts/routine-claim-coherence.md.
+
+
+# A zero-routine operations payload: claims no schedule, and still satisfies V-idle by
+# negating in_progress-as-liveness. Built rather than written as a literal so the protocol
+# text can be swapped without a line-length fight.
+_IDLE_CLEAN = (
+    "Idle is a success state: one short-lived issue per unit of work, closed rather "
+    "than left open; never leave an issue in_progress as a liveness marker; zero "
+    "output on a wake with nothing to do."
+)
+_IDLE_CLAIMS_SCHEDULE = _IDLE_CLEAN.replace(
+    "one short-lived issue per unit of work, closed rather than left open",
+    "one short-lived issue per scheduled run, closed that run",
+)
+
+
+def _ops_payload(idle: str, slots: list[str]) -> str:
+    return (
+        "```json\n"
+        + json.dumps(
+            {
+                "phase_model": "Build then polish.",
+                "idle_state_protocol": idle,
+                "reporting_cadence": "The CEO reports to the operator when a milestone lands.",
+                "comm_conventions": "Async.",
+                "approval_merge_rules": "The Board is the sole approver.",
+                "delegation_checklist": ["outcome?"],
+                "anti_drift_checks": ["We are NOT a free-to-play studio."],
+                "duplicate_prevention": "Check inventory.",
+                "routine_slots": slots,
+                "critical_rules": ["Sign-off before ship."],
+            }
+        )
+        + "\n```"
+    )
+
+
+_OPS_CLEAN = _ops_payload(_IDLE_CLEAN, [])
+_OPS_CLAIMS_SCHEDULE = _ops_payload(_IDLE_CLAIMS_SCHEDULE, [])
+
+
+def _ops_stubs() -> list[AgentStub]:
+    return [
+        AgentStub(slug="ceo", name="CEO", title="CEO", reports_to=None, skills=["s"]),
+        AgentStub(
+            slug="engineer", name="Engineer", title="Engineer", reports_to="ceo", skills=["s"]
+        ),
+    ]
+
+
+def _ops(invoke: Callable[..., str], owners: list[str] | None):
+    from paperclip_blueprints.generators.operations import generate_operations
+
+    return generate_operations(
+        _company(), _brief(), _ops_stubs(), LLMClient(_invoke=invoke), routine_owners=owners
+    )
+
+
+def test_operations_prompt_states_that_no_routine_will_exist() -> None:
+    """C1.3 (FR-002). The generator's blindness was the mechanical root."""
+    seen: dict[str, object] = {}
+
+    def invoke(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _OPS_CLEAN
+
+    _ops(invoke, [])
+    prompt = str(seen["user"])
+    assert "NO routine" in prompt
+    assert "`routine_slots` MUST be an empty list" in prompt
+    assert "MUST NOT refer to a scheduled run" in prompt
+
+
+def test_operations_prompt_names_the_routine_owners() -> None:
+    """C1.4 (FR-003). Slots come from agents that actually have recurring work."""
+    seen: dict[str, object] = {}
+
+    def invoke(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _OPERATIONS_JSON
+
+    _ops(invoke, ["engineer"])
+    prompt = str(seen["user"])
+    assert "`engineer`" in prompt
+    assert "the ONLY agents `routine_slots` may name" in prompt
+
+
+def test_operations_prompt_is_unchanged_when_the_caller_says_nothing() -> None:
+    """C1.5 (SC-004).
+
+    ``tests/fixtures/baseline_024.json`` was captured from a detached worktree at the
+    pre-change commit. Bundles that emit routines must not drift because of this feature.
+    """
+    import json
+    import pathlib
+
+    seen: dict[str, object] = {}
+
+    def invoke(**kwargs: object) -> str:
+        seen.update(kwargs)
+        return _OPERATIONS_JSON
+
+    _ops(invoke, None)
+    baseline = json.loads(
+        (pathlib.Path(__file__).resolve().parent / "fixtures" / "baseline_024.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert str(seen["user"]) == baseline["prompt"]
+
+
+def test_a_schedule_claim_with_no_routines_is_rejected_and_resampled() -> None:
+    """C2.1, C2.2, C2.3 (FR-009, SC-005).
+
+    Meaningful only because the generator can now see the fact: the same check on a blind
+    generator would re-sample from a distribution that cannot produce a passing answer.
+    """
+    calls = {"n": 0}
+
+    def invoke(**_: object) -> str:
+        calls["n"] += 1
+        return _OPS_CLAIMS_SCHEDULE if calls["n"] == 1 else _OPS_CLEAN
+
+    ops = _ops(invoke, [])
+    assert calls["n"] == 2
+    assert ops.routine_slots == []
+    assert "scheduled run" not in ops.idle_state_protocol.lower()
+
+
+def test_a_persistent_schedule_claim_fails_naming_what_was_claimed() -> None:
+    """C2.3 (FR-009)."""
+    with pytest.raises(GenerationError) as exc:
+        _ops(lambda **_: _OPS_CLAIMS_SCHEDULE, [])
+    assert "scheduled run" in str(exc.value)
+
+
+def test_non_empty_routine_slots_with_no_routines_are_rejected() -> None:
+    """C2.1. The mechanical root: slots filled from the agent list alone."""
+    with pytest.raises(GenerationError) as exc:
+        _ops(lambda **_: _OPERATIONS_JSON, [])
+    assert "routine_slots must be empty" in str(exc.value)
+
+
+def test_no_rejection_when_routines_will_exist() -> None:
+    """C2.4. Scoped to the zero case, where falsity is unambiguous."""
+    ops = _ops(lambda **_: _OPERATIONS_JSON, ["ceo"])
+    assert ops.routine_slots == ["ceo: weekly review"]
+
+
+def test_no_rejection_when_the_caller_says_nothing() -> None:
+    """C2.4. ``None`` means the caller did not say; behaviour is unchanged."""
+    ops = _ops(lambda **_: _OPERATIONS_JSON, None)
+    assert ops.routine_slots == ["ceo: weekly review"]

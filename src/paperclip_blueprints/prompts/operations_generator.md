@@ -29,8 +29,21 @@ drifting away from what it is.
   the piece is sourced — never a hot-takes blog post"). Reword freely into a check,
   but keep the distinctive terms. One check per item — do not drop, merge, or
   summarize any. This is the heart of the file.
-- `routine_slots` reference ONLY the agents listed above, by slug.
-- Calibrate `approval_merge_rules` to the governance position. Refer to approval
+{% if routine_owners is not none and not routine_owners %}- **This company has NO recurring work, and this bundle will carry NO routine.** Nothing
+  will trigger any agent on a schedule. Therefore:
+  - `routine_slots` MUST be an empty list. Do not invent slots for the agents above.
+  - `idle_state_protocol` MUST NOT refer to a scheduled run, a routine, a routine
+    schedule, a recurring trigger, or a cadence the platform provides. Write it for
+    agents that act when work reaches them, not on a rhythm. Idle is still a success
+    state and an issue must still never be left `in_progress` as a liveness marker.
+  - No other field may state or imply that agents run on a schedule. Describing a rhythm
+    the OPERATOR keeps (for example a review they perform) is fine — claiming one the
+    platform will fire is not.
+{% elif routine_owners %}- Agents that own recurring work, and the ONLY agents `routine_slots` may name:
+  {% for o in routine_owners %}`{{ o }}`{% if not loop.last %}, {% endif %}{% endfor %}.
+  Every other agent above has no recurring work — do not give it a slot.
+{% else %}- `routine_slots` reference ONLY the agents listed above, by slug.
+{% endif %}- Calibrate `approval_merge_rules` to the governance position. Refer to approval
   decisions in plain prose; do not embed Paperclip's internal approval-flow tokens.
 - **Board-gate authority (non-negotiable).** `approval_merge_rules` MUST state that the
   human **Board is the sole approver** of board-gated decisions. No agent — not even the
@@ -42,14 +55,21 @@ drifting away from what it is.
   `critical_rules` as ownership chains: every responsibility has a named primary owner,
   an ordered fallback, and the CEO as the final backstop — nothing is orphaned, and the
   company degrades gracefully when a role is absent.
-- `idle_state_protocol` codifies idle as a success state AND the correct issue lifecycle for
+{% if routine_owners is not none and not routine_owners %}- `idle_state_protocol` codifies idle as a success state AND the correct issue lifecycle,
+  **without claiming a schedule this bundle does not carry**. State explicitly: a unit of work
+  is ONE short-lived issue, worked and **closed** rather than left open. **NEVER** leave an
+  issue `in_progress` as a liveness or "continuation" marker (a lingering `in_progress` issue
+  is health-check-demanded and re-wakes the agent endlessly). On a wake with nothing to do, the
+  agent produces **zero output** and waits rather than inventing work. Do not write "scheduled
+  run", "routine", or "the schedule is the liveness" — none of those exist here.
+{% else %}- `idle_state_protocol` codifies idle as a success state AND the correct issue lifecycle for
   routine-driven work. State explicitly: recurring/routine-driven work runs as ONE short-lived
   issue per scheduled run, worked and **closed the same run**. **NEVER** leave an issue
   `in_progress` as a liveness or "continuation" marker — the **routine schedule** is the
   liveness, not an open issue (a lingering `in_progress` issue is health-check-demanded and
   re-wakes the agent endlessly). On a wake with nothing to do, the agent produces **zero
   output** and waits for the next scheduled run rather than inventing work.
-
+{% endif %}
 ## Output format
 
 Return ONE fenced ```json block and nothing else:
@@ -57,14 +77,16 @@ Return ONE fenced ```json block and nothing else:
 ```json
 {
   "phase_model": "How the company moves through phases of work.",
-  "idle_state_protocol": "Idle is a success state: one short-lived issue per routine run, closed that run; never leave an issue in_progress as a liveness marker (the schedule is the liveness); zero output on empty wakes.",
-  "reporting_cadence": "Who reports what, to whom, how often.",
+{% if routine_owners is not none and not routine_owners %}  "idle_state_protocol": "Idle is a success state: one short-lived issue per unit of work, closed rather than left open; never leave an issue in_progress as a liveness or continuation marker; zero output on a wake with nothing to do.",
+{% else %}  "idle_state_protocol": "Idle is a success state: one short-lived issue per routine run, closed that run; never leave an issue in_progress as a liveness marker (the schedule is the liveness); zero output on empty wakes.",
+{% endif %}  "reporting_cadence": "Who reports what, to whom, how often.",
   "comm_conventions": "How agents communicate and where.",
   "approval_merge_rules": "Approval rules calibrated to governance (plain prose).",
   "delegation_checklist": ["questions to ask before delegating a unit of work"],
   "anti_drift_checks": ["one check per constraint and per 'we are not' negation"],
   "duplicate_prevention": "How agents avoid duplicating in-flight work.",
-  "routine_slots": ["agent-slug: what they do on a recurring cadence"],
-  "critical_rules": ["the non-negotiables every agent must never break"]
+{% if routine_owners is not none and not routine_owners %}  "routine_slots": [],
+{% else %}  "routine_slots": ["agent-slug: what they do on a recurring cadence"],
+{% endif %}  "critical_rules": ["the non-negotiables every agent must never break"]
 }
 ```

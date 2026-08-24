@@ -26,6 +26,44 @@ _RESERVED_ROLE_RE = re.compile(r"\b(co-?founder|founder|board)\b", re.IGNORECASE
 
 _AGENT_FILES = ("AGENTS.md", "SOUL.md", "HEARTBEAT.md", "TOOLS.md")
 
+# I16 (ADR-044): phrases that name a PLATFORM-PROVIDED recurring trigger. In a bundle that
+# emits no routine, every one of them is false.
+#
+# Deliberately multi-word. Bare "routine" and bare "recurring" are excluded because both have
+# ordinary adjectival senses that are true with no routine behind them — an AGENTS.md that says
+# an agent "approves routine, low-consequence work" is correct, and the agents prompt writes
+# exactly that. Cadence adjectives ("weekly", "daily", "each morning") are excluded for the same
+# reason in the other direction: an operator-driven rhythm is legitimate in a company with no
+# routines at all, and rejecting it would make the rule wrong in the case an operator most
+# likely wrote on purpose.
+#
+# The accepted cost is that an adjective-only over-claim is not caught. That is a narrower miss
+# than the false rejection it avoids. See ADR-044.
+#
+# CONSTRAINT ON EDITING THIS SET: no phrase here may match text a template emits
+# unconditionally. If one did, the rule would fire on every zero-routine bundle and no
+# regeneration could clear it — the unsatisfiable-rule trap this feature exists to avoid.
+# `test_no_mechanism_term_matches_unconditional_template_text` holds that line.
+SCHEDULE_MECHANISM_TERMS = (
+    "scheduled run",
+    "routine run",
+    "routine schedule",
+    "routine-driven",
+    "recurring cadence",
+    "on a schedule",
+    "cron",
+)
+
+
+def schedule_mechanism_claims(text: str) -> list[str]:
+    """Return the schedule-mechanism phrases present in ``text``, sorted and deduplicated.
+
+    One definition, used by the I16 gate and by the operations generator's own pre-write
+    check, so the two cannot disagree about what counts as claiming a schedule.
+    """
+    low = text.lower()
+    return sorted({t for t in SCHEDULE_MECHANISM_TERMS if t in low})
+
 
 def _expected_files(config: CompanyConfig) -> set[str]:
     """The exact file set a bundle of this shape must contain (I10)."""
@@ -134,6 +172,9 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
             if head and head not in agent_slugs:
                 v.append(f"I8: agent {a.slug!r} handoff names unknown agent {head!r}")
 
+    # I16 (ADR-044): no carrier may assert a schedule the bundle carries no routine for.
+    v += _check_routine_claims(config, files)
+
     # I9: .paperclip.yaml maps + sidebar match the actual dirs.
     v += _check_paperclip_yaml(files.get(".paperclip.yaml", ""), agent_slugs, project_slugs)
 
@@ -188,6 +229,49 @@ def check_integrity(config: CompanyConfig, files: dict[str, str]) -> list[str]:
     if extra := actual - expected:
         v.append(f"I10: unexpected files: {sorted(extra)}")
 
+    return v
+
+
+def _emits_no_routine(files: dict[str, str]) -> bool:
+    """True when the rendered ``.paperclip.yaml`` carries no ``routines`` entry.
+
+    Read from the shipped artifact rather than re-derived from ``config.tasks`` (FR-008): the
+    rule is about what the bundle actually carries, and that is the file the platform reads.
+    S15 already asserts the two agree, so a disagreement surfaces there with a clearer message
+    instead of here with a misleading one.
+    """
+    try:
+        data = YAML(typ="safe").load(files.get(".paperclip.yaml", "")) or {}
+    except Exception:  # noqa: BLE001 - I9 reports unparseable YAML; don't double-fault
+        return False
+    return not (data.get("routines") or {})
+
+
+def _check_routine_claims(config: CompanyConfig, files: dict[str, str]) -> list[str]:
+    """I16 (ADR-044): a bundle emitting no routine may not claim a scheduled trigger.
+
+    Checked per CARRIER, not on the source field. ``OperationsDefinition.idle_state_protocol``
+    is rendered into ``OPERATIONS.md`` *and* verbatim into every agent's ``AGENTS.md``, where
+    V-gov requires it — one source, N carriers. An agent reads its own ``AGENTS.md``, so that is
+    where the defect lands and where the finding must point. Enumerating carriers also covers a
+    future one without anyone remembering to extend a source-side check.
+
+    Observed, not hypothesised: a bundle in which every agent carried an instruction to wait
+    for a routine schedule, with no routine behind it.
+    """
+    if config.operations is None:  # --single-agent: no OPERATIONS.md, nothing propagated
+        return []
+    if not _emits_no_routine(files):
+        return []
+    carriers = ["OPERATIONS.md", *(f"agents/{a.slug}/AGENTS.md" for a in config.agents)]
+    v: list[str] = []
+    for rel in carriers:
+        for term in schedule_mechanism_claims(files.get(rel, "")):
+            v.append(
+                f"I16: {rel} asserts {term!r} but the bundle emits no routine — nothing will "
+                f"trigger it; either the work should recur (give the task a cadence) or the "
+                f"document should not claim a schedule"
+            )
     return v
 
 

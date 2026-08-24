@@ -670,3 +670,73 @@ def test_readme_names_only_the_paperclip_yaml_keys_this_bundle_carries() -> None
     # bullet that is simply always right for one bundle shape.
     assert seen_budget == {True, False}
     assert seen_routines == {True, False}
+
+
+# --- the no-cadence design consequence is reported, not graded (feature 024) ---
+
+
+def _warnings_for(config) -> list[str]:
+    seen: list[str] = []
+    render_files(config, warn=seen.append)
+    return seen
+
+
+def _zero_routine_advisories(config) -> list[str]:
+    return [w for w in _warnings_for(config) if "emits no routine" in w]
+
+
+def test_a_zero_routine_bundle_reports_what_the_design_produces() -> None:
+    """C4.1, C4.2 (FR-011).
+
+    A brief that declares no cadence produces a company nothing in the bundle triggers. That is
+    a legitimate design, and also a consequence the operator cannot derive from the brief and
+    did not knowingly choose.
+    """
+    import pathlib
+
+    from paperclip_blueprints.models.output import CompanyConfig
+    from test_models import _full_config_kwargs
+
+    config = CompanyConfig(**_full_config_kwargs())
+    advisories = _zero_routine_advisories(config)
+    assert len(advisories) == 1
+    assert "no agent has a trigger from this bundle" in advisories[0]
+    assert pathlib.Path  # keep the import local and obvious
+
+
+def test_the_advisory_reports_and_does_not_grade() -> None:
+    """C4.3 (FR-012).
+
+    It must not say "inert": `heartbeatEnabled` is a brief-only field, unset by default, so the
+    bundle asserts nothing about heartbeats and the stronger claim would be false. It must also
+    not recommend a change — the operator judges.
+    """
+    from paperclip_blueprints.models.output import CompanyConfig
+    from test_models import _full_config_kwargs
+
+    text = _zero_routine_advisories(CompanyConfig(**_full_config_kwargs()))[0].lower()
+    for word in ("inert", "heartbeat", "should", "consider", "recommend", "must", "wrong", "fix"):
+        assert word not in text, f"the advisory grades or overclaims via {word!r}"
+
+
+def test_no_advisory_when_the_bundle_carries_a_routine() -> None:
+    """C4.5."""
+    from paperclip_blueprints.models.cadence import Cadence
+    from paperclip_blueprints.models.output import CompanyConfig
+    from test_models import _full_config_kwargs
+
+    config = CompanyConfig(**_full_config_kwargs())
+    tasks = list(config.tasks)
+    tasks[0] = tasks[0].model_copy(update={"recurrence": Cadence.coerce("tue")})
+    assert not _zero_routine_advisories(config.model_copy(update={"tasks": tasks}))
+
+
+def test_the_advisory_is_never_a_validation_error() -> None:
+    """C4.4 (FR-011). A clean zero-routine bundle validates and is written."""
+    from paperclip_blueprints.models.output import CompanyConfig
+    from paperclip_blueprints.validators import validate_bundle
+    from test_models import _full_config_kwargs
+
+    config = CompanyConfig(**_full_config_kwargs())
+    files = render_files(config)
+    validate_bundle(config, files)  # must not raise
