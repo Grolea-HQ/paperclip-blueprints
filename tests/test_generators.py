@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 import pytest
 
+from paperclip_blueprints.config import CONTENT_MODEL, STRUCTURAL_MODEL
 from paperclip_blueprints.generators.agents import generate_agent
 from paperclip_blueprints.generators.client import (
     APIRequestError,
@@ -55,9 +56,9 @@ def test_client_uses_injected_transport() -> None:
         return "canned response"
 
     client = LLMClient(_invoke=fake_invoke)
-    out = client.complete(model="claude-opus-4-8", system="sys", user="usr")
+    out = client.complete(model=CONTENT_MODEL, system="sys", user="usr")
     assert out == "canned response"
-    assert calls[0]["model"] == "claude-opus-4-8"
+    assert calls[0]["model"] == CONTENT_MODEL
 
 
 def test_client_does_not_construct_sdk_when_transport_injected() -> None:
@@ -135,7 +136,7 @@ def test_generate_identity_uses_thinking_and_content_model() -> None:
     generate_identity(_brief(), LLMClient(_invoke=fake))
     assert seen["thinking"] is True
     assert seen["effort"] == "high"
-    assert seen["model"] == "claude-opus-4-8"
+    assert seen["model"] == CONTENT_MODEL
 
 
 # --- org / agents / souls / skills generators (T018) ------------------------
@@ -281,7 +282,7 @@ def test_soul_generator_uses_thinking_and_high_effort() -> None:
     generate_soul(stub, _company(), LLMClient(_invoke=fake))
     assert seen["thinking"] is True
     assert seen["effort"] == "high"
-    assert seen["model"] == "claude-opus-4-8"
+    assert seen["model"] == CONTENT_MODEL
 
 
 def test_structural_calls_send_no_thinking_or_effort() -> None:
@@ -323,7 +324,7 @@ def test_structural_calls_send_no_thinking_or_effort() -> None:
         run(LLMClient(_invoke=fake))
         assert seen.get("thinking") is False, f"{label} must not enable thinking"
         assert seen.get("effort") is None, f"{label} must not set effort"
-        assert seen["model"] == "claude-sonnet-4-6", f"{label} must use the structural model"
+        assert seen["model"] == STRUCTURAL_MODEL, f"{label} must use the structural model"
 
 
 def test_soul_generator_rejects_missing_idle_belief() -> None:
@@ -574,14 +575,14 @@ def test_client_tallies_usage_from_usage_reporting_transport() -> None:
         return ("text", (10, 20))
 
     client = LLMClient(_invoke=fake)
-    client.complete(model="claude-opus-4-8", system="s", user="u")
-    client.complete(model="claude-sonnet-4-6", system="s", user="u")
+    client.complete(model=CONTENT_MODEL, system="s", user="u")
+    client.complete(model=STRUCTURAL_MODEL, system="s", user="u")
     summary = client.usage_summary()
     assert summary["total"]["calls"] == 2
     assert summary["total"]["input_tokens"] == 20
     assert summary["total"]["output_tokens"] == 40
     assert summary["total"]["cost_usd"] > 0
-    assert set(summary["by_model"]) == {"claude-opus-4-8", "claude-sonnet-4-6"}
+    assert set(summary["by_model"]) == {CONTENT_MODEL, STRUCTURAL_MODEL}
 
 
 def test_client_plain_text_transport_records_no_usage() -> None:
@@ -593,9 +594,11 @@ def test_client_plain_text_transport_records_no_usage() -> None:
 def test_estimate_cost_uses_price_table() -> None:
     from paperclip_blueprints.config import estimate_cost
 
-    # Opus list price: $5/Mtok in, $25/Mtok out → 1M+1M = $30.
+    # A SUPERSEDED id, deliberately: the table prices what the tool may be asked to
+    # call, not only its defaults, so `--model claude-opus-4-8` is still costed rather
+    # than falling through. Opus list price $5/$25 per Mtok → 1M+1M = $30.
     assert estimate_cost("claude-opus-4-8", 1_000_000, 1_000_000) == pytest.approx(30.0)
-    # An unknown model falls back to the Sonnet price ($3 + $15 = $18).
+    # An unknown model falls back to the Sonnet price ($3 + $15 = $18) — C4.2.
     assert estimate_cost("mystery-model", 1_000_000, 1_000_000) == pytest.approx(18.0)
 
 
@@ -605,6 +608,12 @@ def test_estimate_cost_reconciles_with_real_billing() -> None:
     Token counts captured from a real generation run 2026-06-01 (13 Opus calls,
     37 Sonnet calls). Actual Anthropic billing for that run was ~$1.50; the
     encoded rates must reproduce it within ±5%.
+
+    The model ids stay literal and superseded ON PURPOSE. That run was made on Opus 4.8
+    and Sonnet 4.6, and this test's value is that it checks the table against a real
+    invoice. Repointing it at the current constants would turn evidence into arithmetic
+    — it would then only be asserting that today's rates equal themselves. Keeping the
+    old ids priced in the table (ADR-045) is what lets this stay evidence.
     """
     from paperclip_blueprints.config import estimate_cost
 
@@ -1258,3 +1267,76 @@ def test_no_rejection_when_the_caller_says_nothing() -> None:
     """C2.4. ``None`` means the caller did not say; behaviour is unchanged."""
     ops = _ops(lambda **_: _OPERATIONS_JSON, None)
     assert ops.routine_slots == ["ceo: weekly review"]
+
+
+# --- model defaults are current, and priced (feature 025) --------------------
+#
+# Contract clauses from specs/025-current-generation-model-defaults/contracts/model-defaults.md.
+
+
+def test_the_default_models_are_the_current_generation() -> None:
+    """C1.1, C1.2 (FR-001, SC-001)."""
+    from paperclip_blueprints.config import CONTENT_MODEL, STRUCTURAL_MODEL
+
+    assert CONTENT_MODEL == "claude-opus-5"
+    assert STRUCTURAL_MODEL == "claude-sonnet-5"
+
+
+def test_every_model_called_by_default_is_priced() -> None:
+    """C4.1 (FR-005, SC-004).
+
+    Derived by iterating the constants, not by restating the ids: the table falls through to
+    the Sonnet entry for an unknown key, so a rename that misses the table changes every
+    estimate with no error raised. Restating the ids as literals here would pass even if the
+    constant and the table were both wrong in the same direction.
+    """
+    from paperclip_blueprints.config import (
+        CONTENT_MODEL,
+        STRUCTURAL_MODEL,
+        TOKEN_PRICES_PER_MTOK,
+    )
+
+    for model in (CONTENT_MODEL, STRUCTURAL_MODEL):
+        assert model in TOKEN_PRICES_PER_MTOK, (
+            f"{model} is called by default but is not in the price table — its cost would be "
+            f"reported at the fall-through rate, silently"
+        )
+
+
+def test_the_current_generation_is_priced_at_the_standard_published_rates() -> None:
+    """C4.3 (FR-005).
+
+    Standard rates, deliberately: Sonnet 5 carries an introductory rate ($2/$10) that expires
+    2026-08-31, and encoding it would under-report every run after that date with nothing to
+    signal the change. Over-reporting for the remainder of an introductory period is the
+    recoverable direction.
+    """
+    from paperclip_blueprints.config import CONTENT_MODEL, STRUCTURAL_MODEL, estimate_cost
+
+    assert estimate_cost(CONTENT_MODEL, 1_000_000, 1_000_000) == pytest.approx(30.0)
+    assert estimate_cost(STRUCTURAL_MODEL, 1_000_000, 1_000_000) == pytest.approx(18.0)
+
+
+def test_a_superseded_alias_resolves_to_nothing_rather_than_to_another_model() -> None:
+    """C5.3, C5.4 (FR-006).
+
+    ``opus-4.8`` names a specific model. Repointing it at Opus 5 would make the flag say one
+    model and select another; removing it lets the value fall through as a literal id, where
+    the API reports it. A deliberate older-model run stays expressible by full id.
+    """
+    from paperclip_blueprints.config import resolve_model
+
+    assert resolve_model("opus-4.8", default="d") == "opus-4.8"
+    assert resolve_model("sonnet-4.6", default="d") == "sonnet-4.6"
+    assert resolve_model("claude-opus-4-8", default="d") == "claude-opus-4-8"
+
+
+def test_the_tier_aliases_name_the_current_generation() -> None:
+    """C5.1, C5.2 (FR-006)."""
+    from paperclip_blueprints.config import CONTENT_MODEL, STRUCTURAL_MODEL, resolve_model
+
+    assert resolve_model("opus", default="d") == CONTENT_MODEL
+    assert resolve_model("opus-5", default="d") == CONTENT_MODEL
+    assert resolve_model("sonnet", default="d") == STRUCTURAL_MODEL
+    assert resolve_model("sonnet-5", default="d") == STRUCTURAL_MODEL
+    assert resolve_model(None, default="d") == "d"

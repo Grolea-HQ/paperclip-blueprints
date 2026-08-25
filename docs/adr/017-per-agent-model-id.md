@@ -61,6 +61,13 @@ agents:
 
 2. **Role-derived defaults, reusing the existing role bucket.** Map each agent's
    `_role_bucket` (the same classifier budgets use) to a (type, model):
+
+   > **Superseded in part by ADR-045 (2026-08-24).** The tiering and the adapter types below
+   > are unchanged, but the model ids are now `claude-opus-5` / `claude-sonnet-5`, and they come
+   > from their own bundle-facing constants (`AGENT_TOP_TIER_MODEL` / `AGENT_BALANCED_MODEL`)
+   > rather than from `OPUS_MODEL` / `SONNET_MODEL` — which select what *this tool* calls and
+   > answer to a different authority.
+
    | Role bucket | adapter type | model id |
    |---|---|---|
    | owner (CEO) | `claude_local` | `claude-opus-4-8` |

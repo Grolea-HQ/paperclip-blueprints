@@ -19,9 +19,9 @@ from typing import Protocol
 from ..config import (
     ADAPTER_CLAUDE_LOCAL,
     ADAPTER_CODEX_LOCAL,
+    AGENT_BALANCED_MODEL,
+    AGENT_TOP_TIER_MODEL,
     CODEX_MODEL,
-    OPUS_MODEL,
-    SONNET_MODEL,
 )
 from ..paperclip_slug import slugify_project_name
 
@@ -48,11 +48,15 @@ class AdapterChoice:
 # company), every other role on the balanced tier (Sonnet, which is also strong at
 # code). ``codex_local`` is a fully supported alternative worker, not the default
 # (see ``CODEX_ALTERNATIVE``); flipping a role to it is a one-line change here.
+#
+# These are the BUNDLE-FACING model constants, never the ones selecting what this tool
+# calls (ADR-045). The generated company runs somewhere else, on someone else's
+# Paperclip instance; the two only look alike.
 _BY_ROLE: dict[str, AdapterChoice] = {
-    "owner": AdapterChoice(ADAPTER_CLAUDE_LOCAL, OPUS_MODEL),
-    "manager": AdapterChoice(ADAPTER_CLAUDE_LOCAL, SONNET_MODEL),
-    "engineering": AdapterChoice(ADAPTER_CLAUDE_LOCAL, SONNET_MODEL),
-    "generic": AdapterChoice(ADAPTER_CLAUDE_LOCAL, SONNET_MODEL),
+    "owner": AdapterChoice(ADAPTER_CLAUDE_LOCAL, AGENT_TOP_TIER_MODEL),
+    "manager": AdapterChoice(ADAPTER_CLAUDE_LOCAL, AGENT_BALANCED_MODEL),
+    "engineering": AdapterChoice(ADAPTER_CLAUDE_LOCAL, AGENT_BALANCED_MODEL),
+    "generic": AdapterChoice(ADAPTER_CLAUDE_LOCAL, AGENT_BALANCED_MODEL),
 }
 
 # Supported opt-in alternative worker kind (env-free, import-validated by S12).
@@ -87,8 +91,9 @@ def assign_adapters(
 
 # Claude model tier keyword (in a preference line) -> full model id. Only the Claude
 # *tier* is honored here; adapter-*type* overrides (codex/hermes/opencode/Manifest) need
-# instance/env knowledge and stay v0.2-deployer territory (ADR-017).
-_TIER_MODELS = ((("opus",), OPUS_MODEL), (("sonnet",), SONNET_MODEL))
+# instance/env knowledge and stay v0.2-deployer territory (ADR-017). Bundle-facing ids:
+# this path also ends in .paperclip.yaml, not in a call this tool makes (ADR-045).
+_TIER_MODELS = ((("opus",), AGENT_TOP_TIER_MODEL), (("sonnet",), AGENT_BALANCED_MODEL))
 
 
 def _tier_model(line_lower: str) -> str | None:

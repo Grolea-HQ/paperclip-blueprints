@@ -127,7 +127,7 @@ Verify Python 3.11+. uv resolves against the version in `pyproject.toml`; older 
 
 ### Anthropic API calls fail with 401
 
-Check `ANTHROPIC_API_KEY` is set in `.env` and that the key has access to both `claude-opus-4-8` and `claude-sonnet-4-6` models. Most Anthropic keys do; if yours doesn't, check the Console.
+Check `ANTHROPIC_API_KEY` is set in `.env` and that the key has access to both `claude-opus-5` and `claude-sonnet-5` models. Most Anthropic keys do; if yours doesn't, check the Console.
 
 ### Generated bundle fails Paperclip import
 

@@ -7,6 +7,7 @@ construction, which bypasses the model validators); shape rules read the files.
 
 import pytest
 
+from paperclip_blueprints.config import AGENT_TOP_TIER_MODEL
 from paperclip_blueprints.models.agent import AgentDefinition
 from paperclip_blueprints.models.output import CompanyConfig
 from paperclip_blueprints.renderers.render import render_files
@@ -375,8 +376,8 @@ def test_s12_rejects_adapter_env() -> None:
     config, files = _valid()
     # inject an env block under the first agent's adapter.config
     files[".paperclip.yaml"] = files[".paperclip.yaml"].replace(
-        "        model: claude-opus-4-8",
-        "        model: claude-opus-4-8\n        env:\n          PROVIDER: openrouter",
+        f"        model: {AGENT_TOP_TIER_MODEL}",
+        f"        model: {AGENT_TOP_TIER_MODEL}\n        env:\n          PROVIDER: openrouter",
         1,
     )
     with pytest.raises(BundleValidationError) as exc:

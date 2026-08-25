@@ -121,6 +121,14 @@ it. I8 also covers hand-authored bundles, which no generator-side constraint can
 
 ## Open
 
+> **Closed 2026-08-24 by ADR-045 — negatively.** `claude-sonnet-4-6` accepts
+> `output_config.format` and the constraint binds, verified by an instrumented call through the
+> production transport (with a control case proving the probe can report a rejection).
+> `strict_json_schema` was never a no-op. The inference below reasoned from a published support
+> list, which is evidence about documentation rather than about behaviour. §3 stands unchanged —
+> and is now the reason the schema-dropping fallback still degrades safely for a future model
+> that does decline the parameter.
+
 Whether `claude-sonnet-4-6` accepts `output_config.format` at all is unresolved and not resolvable
 from the test suite, which makes no live calls (Constitution III). If it does not, then
 `strict_json_schema` is currently a no-op on every structural generator — a finding wider than this
