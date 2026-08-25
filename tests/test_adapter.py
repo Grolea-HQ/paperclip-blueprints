@@ -2,7 +2,11 @@
 
 from dataclasses import dataclass
 
-from paperclip_blueprints.config import OPUS_MODEL, PORTABLE_ADAPTER_TYPES, SONNET_MODEL
+from paperclip_blueprints.config import (
+    AGENT_BALANCED_MODEL,
+    AGENT_TOP_TIER_MODEL,
+    PORTABLE_ADAPTER_TYPES,
+)
 from paperclip_blueprints.models.input import CompanyBrief
 from paperclip_blueprints.models.output import CompanyConfig
 from paperclip_blueprints.renderers.adapter import (
@@ -25,16 +29,16 @@ class _Ag:
 
 def test_owner_gets_claude_local_opus() -> None:
     out = assign_adapters({"ceo": "owner"})
-    assert out["ceo"] == AdapterChoice("claude_local", "claude-opus-4-8")
+    assert out["ceo"] == AdapterChoice("claude_local", AGENT_TOP_TIER_MODEL)
 
 
 def test_non_owner_roles_get_claude_local_sonnet() -> None:
     # Default: every non-owner role runs on claude_local/Sonnet — a single provider
     # out of the box (engineering included; Sonnet is strong at code).
     out = assign_adapters({"mgr": "manager", "gen": "generic", "eng": "engineering"})
-    assert out["mgr"] == AdapterChoice("claude_local", "claude-sonnet-4-6")
-    assert out["gen"] == AdapterChoice("claude_local", "claude-sonnet-4-6")
-    assert out["eng"] == AdapterChoice("claude_local", "claude-sonnet-4-6")
+    assert out["mgr"] == AdapterChoice("claude_local", AGENT_BALANCED_MODEL)
+    assert out["gen"] == AdapterChoice("claude_local", AGENT_BALANCED_MODEL)
+    assert out["eng"] == AdapterChoice("claude_local", AGENT_BALANCED_MODEL)
 
 
 def test_every_default_choice_is_claude_local() -> None:
@@ -76,24 +80,28 @@ def test_deterministic() -> None:
 def test_explicit_non_owner_opus_preference_overrides_the_default() -> None:
     agents = [_Ag("senior-analyst", "Senior Analyst", "Senior Analyst")]
     overrides, unmatched = parse_model_preferences(["Senior Analyst → Opus-tier"], agents)
-    assert overrides == {"senior-analyst": OPUS_MODEL}
+    assert overrides == {"senior-analyst": AGENT_TOP_TIER_MODEL}
     assert unmatched == []
     # applied: the role's MODEL flips to Opus; the TYPE stays the env-free default.
     out = assign_adapters({"senior-analyst": "generic"}, overrides)
-    assert out["senior-analyst"] == AdapterChoice("claude_local", "claude-opus-4-8")
+    assert out["senior-analyst"] == AdapterChoice("claude_local", AGENT_TOP_TIER_MODEL)
 
 
 def test_unspecified_roles_keep_the_default() -> None:
     agents = [_Ag("cto", "CTO", "CTO"), _Ag("analyst", "Analyst", "Analyst")]
     overrides, _ = parse_model_preferences(["CTO → Sonnet-tier"], agents)
     out = assign_adapters({"ceo": "owner", "cto": "manager", "analyst": "generic"}, overrides)
-    assert out["ceo"] == AdapterChoice("claude_local", OPUS_MODEL)  # owner default untouched
-    assert out["cto"] == AdapterChoice("claude_local", SONNET_MODEL)  # explicit (== default here)
-    assert out["analyst"] == AdapterChoice("claude_local", SONNET_MODEL)  # default
+    assert out["ceo"] == AdapterChoice(
+        "claude_local", AGENT_TOP_TIER_MODEL
+    )  # owner default untouched
+    assert out["cto"] == AdapterChoice(
+        "claude_local", AGENT_BALANCED_MODEL
+    )  # explicit (== default here)
+    assert out["analyst"] == AdapterChoice("claude_local", AGENT_BALANCED_MODEL)  # default
 
 
 def test_override_keeps_type_import_safe_and_no_env() -> None:
-    out = assign_adapters({"analyst": "generic"}, {"analyst": OPUS_MODEL})
+    out = assign_adapters({"analyst": "generic"}, {"analyst": AGENT_TOP_TIER_MODEL})
     assert out["analyst"].type in PORTABLE_ADAPTER_TYPES
     assert not hasattr(out["analyst"], "env")
 
@@ -101,13 +109,13 @@ def test_override_keeps_type_import_safe_and_no_env() -> None:
 def test_matches_by_title_when_slug_differs() -> None:
     agents = [_Ag("sa", "Senior Analyst", "Ana")]
     overrides, unmatched = parse_model_preferences(["Senior Analyst → Opus-tier"], agents)
-    assert overrides == {"sa": OPUS_MODEL} and unmatched == []
+    assert overrides == {"sa": AGENT_TOP_TIER_MODEL} and unmatched == []
 
 
 def test_boundary_match_avoids_substring_false_positive() -> None:
     agents = [_Ag("analyst", "Analyst", "Analyst"), _Ag("senior-analyst", "Senior Analyst", "SA")]
     overrides, _ = parse_model_preferences(["senior-analyst → Opus"], agents)
-    assert overrides == {"senior-analyst": OPUS_MODEL}  # not "analyst"
+    assert overrides == {"senior-analyst": AGENT_TOP_TIER_MODEL}  # not "analyst"
 
 
 def test_non_tier_line_is_skipped_not_unmatched() -> None:
@@ -135,7 +143,7 @@ def test_paperclip_yaml_honors_a_non_owner_opus_preference() -> None:
     y = render_files(config)[".paperclip.yaml"]
     # the CTO (a non-owner, Sonnet by default) now ships Opus in .paperclip.yaml
     cto_block = y[y.index("cto:") : y.index("cto:") + 160]
-    assert "claude-opus-4-8" in cto_block
+    assert AGENT_TOP_TIER_MODEL in cto_block
 
 
 def test_unmatched_preference_warns_via_the_warn_sink() -> None:
@@ -144,3 +152,33 @@ def test_unmatched_preference_warns_via_the_warn_sink() -> None:
     warnings: list[str] = []
     render_files(config, warn=warnings.append)
     assert any("matched no agent role" in w for w in warnings)
+
+
+# --- the two jobs are separated (feature 025) --------------------------------
+#
+# Contract clauses from specs/025-current-generation-model-defaults/contracts/model-defaults.md.
+
+
+def test_the_bundle_facing_emission_reads_no_generation_time_constant() -> None:
+    """C3.1, C3.2 (FR-003, SC-003).
+
+    ``OPUS_MODEL``/``SONNET_MODEL`` select the model THIS TOOL CALLS; the ids emitted as a
+    generated agent's ``adapter.config.model`` answer to the operator's Paperclip instance
+    instead. One module reading both is how a single edit silently moved both.
+
+    Read from the module SOURCE rather than by comparing values: the two pairs hold equal
+    strings today, so any value assertion would pass whether or not the separation is
+    respected, and would re-couple them besides. This assertion fails against the pre-change
+    module, which is the evidence it asserts something (C3.2).
+    """
+    from pathlib import Path
+
+    import paperclip_blueprints.renderers.adapter as adapter_mod
+
+    source = Path(adapter_mod.__file__).read_text(encoding="utf-8")
+    imports = source.split("from ..config import", 1)[1].split(")", 1)[0]
+    for generation_time in ("OPUS_MODEL", "SONNET_MODEL", "CONTENT_MODEL", "STRUCTURAL_MODEL"):
+        assert generation_time not in imports, (
+            f"adapter.py imports {generation_time}, a generation-time constant: what a "
+            f"generated bundle asserts would move whenever what this tool calls moves"
+        )

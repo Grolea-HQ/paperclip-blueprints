@@ -6,6 +6,7 @@ keys, section headings, single-agent mermaid (no edges), and the HEARTBEAT stub.
 
 from pathlib import Path
 
+from paperclip_blueprints.config import AGENT_BALANCED_MODEL, AGENT_TOP_TIER_MODEL
 from paperclip_blueprints.models.agent import AgentDefinition, AgentSoul
 from paperclip_blueprints.models.company import CompanyDefinition
 from paperclip_blueprints.models.input import CompanyBrief
@@ -377,10 +378,10 @@ def test_paperclip_yaml_emits_per_agent_adapter() -> None:
     data = YAML(typ="safe").load(out)
     ceo = data["agents"]["ceo"]["adapter"]
     assert ceo["type"] == "claude_local"
-    assert ceo["config"]["model"] == "claude-opus-4-8"  # owner → top-tier
+    assert ceo["config"]["model"] == AGENT_TOP_TIER_MODEL  # owner → top-tier
     cto = data["agents"]["cto"]["adapter"]  # generic in the fixture
     assert cto["type"] == "claude_local"
-    assert cto["config"]["model"] == "claude-sonnet-4-6"
+    assert cto["config"]["model"] == AGENT_BALANCED_MODEL
 
 
 def test_paperclip_yaml_engineering_agent_gets_claude_sonnet() -> None:
@@ -390,7 +391,7 @@ def test_paperclip_yaml_engineering_agent_gets_claude_sonnet() -> None:
     data = YAML(typ="safe").load(render_files(config)[".paperclip.yaml"])
     eng = data["agents"]["cto"]["adapter"]
     assert eng["type"] == "claude_local"
-    assert eng["config"]["model"] == "claude-sonnet-4-6"
+    assert eng["config"]["model"] == AGENT_BALANCED_MODEL
 
 
 def test_paperclip_yaml_never_emits_adapter_env() -> None:
@@ -408,4 +409,4 @@ def test_single_agent_bundle_emits_adapter() -> None:
     data = YAML(typ="safe").load(out)
     adapter = data["agents"]["ceo"]["adapter"]
     assert adapter["type"] == "claude_local"
-    assert adapter["config"]["model"] == "claude-opus-4-8"
+    assert adapter["config"]["model"] == AGENT_TOP_TIER_MODEL
