@@ -606,6 +606,29 @@ def test_s15_flags_an_orphan_routine_block() -> None:
     assert any(x.startswith("S15") and "ghost" in x for x in check_schema_shape(config, files))
 
 
+def test_s15_flags_a_recurring_task_with_no_routines_block() -> None:
+    """ADR-046 Class B — the sibling site: an orphan routine block (above) reads the message
+    for `routines.{orphan}` text; the other direction, a recurring task whose block was
+    stripped from `.paperclip.yaml`, is a separate line and was unreached by any test.
+    """
+    import re as _re
+
+    config = CompanyConfig(
+        **_full_config_kwargs(
+            tasks=[
+                _task("ship", "Ship"),
+                _task("signal-scan", "Signal scan", recurrence=Cadence.coerce("weekly")),
+            ]
+        )
+    )
+    files = render_files(config)
+    assert "routines:" in files[".paperclip.yaml"], "fixture must actually emit a routine"
+    files[".paperclip.yaml"] = _re.sub(r"\nroutines:\n(?:  .*\n)*", "\n", files[".paperclip.yaml"])
+    assert "routines:" not in files[".paperclip.yaml"]
+    violations = [x for x in check_schema_shape(config, files) if x.startswith("S15")]
+    assert any("signal-scan" in x and "has no .paperclip.yaml routines" in x for x in violations)
+
+
 # --- producer/consumer ordering (feature 015, US3) ---------------------------
 #
 # FR-008: fires when one task names another, they share a day pattern, and the referencing task
