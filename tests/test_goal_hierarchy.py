@@ -324,3 +324,38 @@ def test_bundle_validator_flags_goal_owner_not_in_org() -> None:
     config.goal_hierarchy.goals[1].owner = "ghost"
     files = render_files(config)
     assert any(v.startswith("I14") and "ghost" in v for v in check_integrity(config, files))
+
+
+# --- ADR-046 Class B: I14's other two sites, unreached by any existing test --------
+#
+# `GoalHierarchy` itself rejects two roots / a dangling parent at construction (see the model
+# invariant tests above), so the validator's own I14 root/parent checks can only be reached by
+# mutating an already-constructed hierarchy — exactly as the owner-closure test above does.
+
+
+def test_bundle_validator_flags_goal_hierarchy_with_two_roots() -> None:
+    from paperclip_blueprints.renderers.render import render_files
+    from paperclip_blueprints.validators.integrity import check_integrity
+
+    config = _full_config_with_hierarchy(
+        [_goal("north-star", None, "ceo", "company"), _goal("arch", "north-star", "cto", "agent")]
+    )
+    assert config.goal_hierarchy is not None
+    config.goal_hierarchy.goals.append(_goal("other-root", None, "cto", "company"))
+    files = render_files(config)
+    violations = [v for v in check_integrity(config, files) if v.startswith("I14")]
+    assert any("exactly one root" in v and "other-root" in v for v in violations)
+
+
+def test_bundle_validator_flags_goal_with_unknown_parent() -> None:
+    from paperclip_blueprints.renderers.render import render_files
+    from paperclip_blueprints.validators.integrity import check_integrity
+
+    config = _full_config_with_hierarchy(
+        [_goal("north-star", None, "ceo", "company"), _goal("arch", "north-star", "cto", "agent")]
+    )
+    assert config.goal_hierarchy is not None
+    config.goal_hierarchy.goals[1].parent = "ghost-parent"
+    files = render_files(config)
+    violations = [v for v in check_integrity(config, files) if v.startswith("I14")]
+    assert any("unknown parent" in v and "ghost-parent" in v for v in violations)
