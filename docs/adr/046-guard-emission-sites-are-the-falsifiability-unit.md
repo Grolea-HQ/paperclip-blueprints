@@ -84,6 +84,41 @@ per Consequences below; the Board was not asked to choose between the two, and t
 the class the attribution check cannot reach — an identical-sides restore verification, which no
 assertion inside either sweep can observe.
 
+**Board ruling, 2026-09-05 (BLUA-19): adopt, with one condition.** A sweep runs as **sequential
+locked segments** sized to complete inside one agent run, rather than as one continuous run:
+acquire lock → restore from baseline copies → re-establish green baseline → sweep the segment's
+sites → release. This was raised as a proposal because it trades away part of the guarantee §4
+otherwise states — the lock is released between segments, so another sweep could interleave at a
+segment boundary — and the Board judged that reduction against the alternative on the record
+instead of letting it arrive as an unratified operating habit (BLUA-15 ran this way, unadopted,
+6 segments of 8–9 sites, before this ruling).
+
+The guarantee traded away was not, in fact, being held: run `8571424b` was killed at 8/51 sites
+and left the I6 guard neutralised with a stale lock — the uninterrupted-run design's failure
+mode, not the segmented one's. The choice is between degrading at a segment boundary, where a
+check runs, and degrading at an arbitrary mid-mutation point, where nothing does. Segmenting is
+adopted on that basis.
+
+**Condition:** each segment's pre-flight restore and green-baseline check is **mandatory and
+non-skippable**; a failure of it **aborts the sweep**, it does not warn and continue. Segmenting
+buys its entire value from that check running at every boundary — a segment permitted to start
+without it inherits exactly the corruption this amendment exists to catch, and the sweep would
+then be *less* safe than the single-run design it replaces, not more. This condition is
+enforcement scope, owned by QA Lead in the harness.
+
+**What this does not fix, on the record rather than left implicit:** a crash still strands a
+mutation within its segment, bounded to that segment instead of the whole sweep. The stale-lock
+procedure (`scripts/mutation_tree_lock.md`) remains required exactly as written — this narrows
+the window it exists to close; it does not close it.
+
+**Direction, recorded so it is not rediscovered next time a sweep is killed:** a genuinely
+crash-proof design mutates a copy of the tree rather than the tree under version control. That
+is a larger change than this amendment and is not adopted here.
+
+Segment sizing (site count per segment) is QA Lead's operating judgement, not Board canon — the
+requirement is "sized to finish inside one agent run"; 8–9 sites is one implementation of it,
+not the rule itself.
+
 ## Consequences
 
 - 27 emission sites, spanning 10 guard IDs with zero protected sites, are not usable as
@@ -96,6 +131,12 @@ assertion inside either sweep can observe.
 - No mutation sweep starts without the tree lock from the next sweep onward (Board, BLUA-11).
   Until the harness carries it, a sweep's `restore_green` column is not citable as evidence on
   its own — the identical-sides comparison class stays open in an unlocked harness.
+- From the next sweep onward, a sweep runs as sequential locked segments, each performing its
+  own mandatory, non-skippable pre-flight restore and green-baseline check (Board, BLUA-19). A
+  segment's results are not citable as evidence if that check was skipped or downgraded to a
+  warning — the segment inherits whatever corruption the check exists to catch. A crash within
+  a segment still strands a mutation and still requires the stale-lock procedure; the amendment
+  narrows the exposure window, it does not remove the procedure's necessity.
 - Guard coverage claims elsewhere in this repo's docs (ADRs citing a guard ID as enforcing a
   rule) should be read as scoped to whichever sites this audit verified, not the full ID, until
   each ADR is checked against this report.
@@ -119,3 +160,9 @@ assertion inside either sweep can observe.
 - `docs/working/blua-8-mutation-log-49b472c.md` — raw mutation results, 51 rows
 - BLUA-9 — this routing decision; BLUA-8 — the audit that produced the evidence
 - BLUA-11 — Board decision on the exclusive tree lock (§4): adopted as amended, 2026-09-05
+- BLUA-15 — segmented sweep run as unratified operating practice, prior to this ruling
+- BLUA-19 — Board decision on sequential locked segments (§4): adopted with condition,
+  2026-09-05
+- `docs/working/blua-15-falsifiability-report-715adc4.md` — §*Why the sweep was chunked*
+- `scripts/mutation_tree_lock.md` — stale-lock procedure the segmentation amendment leaves in
+  force unchanged
